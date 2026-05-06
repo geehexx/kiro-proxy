@@ -352,10 +352,13 @@ class AwsEventStreamParser:
         if self.current_tool_call:
             self._finalize_tool_call()
 
-        # input can be string or object
+        # input can be string or object.
+        # Empty dict {} must become "" so subsequent tool_input fragments
+        # concatenate cleanly. json.dumps({}) → "{}" would produce "{}{"path"...}"
+        # which is invalid JSON and causes _finalize_tool_call to fall back to {}.
         input_data = data.get('input', '')
         if isinstance(input_data, dict):
-            input_str = json.dumps(input_data)
+            input_str = '' if not input_data else json.dumps(input_data)
         else:
             input_str = str(input_data) if input_data else ''
 

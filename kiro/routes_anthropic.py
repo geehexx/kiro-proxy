@@ -64,6 +64,7 @@ async def _emit_gateway_baseline(
     error_reason: Optional[str] = None,
     retry_count: Optional[int] = None,
     retry_after_applied_ms: Optional[int] = None,
+    re2_applied: bool = False,
 ) -> None:
     """Append one record to baselines-gateway-requests.jsonl.
 
@@ -106,6 +107,7 @@ async def _emit_gateway_baseline(
             "error_reason": error_reason,
             "retry_count": retry_count,
             "retry_after_applied_ms": retry_after_applied_ms,
+            "re2_applied": re2_applied,
         }
         await writer.write("gateway-requests", record)
     except Exception as exc:
@@ -437,6 +439,7 @@ async def messages(
                     upstream_ms=None,
                     gateway_cache="hit",
                     status=200,
+                    re2_applied=_re2_active,
                 )
                 return JSONResponse(
                     content=hit_body,
@@ -462,6 +465,7 @@ async def messages(
                     gateway_cache="hit",
                     status=200,
                     stream=True,
+                    re2_applied=_re2_active,
                 )
                 cached_bytes = stream_hit
 
@@ -755,6 +759,7 @@ async def messages(
                                     gateway_cache="bypass" if not stream_cache_eligible else "miss",
                                     status=200 if not streaming_error else 500,
                                     stream=True,
+                                    re2_applied=_re2_active,
                                 )
 
                                 if debug_logger:
@@ -826,6 +831,7 @@ async def messages(
                             upstream_ms=_upstream_ms_total,
                             gateway_cache="miss" if cache_eligible else "bypass",
                             status=200,
+                            re2_applied=_re2_active,
                         )
 
                         return JSONResponse(
@@ -1089,6 +1095,7 @@ async def messages(
                 status=response.status_code,
                 error_reason=_error_reason,
                 retry_after_applied_ms=_retry_after_hint_ms,
+                re2_applied=_re2_active,
             )
 
             # Return error in Anthropic format
@@ -1188,6 +1195,7 @@ async def messages(
                         gateway_cache="bypass" if not stream_cache_eligible else "miss",
                         status=200 if not streaming_error else 500,
                         stream=True,
+                        re2_applied=_re2_active,
                     )
 
                     if debug_logger:
@@ -1259,6 +1267,7 @@ async def messages(
                 upstream_ms=_upstream_ms_total,
                 gateway_cache="miss" if cache_eligible else "bypass",
                 status=200,
+                re2_applied=_re2_active,
             )
 
             return JSONResponse(

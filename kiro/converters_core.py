@@ -356,6 +356,33 @@ def get_truncation_recovery_system_addition() -> str:
     )
 
 
+def get_tool_call_size_guard_system_addition(tools: Optional[List["UnifiedTool"]]) -> str:
+    """Generate system prompt addition that prevents large tool call arguments.
+
+    Kiro API silently truncates tool call output streams exceeding ~9KB,
+    causing tool calls to arrive with empty arguments ({}). This instruction
+    tells the model to split large file writes into chunks using Edit/edit.
+
+    Only injected when tools are present — no tools means no tool calls to guard.
+    """
+    from kiro.config import TOOL_CALL_SIZE_GUARD
+    if not TOOL_CALL_SIZE_GUARD or not tools:
+        return ""
+    return (
+        "\n\n---\n"
+        "# Tool Call Size Constraint\n\n"
+        "This API enforces a strict limit: tool call arguments must not exceed ~7KB "
+        "(approximately 150-200 lines of code).\n\n"
+        "**Rules for file operations:**\n"
+        "- Never write more than ~150 lines or ~7KB of content in a single Write/write tool call\n"
+        "- For larger files: write the first chunk, then use Edit/edit to append remaining "
+        "content in sequential chunks (use the last line of the current file as old_string, "
+        "replace it with that line plus the next chunk)\n"
+        "- Edit/edit operations are not affected by this limit\n\n"
+        "Violating this limit causes the tool call to silently fail with empty arguments."
+    )
+
+
 def inject_thinking_tags(content: str, thinking_config: ThinkingConfig) -> str:
     """
     Inject fake reasoning tags into content based on configuration.
@@ -1443,7 +1470,7 @@ def build_kiro_payload(
         full_system_prompt = full_system_prompt + tool_documentation if full_system_prompt else tool_documentation.strip()
 
     # Add thinking mode legitimization to system prompt if enabled
-    thinking_system_addition = get_thinking_system_prompt_addition()
+    thinking_system_addition = get_thinking_system_prompt_addition() if thinking_config.enabled else ""
     if thinking_system_addition:
         full_system_prompt = full_system_prompt + thinking_system_addition if full_system_prompt else thinking_system_addition.strip()
 
@@ -1451,6 +1478,11 @@ def build_kiro_payload(
     truncation_system_addition = get_truncation_recovery_system_addition()
     if truncation_system_addition:
         full_system_prompt = full_system_prompt + truncation_system_addition if full_system_prompt else truncation_system_addition.strip()
+
+    # Add tool call size guard instruction if tools are present
+    size_guard_addition = get_tool_call_size_guard_system_addition(tools)
+    if size_guard_addition:
+        full_system_prompt = full_system_prompt + size_guard_addition if full_system_prompt else size_guard_addition.strip()
 
     # If no tools are defined, strip ALL tool-related content from messages
     # Kiro API rejects requests with toolResults but no tools
@@ -1545,8 +1577,10 @@ def build_kiro_payload(
         if tool_results:
             user_input_context["toolResults"] = tool_results
 
-    # Inject thinking tags if enabled (only for the current/last user message)
-    if current_message.role == "user":
+    # Inject thinking tags if enabled (only for the current/last user message,
+    # and only when the message has no tool_results — Kiro API rejects messages
+    # that contain both toolResults and thinking tags).
+    if current_message.role == "user" and not current_message.tool_results:
         current_content = inject_thinking_tags(current_content, thinking_config)
 
     # Build userInputMessage

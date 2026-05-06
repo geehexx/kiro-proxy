@@ -844,10 +844,11 @@ class TestBuildKiroPayload:
         assert len(context["tools"]) == 1
         assert context["tools"][0]["toolSpecification"]["name"] == "get_weather"
 
-    def test_injects_thinking_tags_even_when_tool_results_present(self):
+    def test_skips_thinking_tags_when_tool_results_present(self):
         """
-        What it does: Verifies thinking tags ARE injected even when toolResults are present.
-        Purpose: Extended thinking should work in all scenarios including tool use flows.
+        What it does: Verifies thinking tags are NOT injected when toolResults are present.
+        Purpose: Kiro API returns "Improperly formed request" when a message has both
+        toolResults and thinking tags. Thinking injection must be skipped in tool-result turns.
         """
         print("Setup: Request where last message is a tool result...")
         request = ChatCompletionRequest(
@@ -891,8 +892,8 @@ class TestBuildKiroPayload:
         print(f"Has toolResults: {'toolResults' in context}")
 
         assert "toolResults" in context, "toolResults should be present"
-        assert "<thinking_mode>enabled</thinking_mode>" in content, "thinking tags SHOULD be injected even with toolResults"
-        assert "<max_thinking_length>4000</max_thinking_length>" in content, "max_thinking_length should be present"
+        assert "<thinking_mode>enabled</thinking_mode>" not in content, \
+            "thinking tags must NOT be injected when toolResults present — Kiro API rejects mixed messages"
 
     def test_injects_thinking_tags_when_no_tool_results(self):
         """
