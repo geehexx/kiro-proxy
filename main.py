@@ -354,6 +354,27 @@ async def lifespan(app: FastAPI):
         follow_redirects=True
     )
     logger.info("Shared HTTP client created with connection pooling")
+
+    # Prefix cache singleton (phase 1, disabled by default via env)
+    from kiro.prefix_cache import PrefixCache
+    from kiro.config import (
+        PREFIX_CACHE_ENABLED, PREFIX_CACHE_MAX_ENTRIES,
+        PREFIX_CACHE_MAX_BYTES, PREFIX_CACHE_TTL_SECONDS,
+        PREFIX_CACHE_MAX_ENTRY_BYTES,
+    )
+    if PREFIX_CACHE_ENABLED:
+        app.state.prefix_cache = PrefixCache(
+            max_entries=PREFIX_CACHE_MAX_ENTRIES,
+            max_bytes=PREFIX_CACHE_MAX_BYTES,
+            ttl_seconds=PREFIX_CACHE_TTL_SECONDS,
+            max_entry_bytes=PREFIX_CACHE_MAX_ENTRY_BYTES,
+        )
+        logger.info("Prefix cache enabled: entries={} max_bytes={} ttl={}s".format(
+            PREFIX_CACHE_MAX_ENTRIES, PREFIX_CACHE_MAX_BYTES, PREFIX_CACHE_TTL_SECONDS
+        ))
+    else:
+        app.state.prefix_cache = None
+        logger.info("Prefix cache disabled (set PREFIX_CACHE_ENABLED=true to enable)")
     
     # ==============================================================================
     # Legacy Fallback: .env → credentials.json
