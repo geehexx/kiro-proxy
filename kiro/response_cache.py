@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Prefix cache for kiro-gateway.
+Response cache for kiro-gateway.
 
 Caches upstream responses keyed by request prefix (system + messages except
 the trailing user turn + model + max_tokens + tool signature). Session-scoped
@@ -12,7 +12,7 @@ Phase 1: in-memory LRU, bounded by entry count and total bytes. Phase 2
 
 Why this exists: Anthropic cache_control beta is dropped by this gateway
 (converters_anthropic.py lines 87 and 105), and AWS Q upstream does not
-honour Anthropic prompt caching. The gateway-side prefix cache is the
+honour Anthropic prompt caching. The gateway-side response cache is the
 only way to get prompt-cache-like behaviour on this stack.
 """
 
@@ -80,15 +80,16 @@ def make_key(
     prefix. If the last message is not a user turn (tool_result flow), the
     full message list is included.
     """
-    if messages and messages[-1].get("role") == "user":
-        prefix_messages = messages[:-1]
-    else:
-        prefix_messages = list(messages)
-
+    # All messages are included in the key (full-request caching).
+    # Excluding the trailing turn is tempting for "prefix reuse" but is
+    # incorrect for full-response caching: two conversations with the same
+    # prefix but different trailing turns would return the same answer.
+    # Prefix-only keying is valid only for upstream KV-cache activation
+    # (Anthropic cache_control, which AWS Q does not support).
     key_material = {
         "session_id": session_id,
         "system": system,
-        "messages": prefix_messages,
+        "messages": list(messages),
         "model": model,
         "max_tokens": max_tokens,
         "tool_signature": _tool_signature(tools),
@@ -97,8 +98,8 @@ def make_key(
     return hashlib.sha256(serialised).hexdigest()
 
 
-class PrefixCache:
-    """Thread-safe LRU prefix cache with TTL and byte budget."""
+class ResponseCache:
+    """Thread-safe LRU response cache with TTL and byte budget."""
 
     def __init__(
         self,

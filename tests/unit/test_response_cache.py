@@ -12,9 +12,9 @@ import time
 
 import pytest
 
-from kiro.prefix_cache import (
+from kiro.response_cache import (
     MAX_ENTRY_BYTES_HARDCAP,
-    PrefixCache,
+    ResponseCache,
     _canonical,
     _tool_signature,
     make_key,
@@ -44,17 +44,23 @@ class TestKeyDeterminism:
         args = self._args()
         assert make_key(**args) == make_key(**args)
 
-    def test_trailing_user_turn_excluded_from_key(self):
-        """Two requests differing only in trailing user message must share a key."""
+    def test_trailing_user_turn_included_in_key(self):
+        """Trailing user turn MUST affect the key (correctness).
+
+        Prefix-only keying returned the same cached response for different
+        trailing questions — wrong answer bug. Full-request keying is the
+        only correctness-safe option for response caching without upstream
+        KV-cache support.
+        """
         args_a = self._args()
         args_b = self._args(
             messages=args_a["messages"][:-1]
             + [{"role": "user", "content": "something totally different"}]
         )
-        assert make_key(**args_a) == make_key(**args_b)
+        assert make_key(**args_a) != make_key(**args_b)
 
-    def test_trailing_assistant_turn_kept_in_key(self):
-        """If last message is NOT user (e.g. tool_result flow), all messages matter."""
+    def test_trailing_assistant_message_affects_key(self):
+        """Assistant trailing turn affects the key (all messages are part of the hash)."""
         args_a = self._args(
             messages=[
                 {"role": "user", "content": "hi"},
@@ -159,7 +165,7 @@ class TestToolSignature:
 
 class TestLRUEviction:
     def test_max_entries_evicts_oldest(self):
-        cache = PrefixCache(max_entries=3, max_bytes=10_000_000, ttl_seconds=3600)
+        cache = ResponseCache(max_entries=3, max_bytes=10_000_000, ttl_seconds=3600)
         cache.put("k1", b"a")
         cache.put("k2", b"b")
         cache.put("k3", b"c")
@@ -171,7 +177,7 @@ class TestLRUEviction:
         assert cache.stats()["evictions"] == 1
 
     def test_get_bumps_entry_to_newest(self):
-        cache = PrefixCache(max_entries=2, max_bytes=10_000_000, ttl_seconds=3600)
+        cache = ResponseCache(max_entries=2, max_bytes=10_000_000, ttl_seconds=3600)
         cache.put("old", b"x")
         cache.put("mid", b"y")
         # Access "old" to bump it.
@@ -182,7 +188,7 @@ class TestLRUEviction:
         assert cache.get("new") is not None
 
     def test_byte_budget_evicts(self):
-        cache = PrefixCache(max_entries=100, max_bytes=3_000, ttl_seconds=3600)
+        cache = ResponseCache(max_entries=100, max_bytes=3_000, ttl_seconds=3600)
         cache.put("k1", b"x" * 1_000)
         cache.put("k2", b"y" * 1_000)
         cache.put("k3", b"z" * 1_000)
@@ -193,7 +199,7 @@ class TestLRUEviction:
 
 class TestOversize:
     def test_entry_over_max_entry_bytes_rejected(self):
-        cache = PrefixCache(
+        cache = ResponseCache(
             max_entries=100,
             max_bytes=10_000_000,
             ttl_seconds=3600,
@@ -206,12 +212,12 @@ class TestOversize:
 
     def test_hardcap_on_max_entry_bytes(self):
         with pytest.raises(ValueError):
-            PrefixCache(max_entry_bytes=MAX_ENTRY_BYTES_HARDCAP + 1)
+            ResponseCache(max_entry_bytes=MAX_ENTRY_BYTES_HARDCAP + 1)
 
 
 class TestTTL:
     def test_expired_entry_returns_none(self):
-        cache = PrefixCache(ttl_seconds=1)
+        cache = ResponseCache(ttl_seconds=1)
         cache.put("k", b"v")
         # Back-date the entry by tampering with stored entry timestamp.
         with cache._lock:  # noqa: SLF001 - test-only access
@@ -220,7 +226,7 @@ class TestTTL:
         assert cache.stats()["misses"] == 1
 
     def test_fresh_entry_hits(self):
-        cache = PrefixCache(ttl_seconds=3600)
+        cache = ResponseCache(ttl_seconds=3600)
         cache.put("k", b"v")
         assert cache.get("k").body == b"v"
         assert cache.stats()["hits"] == 1
@@ -228,7 +234,7 @@ class TestTTL:
 
 class TestSessionInvalidation:
     def test_invalidate_clears_all_phase1(self):
-        cache = PrefixCache()
+        cache = ResponseCache()
         cache.put("k1", b"a")
         cache.put("k2", b"b")
         cleared = cache.invalidate_session("any-session-id")
@@ -249,12 +255,12 @@ class TestValidation:
     )
     def test_invalid_constructor_args(self, kwargs):
         with pytest.raises(ValueError):
-            PrefixCache(**kwargs)
+            ResponseCache(**kwargs)
 
 
 class TestThreadSafety:
     def test_concurrent_puts_no_corruption(self):
-        cache = PrefixCache(max_entries=500, max_bytes=10_000_000)
+        cache = ResponseCache(max_entries=500, max_bytes=10_000_000)
 
         def worker(thread_id: int) -> None:
             for i in range(50):
@@ -272,7 +278,7 @@ class TestThreadSafety:
         assert stats["total_bytes"] <= 10_000_000
 
     def test_concurrent_get_put(self):
-        cache = PrefixCache()
+        cache = ResponseCache()
         cache.put("k", b"hello")
         failures: list[Exception] = []
 
@@ -302,7 +308,7 @@ class TestThreadSafety:
 
 class TestHeaders:
     def test_headers_roundtrip(self):
-        cache = PrefixCache()
+        cache = ResponseCache()
         cache.put("k", b"body", headers={"Content-Type": "application/json"})
         entry = cache.get("k")
         assert entry.headers == {"Content-Type": "application/json"}
@@ -316,7 +322,7 @@ class TestCanonical:
 
 class TestClear:
     def test_clear_resets_all_state(self):
-        cache = PrefixCache()
+        cache = ResponseCache()
         cache.put("a", b"x")
         cache.get("a")  # bump hits
         cache.get("missing")  # bump misses

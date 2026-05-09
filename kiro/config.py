@@ -578,13 +578,13 @@ def get_kiro_q_host(region: str) -> str:
 
 
 # ==================================================================================================
-# Prefix Cache (in-memory LRU, session-scoped)
+# Response Cache (in-memory LRU, session-scoped)
 # ==================================================================================================
 # Phase 1: disabled by default. See VerifAI/docs/kiro-gateway-prefix-cache-plan.md.
 
-PREFIX_CACHE_ENABLED: bool = os.getenv("PREFIX_CACHE_ENABLED", "false").lower() == "true"
-PREFIX_CACHE_MAX_ENTRIES: int = int(os.getenv("PREFIX_CACHE_MAX_ENTRIES", "1000"))
-PREFIX_CACHE_MAX_BYTES: int = int(os.getenv("PREFIX_CACHE_MAX_BYTES", str(500 * 1024 * 1024)))
-PREFIX_CACHE_TTL_SECONDS: int = int(os.getenv("PREFIX_CACHE_TTL_SECONDS", "3600"))
-PREFIX_CACHE_MAX_ENTRY_BYTES: int = int(os.getenv("PREFIX_CACHE_MAX_ENTRY_BYTES", str(5 * 1024 * 1024)))
-PREFIX_CACHE_LOG_HITS: bool = os.getenv("PREFIX_CACHE_LOG_HITS", "true").lower() == "true"
+RESPONSE_CACHE_ENABLED: bool = os.getenv("RESPONSE_CACHE_ENABLED", "false").lower() == "true"
+RESPONSE_CACHE_MAX_ENTRIES: int = int(os.getenv("RESPONSE_CACHE_MAX_ENTRIES", "1000"))
+RESPONSE_CACHE_MAX_BYTES: int = int(os.getenv("RESPONSE_CACHE_MAX_BYTES", str(500 * 1024 * 1024)))
+RESPONSE_CACHE_TTL_SECONDS: int = int(os.getenv("RESPONSE_CACHE_TTL_SECONDS", "3600"))
+RESPONSE_CACHE_MAX_ENTRY_BYTES: int = int(os.getenv("RESPONSE_CACHE_MAX_ENTRY_BYTES", str(5 * 1024 * 1024)))
+RESPONSE_CACHE_LOG_HITS: bool = os.getenv("RESPONSE_CACHE_LOG_HITS", "true").lower() == "true"
