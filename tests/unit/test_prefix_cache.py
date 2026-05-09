@@ -14,7 +14,6 @@ import pytest
 
 from kiro.prefix_cache import (
     MAX_ENTRY_BYTES_HARDCAP,
-    CacheEntry,
     PrefixCache,
     _canonical,
     _tool_signature,
