@@ -146,9 +146,69 @@ async def messages(
         HTTPException: On validation or API errors
     """
     logger.info(f"Request to /v1/messages (model={request_data.model}, stream={request_data.stream})")
-    
+
     if anthropic_version:
         logger.debug(f"Anthropic-Version header: {anthropic_version}")
+
+    # ==============================================================================
+    # Response cache lookup (Phase 2 — non-streaming only)
+    # ==============================================================================
+    # Streaming cache (capture + replay chunks) is a separate follow-up.
+    # The cache is a singleton on app.state; if disabled it is None.
+    from kiro.cache_integration import (
+        compute_cache_key,
+        derive_session_id,
+        entry_to_response_body,
+        store_cache,
+        try_cache_lookup,
+    )
+
+    response_cache = getattr(request.app.state, "response_cache", None)
+    cache_key: Optional[str] = None
+    cache_eligible = response_cache is not None and not request_data.stream
+    if cache_eligible:
+        client_session_id = request.headers.get("x-kiro-session-id")
+        api_key_for_scope = (
+            request.headers.get("x-api-key")
+            or request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+            or None
+        )
+        session_id = derive_session_id(api_key_for_scope, client_session_id)
+
+        # Serialise request components into dict form for fingerprinting.
+        messages_for_cache = [msg.model_dump() for msg in request_data.messages]
+        tools_for_cache = (
+            [tool.model_dump() for tool in request_data.tools]
+            if request_data.tools
+            else None
+        )
+        if isinstance(request_data.system, list):
+            system_for_cache = [
+                b.model_dump() if hasattr(b, "model_dump") else b
+                for b in request_data.system
+            ]
+        else:
+            system_for_cache = request_data.system
+
+        cache_key = compute_cache_key(
+            session_id=session_id,
+            system=system_for_cache,
+            messages=messages_for_cache,
+            model=request_data.model,
+            max_tokens=request_data.max_tokens,
+            tools=tools_for_cache,
+        )
+
+        hit = try_cache_lookup(response_cache, cache_key)
+        if hit is not None:
+            logger.info(
+                f"HTTP 200 - POST /v1/messages (non-streaming, cache hit) "
+                f"key={cache_key[:8]}"
+            )
+            return JSONResponse(
+                content=entry_to_response_body(hit),
+                headers={"x-kiro-cache": "hit"},
+            )
     
     # Note: prepare_new_request() and log_request_body() are now called by DebugLoggerMiddleware
     # This ensures debug logging works even for requests that fail Pydantic validation (422 errors)
@@ -507,14 +567,32 @@ async def messages(
                             request_tools=tools_for_tokenizer,
                             request_system=system_for_tokenizer,
                         )
-                        
+
                         await http_client.close()
                         logger.info(f"HTTP 200 - POST /v1/messages (non-streaming) - completed")
-                        
+
                         if debug_logger:
                             debug_logger.discard_buffers()
-                        
-                        return JSONResponse(content=anthropic_response)
+
+                        # Persist into the response cache if enabled.
+                        if (
+                            cache_eligible
+                            and cache_key is not None
+                            and response_cache is not None
+                        ):
+                            stored = store_cache(
+                                response_cache, cache_key, anthropic_response
+                            )
+                            if stored:
+                                logger.debug(
+                                    f"response-cache stored key={cache_key[:8]} "
+                                    f"entries={response_cache.stats()['entries']}"
+                                )
+
+                        return JSONResponse(
+                            content=anthropic_response,
+                            headers={"x-kiro-cache": "miss"} if cache_eligible else None,
+                        )
                 
                 else:
                     # ERROR - classify and decide
@@ -868,15 +946,29 @@ async def messages(
                 request_tools=tools_for_tokenizer,
                 request_system=system_for_tokenizer,
             )
-            
+
             await http_client.close()
-            
+
             logger.info(f"HTTP 200 - POST /v1/messages (non-streaming) - completed")
-            
+
             if debug_logger:
                 debug_logger.discard_buffers()
-            
-            return JSONResponse(content=anthropic_response)
+
+            # Persist into the response cache if enabled. We store only
+            # on clean 200 responses — errors and partial replies must
+            # not be cached.
+            if cache_eligible and cache_key is not None and response_cache is not None:
+                stored = store_cache(response_cache, cache_key, anthropic_response)
+                if stored:
+                    logger.debug(
+                        f"response-cache stored key={cache_key[:8]} "
+                        f"entries={response_cache.stats()['entries']}"
+                    )
+
+            return JSONResponse(
+                content=anthropic_response,
+                headers={"x-kiro-cache": "miss"} if cache_eligible else None,
+            )
     
     except HTTPException as e:
         await http_client.close()
