@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Unit tests for kiro/prefix_cache.py.
+Unit tests for kiro/response_cache.py.
 
 Covers: key determinism, tool signature, LRU eviction, byte budget, TTL
 expiry, session invalidation, thread safety, oversize rejection.

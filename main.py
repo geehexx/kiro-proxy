@@ -358,23 +358,23 @@ async def lifespan(app: FastAPI):
     # Response cache singleton (phase 1, disabled by default via env)
     from kiro.response_cache import ResponseCache
     from kiro.config import (
-        PREFIX_CACHE_ENABLED, PREFIX_CACHE_MAX_ENTRIES,
-        PREFIX_CACHE_MAX_BYTES, PREFIX_CACHE_TTL_SECONDS,
-        PREFIX_CACHE_MAX_ENTRY_BYTES,
+        RESPONSE_CACHE_ENABLED, RESPONSE_CACHE_MAX_ENTRIES,
+        RESPONSE_CACHE_MAX_BYTES, RESPONSE_CACHE_TTL_SECONDS,
+        RESPONSE_CACHE_MAX_ENTRY_BYTES,
     )
-    if PREFIX_CACHE_ENABLED:
-        app.state.prefix_cache = ResponseCache(
-            max_entries=PREFIX_CACHE_MAX_ENTRIES,
-            max_bytes=PREFIX_CACHE_MAX_BYTES,
-            ttl_seconds=PREFIX_CACHE_TTL_SECONDS,
-            max_entry_bytes=PREFIX_CACHE_MAX_ENTRY_BYTES,
+    if RESPONSE_CACHE_ENABLED:
+        app.state.response_cache = ResponseCache(
+            max_entries=RESPONSE_CACHE_MAX_ENTRIES,
+            max_bytes=RESPONSE_CACHE_MAX_BYTES,
+            ttl_seconds=RESPONSE_CACHE_TTL_SECONDS,
+            max_entry_bytes=RESPONSE_CACHE_MAX_ENTRY_BYTES,
         )
         logger.info("Response cache enabled: entries={} max_bytes={} ttl={}s".format(
-            PREFIX_CACHE_MAX_ENTRIES, PREFIX_CACHE_MAX_BYTES, PREFIX_CACHE_TTL_SECONDS
+            RESPONSE_CACHE_MAX_ENTRIES, RESPONSE_CACHE_MAX_BYTES, RESPONSE_CACHE_TTL_SECONDS
         ))
     else:
-        app.state.prefix_cache = None
-        logger.info("Response cache disabled (set PREFIX_CACHE_ENABLED=true to enable)")
+        app.state.response_cache = None
+        logger.info("Response cache disabled (set RESPONSE_CACHE_ENABLED=true to enable)")
     
     # ==============================================================================
     # Legacy Fallback: .env → credentials.json
