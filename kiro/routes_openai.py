@@ -143,16 +143,23 @@ async def get_models(request: Request):
         account = request.app.state.account_manager.get_first_account()
         available_model_ids = account.model_resolver.get_available_models()
     
-    # Build OpenAI-compatible model list
-    openai_models = [
-        OpenAIModel(
-            id=model_id,
-            owned_by="anthropic",
-            description="Claude model via Kiro API"
+    # Build OpenAI-compatible model list with humanised labels.
+    from kiro.model_display import canonical_model_id, describe_model, display_name
+
+    openai_models = []
+    for model_id in available_model_ids:
+        canonical = canonical_model_id(model_id)
+        label = display_name(model_id)
+        description = describe_model(model_id) or "Claude model via Kiro API"
+        openai_models.append(
+            OpenAIModel(
+                id=canonical,
+                owned_by="anthropic",
+                description=description,
+                display_name=label,
+            )
         )
-        for model_id in available_model_ids
-    ]
-    
+
     return ModelList(data=openai_models)
 
 
