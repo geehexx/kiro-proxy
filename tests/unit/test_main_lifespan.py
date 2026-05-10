@@ -34,7 +34,7 @@ class TestLifespanLegacyFallback:
     @pytest.mark.asyncio
     async def test_lifespan_legacy_mode_recreate_credentials(self, tmp_path, monkeypatch):
         """
-        Test 92: ACCOUNT_SYSTEM=false всегда пересоздаёт credentials.json
+        Test 92: ACCOUNT_SYSTEM=false always recreates credentials.json
         
         What it does: Verifies that legacy mode recreates credentials.json on every startup
         Purpose: Ensure .env changes are always reflected in legacy mode
@@ -93,7 +93,7 @@ class TestLifespanLegacyFallback:
     @pytest.mark.asyncio
     async def test_lifespan_account_system_one_time_migration(self, tmp_path, monkeypatch):
         """
-        Test 93: ACCOUNT_SYSTEM=true создаёт credentials.json только раз
+        Test 93: ACCOUNT_SYSTEM=true creates credentials.json only once
         
         What it does: Verifies one-time migration in account system mode
         Purpose: Ensure credentials.json is not overwritten after initial migration
@@ -159,7 +159,7 @@ class TestLifespanLegacyFallback:
     @pytest.mark.asyncio
     async def test_lifespan_migration_priority_sqlite(self, tmp_path, monkeypatch):
         """
-        Test 94: Приоритет SQLite > JSON > refresh_token
+        Test 94: Priority order is SQLite > JSON > refresh_token
         
         What it does: Verifies credential source priority during migration
         Purpose: Ensure correct priority order matches KiroAuthManager
@@ -225,7 +225,7 @@ class TestLifespanLegacyFallback:
     @pytest.mark.asyncio
     async def test_lifespan_migration_add_env_overrides(self, tmp_path, monkeypatch):
         """
-        Test 95: Добавление profile_arn, region, api_region из .env
+        Test 95: Append profile_arn, region, and api_region from .env
         
         What it does: Verifies that env var overrides are added to migrated credentials
         Purpose: Ensure per-account parameters are preserved during migration
@@ -278,7 +278,7 @@ class TestLifespanLegacyFallback:
     @pytest.mark.asyncio
     async def test_lifespan_skip_migration_if_exists(self, tmp_path, monkeypatch):
         """
-        Test 96: Пропуск миграции если credentials.json существует
+        Test 96: Skip migration when credentials.json already exists
         
         What it does: Verifies migration is skipped when credentials.json already exists
         Purpose: Prevent overwriting user-managed credentials
@@ -342,7 +342,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_create_account_manager(self, tmp_path, monkeypatch):
         """
-        Test 97: Создание AccountManager с правильными путями
+        Test 97: Create AccountManager with correct paths
         
         What it does: Verifies AccountManager is created with correct file paths
         Purpose: Ensure AccountManager receives proper configuration
@@ -405,7 +405,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_load_credentials_and_state(self, tmp_path, monkeypatch):
         """
-        Test 98: Вызов load_credentials() и load_state()
+        Test 98: Invoke load_credentials() and load_state()
         
         What it does: Verifies that load methods are called during startup
         Purpose: Ensure credentials and state are loaded before initialization
@@ -461,7 +461,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_set_account_system_flag(self, tmp_path, monkeypatch):
         """
-        Test 99: Установка app.state.account_system
+        Test 99: Assign app.state.account_system
         
         What it does: Verifies account_system flag is set in app.state
         Purpose: Ensure routes can check if account system is enabled
@@ -503,7 +503,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_initialize_first_working_account(self, tmp_path, monkeypatch):
         """
-        Test 100: Инициализация первого рабочего аккаунта
+        Test 100: Initialise the first working account
         
         What it does: Verifies first working account is initialized at startup
         Purpose: Ensure at least one account is ready before accepting requests
@@ -558,7 +558,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_full_circle_initialization(self, tmp_path, monkeypatch):
         """
-        Test 101: Попытка инициализации всех аккаунтов по кругу
+        Test 101: Attempt initialisation of all accounts in round-robin order
         
         What it does: Verifies full circle attempt if first accounts fail
         Purpose: Ensure all accounts are tried before giving up
@@ -616,7 +616,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_exit_if_no_accounts(self, tmp_path, monkeypatch):
         """
-        Test 102: RuntimeError если нет аккаунтов в credentials.json
+        Test 102: RuntimeError when no accounts are present in credentials.json
         
         What it does: Verifies application raises RuntimeError if no accounts configured
         Purpose: Prevent startup with empty configuration
@@ -656,7 +656,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_exit_if_all_failed(self, tmp_path, monkeypatch):
         """
-        Test 103: RuntimeError если все аккаунты не инициализировались
+        Test 103: RuntimeError when all accounts failed to initialise
         
         What it does: Verifies application raises RuntimeError if all accounts fail to initialize
         Purpose: Prevent startup without any working accounts
@@ -700,7 +700,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_save_initial_state(self, tmp_path, monkeypatch):
         """
-        Test 104: Сохранение начального state.json
+        Test 104: Persist the initial state.json
         
         What it does: Verifies initial state is saved after first account initialization
         Purpose: Ensure state persistence starts immediately
@@ -751,7 +751,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_start_background_task(self, tmp_path, monkeypatch):
         """
-        Test 105: Запуск save_state_periodically()
+        Test 105: Start save_state_periodically()
         
         What it does: Verifies background task is started for periodic state saving
         Purpose: Ensure state is saved periodically during runtime
@@ -801,7 +801,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_shutdown_cancel_task(self, tmp_path, monkeypatch):
         """
-        Test 106: Отмена background task при shutdown
+        Test 106: Cancel the background task on shutdown
         
         What it does: Verifies background task is cancelled during shutdown
         Purpose: Ensure clean shutdown without hanging tasks
@@ -859,7 +859,7 @@ class TestLifespanAccountManagerInit:
     @pytest.mark.asyncio
     async def test_lifespan_shutdown_final_save(self, tmp_path, monkeypatch):
         """
-        Test 107: Финальное сохранение state.json при shutdown
+        Test 107: Final save of state.json on shutdown
         
         What it does: Verifies final state save happens during shutdown
         Purpose: Ensure no state is lost on graceful shutdown

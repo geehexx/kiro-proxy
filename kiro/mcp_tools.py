@@ -562,7 +562,7 @@ def extract_query_from_messages(messages, api_format: str) -> Optional[str]:
     if isinstance(content, str):
         text = content
     elif isinstance(content, list):
-        # Extract text from content blocks (могут быть Pydantic модели или dict)
+        # Extract text from content blocks (may be Pydantic models or dicts)
         text_parts = []
         for block in content:
             # Handle both Pydantic models and dicts
