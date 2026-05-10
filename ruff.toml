@@ -1,0 +1,39 @@
+# Ruff configuration for kiro-gateway.
+#
+# Tuned to be lint-on-save friendly rather than a hard CI gate: the
+# existing upstream codebase has plenty of pre-existing style debt
+# (trailing whitespace on blank lines, unused-import drift) and we do
+# not want lefthook to block every commit until that debt is paid down.
+#
+# When touching a file, prefer running `ruff check --fix` against it so
+# the blast radius of a style fix is contained to your diff.
+
+line-length = 120
+target-version = "py312"
+extend-exclude = [
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".hypothesis",
+    "old",
+    "_notes",
+    "docs",
+    "tests/unit/test_debug_logger.py",
+]
+
+[lint]
+# Start with the standard pyflakes + pycodestyle warnings and expand
+# from there. W293 (blank line contains whitespace) is surfaced as a
+# warning but not enforced at commit time.
+select = ["F", "E4", "E7", "E9", "W", "I"]
+ignore = [
+    "W293",  # pre-existing in legacy upstream code; cleaned opportunistically
+    "E501",  # line-length drift in legacy files; the critical rule is logic, not layout
+    "F401",  # unused-import drift in legacy files; cleaned on file touch
+]
+
+[lint.per-file-ignores]
+"tests/**/*.py" = [
+    "F841",  # unused locals are common in tests (assertion placeholders)
+]
