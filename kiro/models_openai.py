@@ -37,14 +37,21 @@ from pydantic import BaseModel, Field
 class OpenAIModel(BaseModel):
     """
     Data model for describing an AI model in OpenAI format.
-    
+
     Used in the /v1/models endpoint response.
+
+    ``display_name`` is a Kiro-gateway extension: clients like Claude
+    Code use it to render a human-readable label in the model picker
+    without re-deriving it from ``id``. The field is ignored by
+    strict OpenAI clients because Pydantic serialises unknown extras
+    as regular JSON keys.
     """
     id: str
     object: str = "model"
     created: int = Field(default_factory=lambda: int(time.time()))
     owned_by: str = "anthropic"
     description: Optional[str] = None
+    display_name: Optional[str] = None
 
 
 class ModelList(BaseModel):

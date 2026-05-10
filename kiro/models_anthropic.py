@@ -369,21 +369,62 @@ class AnthropicCountTokensRequest(BaseModel):
 # ==================================================================================================
 
 
+class AnthropicCacheCreation(BaseModel):
+    """
+    Breakdown of cache-creation tokens by TTL bucket (Anthropic schema).
+
+    Attributes:
+        ephemeral_5m_input_tokens: Tokens used to create the 5-minute cache entry
+        ephemeral_1h_input_tokens: Tokens used to create the 1-hour cache entry
+    """
+
+    ephemeral_5m_input_tokens: Optional[int] = None
+    ephemeral_1h_input_tokens: Optional[int] = None
+
+    model_config = {"extra": "allow"}
+
+
+class AnthropicServerToolUse(BaseModel):
+    """
+    Server-side tool-use counters surfaced in Anthropic ``usage`` payloads.
+
+    Attributes:
+        web_search_requests: Count of web-search tool invocations made by the server
+        web_fetch_requests: Count of web-fetch tool invocations made by the server
+    """
+
+    web_search_requests: Optional[int] = None
+    web_fetch_requests: Optional[int] = None
+
+    model_config = {"extra": "allow"}
+
+
 class AnthropicUsage(BaseModel):
     """
     Token usage information in Anthropic format.
 
+    Mirrors the ``usage`` object in the public Anthropic Messages API as of
+    2026-05. Fields are optional/forwarded only when the upstream Kiro
+    response includes them — we do not synthesise cache or server-tool
+    counters we cannot observe.
+
     Attributes:
         input_tokens: Number of input tokens
         output_tokens: Number of output tokens
-        cache_read_input_tokens: Tokens read from prompt cache (only forwarded when explicitly returned by upstream Kiro API)
-        cache_creation_input_tokens: Tokens used to create prompt cache (only forwarded when explicitly returned by upstream Kiro API)
+        cache_read_input_tokens: Tokens read from prompt cache (forwarded when upstream returns it)
+        cache_creation_input_tokens: Tokens used to create prompt cache (forwarded when upstream returns it)
+        cache_creation: Per-TTL breakdown of cache-creation tokens (forwarded when upstream returns it)
+        server_tool_use: Server-side tool-use counters (forwarded when upstream returns it)
+        service_tier: Service tier used for this request (forwarded when upstream returns it)
     """
 
     input_tokens: int
     output_tokens: int
     cache_read_input_tokens: Optional[int] = None
     cache_creation_input_tokens: Optional[int] = None
+    cache_creation: Optional[AnthropicCacheCreation] = None
+    server_tool_use: Optional[AnthropicServerToolUse] = None
+    service_tier: Optional[str] = None
 
     model_config = {"extra": "allow"}
 

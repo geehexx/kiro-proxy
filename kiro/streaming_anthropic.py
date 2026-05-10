@@ -642,9 +642,17 @@ async def stream_kiro_to_anthropic(
         else:
             stop_reason = "end_turn"
         
-        # Send message_delta with stop_reason and usage
+        # Send message_delta with stop_reason and usage.
+        # Per the Anthropic Messages API streaming schema, the usage
+        # object in ``message_delta`` is CUMULATIVE — it repeats
+        # ``input_tokens`` and cache counters so the client can read a
+        # single event and have the full picture. Emitting only
+        # ``output_tokens`` is technically accepted but under-reports
+        # prompt usage to downstream UIs (Claude Code's usage tracker
+        # reads this payload for its running total).
         usage_payload = {
-            "output_tokens": output_tokens
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
         }
         usage_payload.update(upstream_cache_usage)
 
