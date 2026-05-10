@@ -146,7 +146,14 @@ async def messages(
         HTTPException: On validation or API errors
     """
     logger.info(f"Request to /v1/messages (model={request_data.model}, stream={request_data.stream})")
-    
+
+    # Record per-request context for debug capture (no-op if DEBUG_CAPTURE_UPSTREAM_ERRORS unset).
+    try:
+        from kiro.debug_capture import set_request_context
+        set_request_context(model=request_data.model, messages=request_data.messages)
+    except Exception:
+        pass
+
     if anthropic_version:
         logger.debug(f"Anthropic-Version header: {anthropic_version}")
     
@@ -522,9 +529,21 @@ async def messages(
                         error_content = await response.aread()
                     except Exception:
                         error_content = b"Unknown error"
-                    
+
                     await http_client.close()
                     error_text = error_content.decode('utf-8', errors='replace')
+
+                    # Capture raw upstream error body (gated by DEBUG_CAPTURE_UPSTREAM_ERRORS).
+                    try:
+                        from kiro.debug_capture import capture_upstream_error
+                        capture_upstream_error(
+                            status_code=response.status_code,
+                            body=error_text,
+                            headers=dict(response.headers),
+                            source="anthropic_non_stream",
+                        )
+                    except Exception:
+                        pass
                     
                     # Extract error reason and save for final return
                     error_reason = None

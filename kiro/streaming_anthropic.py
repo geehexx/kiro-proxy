@@ -905,6 +905,17 @@ async def stream_with_first_token_retry_anthropic(
     """
     def create_http_error(status_code: int, error_text: str) -> Exception:
         """Create exception for HTTP errors in Anthropic format."""
+        # Capture raw upstream error body (gated by DEBUG_CAPTURE_UPSTREAM_ERRORS).
+        try:
+            from kiro.debug_capture import capture_upstream_error
+            capture_upstream_error(
+                status_code=status_code,
+                body=error_text,
+                headers=None,
+                source="anthropic_stream",
+            )
+        except Exception:
+            pass
         return Exception(json.dumps({
             "type": "error",
             "error": {

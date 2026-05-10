@@ -379,6 +379,37 @@ else:
 # Directory for debug log files
 DEBUG_DIR: str = os.getenv("DEBUG_DIR", "debug_logs")
 
+# ==================================================================================================
+# Upstream Error Capture (follow-up #1 from 4.7 error surfacing plan)
+# ==================================================================================================
+# Persists raw non-2xx upstream bodies so the next incident produces
+# evidence rather than guesses. Disabled by default. Zero behaviour
+# change when disabled.
+
+def _bool_env(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name, "").strip().lower()
+    if raw in ("1", "true", "yes", "on"):
+        return True
+    if raw in ("0", "false", "no", "off", ""):
+        return default
+    return default
+
+DEBUG_CAPTURE_UPSTREAM_ERRORS: bool = _bool_env("DEBUG_CAPTURE_UPSTREAM_ERRORS", False)
+
+# Ring-buffer file cap. Older captures pruned at write time.
+try:
+    DEBUG_CAPTURE_MAX_FILES: int = max(1, int(os.getenv("DEBUG_CAPTURE_MAX_FILES", "200")))
+except ValueError:
+    DEBUG_CAPTURE_MAX_FILES = 200
+
+# Capture destination. Default lives under the Claude Code user dir so
+# both ends of the pipeline (gateway + hooks) can see it without extra
+# mount config under WSLg.
+DEBUG_CAPTURE_DIR: str = os.getenv(
+    "DEBUG_CAPTURE_DIR",
+    str(Path("~/.claude/kiro-gateway-errors").expanduser()),
+)
+
 
 def _warn_timeout_configuration():
     """
