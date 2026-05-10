@@ -44,7 +44,7 @@ class TestAccountSystemFullFlow:
         mock_list_models_response
     ):
         """
-        Test 137: Полный failover между двумя аккаунтами
+        Test 137: Full failover between two accounts
         
         What it does: Simulates complete failover from broken account to working one
         Purpose: Verify failover loop works end-to-end
@@ -163,7 +163,7 @@ class TestAccountSystemFullFlow:
         mock_list_models_response
     ):
         """
-        Test 138: Sticky behavior обновляет global index
+        Test 138: Sticky behavior updates global index
         
         What it does: Verifies global current_account_index is updated on success
         Purpose: Ensure sticky behavior works across all models
@@ -221,7 +221,7 @@ class TestAccountSystemFullFlow:
         mock_time
     ):
         """
-        Test 139: Circuit Breaker блокирует сломанный аккаунт
+        Test 139: Circuit Breaker blocks a broken account
         
         What it does: Verifies broken account is skipped during cooldown
         Purpose: Ensure Circuit Breaker prevents using broken accounts
@@ -289,7 +289,7 @@ class TestAccountSystemFullFlow:
         temp_account_credentials_files
     ):
         """
-        Test 140: Half-Open восстанавливает аккаунт после timeout
+        Test 140: Half-Open recovers an account after timeout
         
         What it does: Verifies broken account is retried after recovery timeout
         Purpose: Ensure accounts can recover from broken state
@@ -360,7 +360,7 @@ class TestAccountSystemFullFlow:
         temp_account_credentials_files
     ):
         """
-        Test 141: state.json сохраняется и восстанавливается
+        Test 141: state.json is persisted and restored
         
         What it does: Verifies state persists across manager restarts
         Purpose: Ensure runtime state survives restarts
@@ -435,7 +435,7 @@ class TestAccountSystemFullFlow:
         mock_list_models_response
     ):
         """
-        Test 142: TTL обновляется только при использовании аккаунта
+        Test 142: TTL is refreshed only when the account is used
         
         What it does: Verifies model cache is refreshed when TTL expires during usage
         Purpose: Ensure cache stays fresh without background tasks

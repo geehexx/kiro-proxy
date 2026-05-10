@@ -838,6 +838,7 @@ class TestThinkingParserEdgeCases:
         print("Testing Unicode content...")
         parser = ThinkingParser()
         
+        # Non-ASCII input (Cyrillic + emoji) exercises Unicode passthrough.
         result = parser.feed("<thinking>Думаю о проблеме 🤔</thinking>Ответ: 42")
         
         print(f"Regular content: '{result.regular_content}'")

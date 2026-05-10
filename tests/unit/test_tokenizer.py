@@ -325,11 +325,11 @@ class TestCountMessageTokens:
         with_correction = count_message_tokens(messages, apply_claude_correction=True)
         without_correction = count_message_tokens(messages, apply_claude_correction=False)
         
-        print(f"С коррекцией: {with_correction}")
-        print(f"Без коррекции: {without_correction}")
-        
+        print(f"With correction: {with_correction}")
+        print(f"Without correction: {without_correction}")
+
         assert with_correction > without_correction, "With correction should be higher"
-    
+
     def test_message_with_empty_content(self):
         """
         What it does: Checks token counting for message with empty content.
@@ -600,8 +600,8 @@ class TestCountToolsTokens:
         with_correction = count_tools_tokens(tools, apply_claude_correction=True)
         without_correction = count_tools_tokens(tools, apply_claude_correction=False)
         
-        print(f"С коррекцией: {with_correction}")
-        print(f"Без коррекции: {without_correction}")
+        print(f"With correction: {with_correction}")
+        print(f"Without correction: {without_correction}")
         
         assert with_correction > without_correction, "With correction should be higher"
 
@@ -967,15 +967,15 @@ class TestGetEncoding:
         tokenizer_module._encoding = None
         
         try:
-            # Мокируем import tiktoken чтобы выбросить ImportError
+            # Mock the tiktoken import to raise ImportError
             with patch.dict('sys.modules', {'tiktoken': None}):
                 with patch('builtins.__import__', side_effect=ImportError("No module named 'tiktoken'")):
-                    # Сбрасываем кэш
+                    # Reset the cache
                     tokenizer_module._encoding = None
-                    
-                    # Должен вернуть None и не упасть
-                    # Примечание: из-за кэширования этот тест может не работать идеально
-                    # но главное - проверить что код не падает
+
+                    # Should return None and not crash.
+                    # Note: due to caching this test may not work perfectly,
+                    # but the key assertion is that the code does not crash.
                     pass
         finally:
             tokenizer_module._encoding = original_encoding
@@ -1030,13 +1030,13 @@ class TestTokenizerIntegration:
         """
         print("Test: Large context...")
         
-        # Создаём большой текст
-        large_text = "This is a test sentence. " * 1000  # ~5000 слов
-        
+        # Build a large text
+        large_text = "This is a test sentence. " * 1000  # ~5000 words
+
         messages = [{"role": "user", "content": large_text}]
-        
+
         result = estimate_request_tokens(messages)
-        print(f"Токенов в большом тексте: {result['total_tokens']}")
+        print(f"Tokens in large text: {result['total_tokens']}")
         
         # Should have many tokens
         assert result["total_tokens"] > 1000, "Large text should have > 1000 tokens"
@@ -1051,7 +1051,7 @@ class TestTokenizerIntegration:
         text = "This is a test for consistency checking"
         
         results = [count_tokens(text) for _ in range(5)]
-        print(f"Результаты: {results}")
+        print(f"Results: {results}")
         
         # All results should be identical
         assert len(set(results)) == 1, "Results should be consistent"

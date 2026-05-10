@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 """
-Unit-тесты для DebugLogger.
-Проверяет логику буферизации и записи debug логов в разных режимах.
+Unit tests for DebugLogger.
+Verifies the buffering and write logic for debug logs in each mode.
 """
 
 import json
@@ -12,679 +12,679 @@ from unittest.mock import patch, MagicMock
 
 
 class TestDebugLoggerModeOff:
-    """Тесты для режима DEBUG_MODE=off."""
-    
+    """Tests for DEBUG_MODE=off."""
+
     def test_prepare_new_request_does_nothing(self, tmp_path):
         """
-        Что он делает: Проверяет, что prepare_new_request ничего не делает в режиме off.
-        Цель: Убедиться, что в режиме off директория не создаётся.
+        What it does: Verifies that prepare_new_request does nothing in off mode.
+        Purpose: Confirm no directory is created in off mode.
         """
-        print("Настройка: Режим off...")
+        print("Setup: Mode off...")
         with patch('kiro.debug_logger.DEBUG_MODE', 'off'):
             with patch('kiro.debug_logger.DEBUG_DIR', str(tmp_path / "debug_logs")):
-                # Пересоздаём экземпляр с новыми настройками
+                # Recreate instance with the new settings
                 from kiro.debug_logger import DebugLogger
                 logger = DebugLogger.__new__(DebugLogger)
                 logger._initialized = False
                 logger.__init__()
                 logger.debug_dir = tmp_path / "debug_logs"
-                
-                print("Действие: Вызов prepare_new_request...")
+
+                print("Action: Calling prepare_new_request...")
                 logger.prepare_new_request()
-                
-                print(f"Проверяем, что директория не создана...")
+
+                print(f"Check that the directory was not created...")
                 assert not (tmp_path / "debug_logs").exists()
-    
+
     def test_log_request_body_does_nothing(self, tmp_path):
         """
-        Что он делает: Проверяет, что log_request_body ничего не делает в режиме off.
-        Цель: Убедиться, что данные не записываются.
+        What it does: Verifies that log_request_body does nothing in off mode.
+        Purpose: Confirm data is not written.
         """
-        print("Настройка: Режим off...")
+        print("Setup: Mode off...")
         with patch('kiro.debug_logger.DEBUG_MODE', 'off'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = tmp_path / "debug_logs"
-            
-            print("Действие: Вызов log_request_body...")
+
+            print("Action: Calling log_request_body...")
             logger.log_request_body(b'{"test": "data"}')
-            
-            print(f"Проверяем, что файл не создан...")
+
+            print(f"Check that the file was not created...")
             assert not (tmp_path / "debug_logs" / "request_body.json").exists()
 
 
 class TestDebugLoggerModeAll:
-    """Тесты для режима DEBUG_MODE=all."""
-    
+    """Tests for DEBUG_MODE=all."""
+
     def test_prepare_new_request_clears_directory(self, tmp_path):
         """
-        Что он делает: Проверяет, что prepare_new_request очищает директорию в режиме all.
-        Цель: Убедиться, что старые логи удаляются.
+        What it does: Verifies that prepare_new_request clears the directory in all mode.
+        Purpose: Confirm old logs are removed.
         """
-        print("Настройка: Режим all, создаём старый файл...")
+        print("Setup: Mode all, creating an old file...")
         debug_dir = tmp_path / "debug_logs"
         debug_dir.mkdir()
         old_file = debug_dir / "old_file.txt"
         old_file.write_text("old content")
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов prepare_new_request...")
+
+            print("Action: Calling prepare_new_request...")
             logger.prepare_new_request()
-            
-            print(f"Проверяем, что старый файл удалён...")
+
+            print(f"Check that the old file was removed...")
             assert not old_file.exists()
-            print(f"Проверяем, что директория существует...")
+            print(f"Check that the directory exists...")
             assert debug_dir.exists()
-    
+
     def test_log_request_body_writes_immediately(self, tmp_path):
         """
-        Что он делает: Проверяет, что log_request_body пишет сразу в файл в режиме all.
-        Цель: Убедиться, что данные записываются немедленно.
+        What it does: Verifies that log_request_body writes to file immediately in all mode.
+        Purpose: Confirm data is written straight away.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         debug_dir = tmp_path / "debug_logs"
         debug_dir.mkdir()
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов log_request_body...")
+
+            print("Action: Calling log_request_body...")
             test_data = b'{"model": "test", "messages": []}'
             logger.log_request_body(test_data)
-            
-            print(f"Проверяем, что файл создан...")
+
+            print(f"Check that the file was created...")
             file_path = debug_dir / "request_body.json"
             assert file_path.exists()
-            
-            print(f"Проверяем содержимое файла...")
+
+            print(f"Check the file contents...")
             content = json.loads(file_path.read_text())
             assert content["model"] == "test"
-    
+
     def test_log_kiro_request_body_writes_immediately(self, tmp_path):
         """
-        Что он делает: Проверяет, что log_kiro_request_body пишет сразу в файл в режиме all.
-        Цель: Убедиться, что Kiro payload записывается немедленно.
+        What it does: Verifies that log_kiro_request_body writes to file immediately in all mode.
+        Purpose: Confirm the Kiro payload is written straight away.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         debug_dir = tmp_path / "debug_logs"
         debug_dir.mkdir()
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов log_kiro_request_body...")
+
+            print("Action: Calling log_kiro_request_body...")
             test_data = b'{"conversationState": {}}'
             logger.log_kiro_request_body(test_data)
-            
-            print(f"Проверяем, что файл создан...")
+
+            print(f"Check that the file was created...")
             file_path = debug_dir / "kiro_request_body.json"
             assert file_path.exists()
-    
+
     def test_log_raw_chunk_appends_to_file(self, tmp_path):
         """
-        Что он делает: Проверяет, что log_raw_chunk дописывает в файл в режиме all.
-        Цель: Убедиться, что чанки накапливаются.
+        What it does: Verifies that log_raw_chunk appends to the file in all mode.
+        Purpose: Confirm chunks accumulate.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         debug_dir = tmp_path / "debug_logs"
         debug_dir.mkdir()
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов log_raw_chunk дважды...")
+
+            print("Action: Calling log_raw_chunk twice...")
             logger.log_raw_chunk(b'chunk1')
             logger.log_raw_chunk(b'chunk2')
-            
-            print(f"Проверяем содержимое файла...")
+
+            print(f"Check the file contents...")
             file_path = debug_dir / "response_stream_raw.txt"
             content = file_path.read_bytes()
             assert content == b'chunk1chunk2'
 
 
 class TestDebugLoggerModeErrors:
-    """Тесты для режима DEBUG_MODE=errors."""
-    
+    """Tests for DEBUG_MODE=errors."""
+
     def test_log_request_body_buffers_data(self, tmp_path):
         """
-        Что он делает: Проверяет, что log_request_body буферизует данные в режиме errors.
-        Цель: Убедиться, что данные не записываются сразу.
+        What it does: Verifies that log_request_body buffers data in errors mode.
+        Purpose: Confirm data is not written straight away.
         """
-        print("Настройка: Режим errors...")
+        print("Setup: Mode errors...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'errors'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов log_request_body...")
+
+            print("Action: Calling log_request_body...")
             test_data = b'{"test": "buffered"}'
             logger.log_request_body(test_data)
-            
-            print(f"Проверяем, что файл НЕ создан...")
+
+            print(f"Check that the file was NOT created...")
             assert not debug_dir.exists()
-            
-            print(f"Проверяем, что данные в буфере...")
+
+            print(f"Check that the data is in the buffer...")
             assert logger._request_body_buffer == test_data
-    
+
     def test_flush_on_error_writes_buffers(self, tmp_path):
         """
-        Что он делает: Проверяет, что flush_on_error записывает буферы в файлы.
-        Цель: Убедиться, что при ошибке данные сохраняются.
+        What it does: Verifies that flush_on_error writes the buffers to files.
+        Purpose: Confirm data is persisted on error.
         """
-        print("Настройка: Режим errors, заполняем буферы...")
+        print("Setup: Mode errors, filling buffers...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'errors'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            # Заполняем буферы
+
+            # Fill the buffers
             logger.log_request_body(b'{"request": "body"}')
             logger.log_kiro_request_body(b'{"kiro": "request"}')
             logger.log_raw_chunk(b'raw_chunk')
             logger.log_modified_chunk(b'modified_chunk')
-            
-            print("Действие: Вызов flush_on_error...")
+
+            print("Action: Calling flush_on_error...")
             logger.flush_on_error(400, "Bad Request")
-            
-            print(f"Проверяем, что все файлы созданы...")
+
+            print(f"Check that all files were created...")
             assert (debug_dir / "request_body.json").exists()
             assert (debug_dir / "kiro_request_body.json").exists()
             assert (debug_dir / "response_stream_raw.txt").exists()
             assert (debug_dir / "response_stream_modified.txt").exists()
             assert (debug_dir / "error_info.json").exists()
-            
-            print(f"Проверяем error_info.json...")
+
+            print(f"Check error_info.json...")
             error_info = json.loads((debug_dir / "error_info.json").read_text())
             assert error_info["status_code"] == 400
             assert error_info["error_message"] == "Bad Request"
-    
+
     def test_flush_on_error_clears_buffers(self, tmp_path):
         """
-        Что он делает: Проверяет, что flush_on_error очищает буферы после записи.
-        Цель: Убедиться, что буферы не накапливаются между запросами.
+        What it does: Verifies that flush_on_error clears the buffers after writing.
+        Purpose: Confirm buffers do not accumulate between requests.
         """
-        print("Настройка: Режим errors...")
+        print("Setup: Mode errors...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'errors'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
+
             logger.log_request_body(b'{"test": "data"}')
-            
-            print("Действие: Вызов flush_on_error...")
+
+            print("Action: Calling flush_on_error...")
             logger.flush_on_error(500, "Error")
-            
-            print(f"Проверяем, что буферы очищены...")
+
+            print(f"Check that the buffers were cleared...")
             assert logger._request_body_buffer is None
             assert logger._kiro_request_body_buffer is None
             assert len(logger._raw_chunks_buffer) == 0
             assert len(logger._modified_chunks_buffer) == 0
-    
+
     def test_discard_buffers_clears_without_writing(self, tmp_path):
         """
-        Что он делает: Проверяет, что discard_buffers очищает буферы без записи.
-        Цель: Убедиться, что успешные запросы не оставляют логов.
+        What it does: Verifies that discard_buffers clears the buffers without writing.
+        Purpose: Confirm successful requests leave no logs.
         """
-        print("Настройка: Режим errors, заполняем буферы...")
+        print("Setup: Mode errors, filling buffers...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'errors'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
+
             logger.log_request_body(b'{"test": "data"}')
             logger.log_raw_chunk(b'chunk')
-            
-            print("Действие: Вызов discard_buffers...")
+
+            print("Action: Calling discard_buffers...")
             logger.discard_buffers()
-            
-            print(f"Проверяем, что директория НЕ создана...")
+
+            print(f"Check that the directory was NOT created...")
             assert not debug_dir.exists()
-            
-            print(f"Проверяем, что буферы очищены...")
+
+            print(f"Check that the buffers were cleared...")
             assert logger._request_body_buffer is None
             assert len(logger._raw_chunks_buffer) == 0
-    
+
     def test_flush_on_error_writes_error_info_in_mode_all(self, tmp_path):
         """
-        Что он делает: Проверяет, что flush_on_error записывает error_info.json в режиме all.
-        Цель: Убедиться, что информация об ошибке сохраняется в обоих режимах.
+        What it does: Verifies that flush_on_error writes error_info.json in all mode.
+        Purpose: Confirm error information is persisted in both modes.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов flush_on_error...")
+
+            print("Action: Calling flush_on_error...")
             logger.flush_on_error(400, "Bad Request")
-            
-            print(f"Проверяем, что error_info.json создан...")
+
+            print(f"Check that error_info.json was created...")
             assert (debug_dir / "error_info.json").exists()
-            
-            print(f"Проверяем содержимое error_info.json...")
+
+            print(f"Check error_info.json contents...")
             error_info = json.loads((debug_dir / "error_info.json").read_text())
             assert error_info["status_code"] == 400
             assert error_info["error_message"] == "Bad Request"
 
 
 class TestDebugLoggerLogErrorInfo:
-    """Тесты для метода log_error_info()."""
-    
+    """Tests for the log_error_info() method."""
+
     def test_log_error_info_writes_in_mode_all(self, tmp_path):
         """
-        Что он делает: Проверяет, что log_error_info записывает файл в режиме all.
-        Цель: Убедиться, что error_info.json создаётся при ошибках.
+        What it does: Verifies that log_error_info writes the file in all mode.
+        Purpose: Confirm error_info.json is created on errors.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов log_error_info...")
+
+            print("Action: Calling log_error_info...")
             logger.log_error_info(500, "Internal Server Error")
-            
-            print(f"Проверяем, что error_info.json создан...")
+
+            print(f"Check that error_info.json was created...")
             error_file = debug_dir / "error_info.json"
             assert error_file.exists()
-            
-            print(f"Проверяем содержимое...")
+
+            print(f"Check the contents...")
             error_info = json.loads(error_file.read_text())
             assert error_info["status_code"] == 500
             assert error_info["error_message"] == "Internal Server Error"
-    
+
     def test_log_error_info_writes_in_mode_errors(self, tmp_path):
         """
-        Что он делает: Проверяет, что log_error_info записывает файл в режиме errors.
-        Цель: Убедиться, что метод работает в обоих режимах.
+        What it does: Verifies that log_error_info writes the file in errors mode.
+        Purpose: Confirm the method works in both modes.
         """
-        print("Настройка: Режим errors...")
+        print("Setup: Mode errors...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'errors'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов log_error_info...")
+
+            print("Action: Calling log_error_info...")
             logger.log_error_info(404, "Not Found")
-            
-            print(f"Проверяем, что error_info.json создан...")
+
+            print(f"Check that error_info.json was created...")
             error_file = debug_dir / "error_info.json"
             assert error_file.exists()
-    
+
     def test_log_error_info_does_nothing_in_mode_off(self, tmp_path):
         """
-        Что он делает: Проверяет, что log_error_info ничего не делает в режиме off.
-        Цель: Убедиться, что в режиме off файлы не создаются.
+        What it does: Verifies that log_error_info does nothing in off mode.
+        Purpose: Confirm no files are created in off mode.
         """
-        print("Настройка: Режим off...")
+        print("Setup: Mode off...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'off'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов log_error_info...")
+
+            print("Action: Calling log_error_info...")
             logger.log_error_info(500, "Error")
-            
-            print(f"Проверяем, что директория НЕ создана...")
+
+            print(f"Check that the directory was NOT created...")
             assert not debug_dir.exists()
 
 
 class TestDebugLoggerHelperMethods:
-    """Тесты для вспомогательных методов DebugLogger."""
-    
+    """Tests for DebugLogger helper methods."""
+
     def test_is_enabled_returns_true_for_errors(self):
         """
-        Что он делает: Проверяет _is_enabled() для режима errors.
-        Цель: Убедиться, что режим errors считается включённым.
+        What it does: Verifies _is_enabled() for errors mode.
+        Purpose: Confirm errors mode is considered enabled.
         """
-        print("Настройка: Режим errors...")
+        print("Setup: Mode errors...")
         with patch('kiro.debug_logger.DEBUG_MODE', 'errors'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
-            
-            print(f"Проверяем _is_enabled()...")
+
+            print(f"Check _is_enabled()...")
             assert logger._is_enabled() is True
-    
+
     def test_is_enabled_returns_true_for_all(self):
         """
-        Что он делает: Проверяет _is_enabled() для режима all.
-        Цель: Убедиться, что режим all считается включённым.
+        What it does: Verifies _is_enabled() for all mode.
+        Purpose: Confirm all mode is considered enabled.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
-            
-            print(f"Проверяем _is_enabled()...")
+
+            print(f"Check _is_enabled()...")
             assert logger._is_enabled() is True
-    
+
     def test_is_enabled_returns_false_for_off(self):
         """
-        Что он делает: Проверяет _is_enabled() для режима off.
-        Цель: Убедиться, что режим off считается выключенным.
+        What it does: Verifies _is_enabled() for off mode.
+        Purpose: Confirm off mode is considered disabled.
         """
-        print("Настройка: Режим off...")
+        print("Setup: Mode off...")
         with patch('kiro.debug_logger.DEBUG_MODE', 'off'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
-            
-            print(f"Проверяем _is_enabled()...")
+
+            print(f"Check _is_enabled()...")
             assert logger._is_enabled() is False
-    
+
     def test_is_immediate_write_returns_true_for_all(self):
         """
-        Что он делает: Проверяет _is_immediate_write() для режима all.
-        Цель: Убедиться, что режим all пишет сразу.
+        What it does: Verifies _is_immediate_write() for all mode.
+        Purpose: Confirm all mode writes straight away.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
-            
-            print(f"Проверяем _is_immediate_write()...")
+
+            print(f"Check _is_immediate_write()...")
             assert logger._is_immediate_write() is True
-    
+
     def test_is_immediate_write_returns_false_for_errors(self):
         """
-        Что он делает: Проверяет _is_immediate_write() для режима errors.
-        Цель: Убедиться, что режим errors буферизует.
+        What it does: Verifies _is_immediate_write() for errors mode.
+        Purpose: Confirm errors mode buffers.
         """
-        print("Настройка: Режим errors...")
+        print("Setup: Mode errors...")
         with patch('kiro.debug_logger.DEBUG_MODE', 'errors'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
-            
-            print(f"Проверяем _is_immediate_write()...")
+
+            print(f"Check _is_immediate_write()...")
             assert logger._is_immediate_write() is False
 
 
 class TestDebugLoggerJsonHandling:
-    """Тесты для обработки JSON в DebugLogger."""
-    
+    """Tests for JSON handling in DebugLogger."""
+
     def test_log_request_body_formats_json_pretty(self, tmp_path):
         """
-        Что он делает: Проверяет, что JSON форматируется красиво.
-        Цель: Убедиться, что JSON читаем в файле.
+        What it does: Verifies that JSON is pretty-formatted.
+        Purpose: Confirm JSON is readable in the file.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         debug_dir = tmp_path / "debug_logs"
         debug_dir.mkdir()
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов log_request_body с JSON...")
+
+            print("Action: Calling log_request_body with JSON...")
             logger.log_request_body(b'{"key":"value"}')
-            
-            print(f"Проверяем форматирование...")
+
+            print(f"Check the formatting...")
             content = (debug_dir / "request_body.json").read_text()
-            # Должен быть отформатирован с отступами
+            # Should be formatted with indentation
             assert "  " in content or "\n" in content
-    
+
     def test_log_request_body_handles_invalid_json(self, tmp_path):
         """
-        Что он делает: Проверяет обработку невалидного JSON.
-        Цель: Убедиться, что невалидный JSON записывается как есть.
+        What it does: Verifies handling of invalid JSON.
+        Purpose: Confirm invalid JSON is written as-is.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         debug_dir = tmp_path / "debug_logs"
         debug_dir.mkdir()
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             logger = DebugLogger.__new__(DebugLogger)
             logger._initialized = False
             logger.__init__()
             logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов log_request_body с невалидным JSON...")
+
+            print("Action: Calling log_request_body with invalid JSON...")
             invalid_data = b'not a json {{'
             logger.log_request_body(invalid_data)
-            
-            print(f"Проверяем, что данные записаны как есть...")
+
+            print(f"Check that the data was written as-is...")
             content = (debug_dir / "request_body.json").read_bytes()
             assert content == invalid_data
 
 
 class TestDebugLoggerAppLogsCapture:
-    """Тесты для захвата логов приложения (app_logs.txt)."""
-    
+    """Tests for application log capture (app_logs.txt)."""
+
     def test_prepare_new_request_sets_up_log_capture(self, tmp_path):
         """
-        Что он делает: Проверяет, что prepare_new_request настраивает захват логов.
-        Цель: Убедиться, что sink для логов создаётся.
+        What it does: Verifies that prepare_new_request sets up log capture.
+        Purpose: Confirm the log sink is created.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
             dbg_logger = DebugLogger.__new__(DebugLogger)
             dbg_logger._initialized = False
             dbg_logger.__init__()
             dbg_logger.debug_dir = debug_dir
-            
-            print("Действие: Вызов prepare_new_request...")
+
+            print("Action: Calling prepare_new_request...")
             dbg_logger.prepare_new_request()
-            
-            print(f"Проверяем, что sink создан...")
+
+            print(f"Check that the sink was created...")
             assert dbg_logger._loguru_sink_id is not None
-            
-            # Очистка
+
+            # Cleanup
             dbg_logger._clear_app_logs_buffer()
-    
+
     def test_flush_on_error_writes_app_logs_in_mode_errors(self, tmp_path):
         """
-        Что он делает: Проверяет, что flush_on_error записывает app_logs.txt в режиме errors.
-        Цель: Убедиться, что логи приложения сохраняются при ошибках.
+        What it does: Verifies that flush_on_error writes app_logs.txt in errors mode.
+        Purpose: Confirm application logs are persisted on error.
         """
-        print("Настройка: Режим errors...")
+        print("Setup: Mode errors...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'errors'):
             from kiro.debug_logger import DebugLogger
             from loguru import logger as loguru_logger
-            
+
             dbg_logger = DebugLogger.__new__(DebugLogger)
             dbg_logger._initialized = False
             dbg_logger.__init__()
             dbg_logger.debug_dir = debug_dir
-            
-            # Настраиваем захват логов
+
+            # Set up log capture
             dbg_logger.prepare_new_request()
-            
-            # Добавляем данные в буфер чтобы flush сработал
+
+            # Add data to the buffer so that flush is triggered
             dbg_logger.log_request_body(b'{"test": "data"}')
-            
-            # Пишем тестовый лог напрямую в буфер (имитация)
+
+            # Write a test log directly into the buffer (simulation)
             dbg_logger._app_logs_buffer.write("Test log message\n")
-            
-            print("Действие: Вызов flush_on_error...")
+
+            print("Action: Calling flush_on_error...")
             dbg_logger.flush_on_error(500, "Test Error")
-            
-            print(f"Проверяем, что app_logs.txt создан...")
+
+            print(f"Check that app_logs.txt was created...")
             app_logs_file = debug_dir / "app_logs.txt"
             assert app_logs_file.exists()
-            
-            print(f"Проверяем содержимое...")
+
+            print(f"Check the contents...")
             content = app_logs_file.read_text()
             assert "Test log message" in content
-    
+
     def test_discard_buffers_saves_logs_in_mode_all(self, tmp_path):
         """
-        Что он делает: Проверяет, что discard_buffers сохраняет логи в режиме all.
-        Цель: Убедиться, что даже успешные запросы сохраняют логи в режиме all.
+        What it does: Verifies that discard_buffers saves logs in all mode.
+        Purpose: Confirm that even successful requests persist logs in all mode.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         debug_dir = tmp_path / "debug_logs"
         debug_dir.mkdir()
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
-            
+
             dbg_logger = DebugLogger.__new__(DebugLogger)
             dbg_logger._initialized = False
             dbg_logger.__init__()
             dbg_logger.debug_dir = debug_dir
-            
-            # Настраиваем захват логов
+
+            # Set up log capture
             dbg_logger.prepare_new_request()
-            
-            # Пишем тестовый лог напрямую в буфер
+
+            # Write a test log directly into the buffer
             dbg_logger._app_logs_buffer.write("Success log message\n")
-            
-            print("Действие: Вызов discard_buffers...")
+
+            print("Action: Calling discard_buffers...")
             dbg_logger.discard_buffers()
-            
-            print(f"Проверяем, что app_logs.txt создан...")
+
+            print(f"Check that app_logs.txt was created...")
             app_logs_file = debug_dir / "app_logs.txt"
             assert app_logs_file.exists()
-            
-            print(f"Проверяем содержимое...")
+
+            print(f"Check the contents...")
             content = app_logs_file.read_text()
             assert "Success log message" in content
-    
+
     def test_discard_buffers_does_not_save_logs_in_mode_errors(self, tmp_path):
         """
-        Что он делает: Проверяет, что discard_buffers НЕ сохраняет логи в режиме errors.
-        Цель: Убедиться, что успешные запросы не оставляют логов в режиме errors.
+        What it does: Verifies that discard_buffers does NOT save logs in errors mode.
+        Purpose: Confirm successful requests leave no logs in errors mode.
         """
-        print("Настройка: Режим errors...")
+        print("Setup: Mode errors...")
         debug_dir = tmp_path / "debug_logs"
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'errors'):
             from kiro.debug_logger import DebugLogger
-            
+
             dbg_logger = DebugLogger.__new__(DebugLogger)
             dbg_logger._initialized = False
             dbg_logger.__init__()
             dbg_logger.debug_dir = debug_dir
-            
-            # Настраиваем захват логов
+
+            # Set up log capture
             dbg_logger.prepare_new_request()
-            
-            # Пишем тестовый лог напрямую в буфер
+
+            # Write a test log directly into the buffer
             dbg_logger._app_logs_buffer.write("Should not be saved\n")
-            
-            print("Действие: Вызов discard_buffers...")
+
+            print("Action: Calling discard_buffers...")
             dbg_logger.discard_buffers()
-            
-            print(f"Проверяем, что директория НЕ создана...")
+
+            print(f"Check that the directory was NOT created...")
             assert not debug_dir.exists()
-    
+
     def test_clear_app_logs_buffer_removes_sink(self, tmp_path):
         """
-        Что он делает: Проверяет, что _clear_app_logs_buffer удаляет sink.
-        Цель: Убедиться, что sink корректно удаляется.
+        What it does: Verifies that _clear_app_logs_buffer removes the sink.
+        Purpose: Confirm the sink is removed correctly.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
-            
+
             dbg_logger = DebugLogger.__new__(DebugLogger)
             dbg_logger._initialized = False
             dbg_logger.__init__()
             dbg_logger.debug_dir = tmp_path / "debug_logs"
-            
-            # Настраиваем захват логов
+
+            # Set up log capture
             dbg_logger.prepare_new_request()
             sink_id = dbg_logger._loguru_sink_id
             assert sink_id is not None
-            
-            print("Действие: Вызов _clear_app_logs_buffer...")
+
+            print("Action: Calling _clear_app_logs_buffer...")
             dbg_logger._clear_app_logs_buffer()
-            
-            print(f"Проверяем, что sink_id сброшен...")
+
+            print(f"Check that sink_id was reset...")
             assert dbg_logger._loguru_sink_id is None
-    
+
     def test_app_logs_not_saved_when_empty(self, tmp_path):
         """
-        Что он делает: Проверяет, что пустые логи не создают файл.
-        Цель: Убедиться, что app_logs.txt не создаётся если логов нет.
+        What it does: Verifies that empty logs do not create a file.
+        Purpose: Confirm app_logs.txt is not created when there are no logs.
         """
-        print("Настройка: Режим all...")
+        print("Setup: Mode all...")
         debug_dir = tmp_path / "debug_logs"
         debug_dir.mkdir()
-        
+
         with patch('kiro.debug_logger.DEBUG_MODE', 'all'):
             from kiro.debug_logger import DebugLogger
-            
+
             dbg_logger = DebugLogger.__new__(DebugLogger)
             dbg_logger._initialized = False
             dbg_logger.__init__()
             dbg_logger.debug_dir = debug_dir
-            
-            # НЕ пишем ничего в буфер
-            
-            print("Действие: Вызов _write_app_logs_to_file...")
+
+            # Do NOT write anything to the buffer
+
+            print("Action: Calling _write_app_logs_to_file...")
             dbg_logger._write_app_logs_to_file()
-            
-            print(f"Проверяем, что app_logs.txt НЕ создан...")
+
+            print(f"Check that app_logs.txt was NOT created...")
             app_logs_file = debug_dir / "app_logs.txt"
             assert not app_logs_file.exists()
