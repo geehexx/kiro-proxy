@@ -17,7 +17,6 @@ from kiro.model_display import (
     display_name,
 )
 
-
 CANONICAL_CASES = [
     # Dashed minor-version form
     ("claude-opus-4-7", "claude-opus-4.7"),

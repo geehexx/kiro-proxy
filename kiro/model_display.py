@@ -27,7 +27,6 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-
 _DATE_SUFFIX_RE = re.compile(r"-\d{8}(-v\d+[_\-.]?\d*)?$")
 _TRAILING_VERSION_RE = re.compile(r"-v\d+[_\-.]?\d*$", re.IGNORECASE)
 

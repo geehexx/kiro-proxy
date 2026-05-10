@@ -22,7 +22,6 @@ from kiro.cache_integration import (
 )
 from kiro.response_cache import ResponseCache
 
-
 # ---------------------------------------------------------------------------
 # derive_session_id
 # ---------------------------------------------------------------------------
