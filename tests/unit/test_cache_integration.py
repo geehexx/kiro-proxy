@@ -110,6 +110,19 @@ class TestComputeCacheKey:
         b = compute_cache_key(**{**SAMPLE, "tools": [{"name": "calc", "input_schema": {}}]})
         assert a != b
 
+    def test_thinking_config_affects_key(self) -> None:
+        """thinking-on and thinking-off requests must not share a cache bucket."""
+        a = compute_cache_key(**SAMPLE)
+        b = compute_cache_key(**{**SAMPLE, "thinking": {"type": "enabled", "budget_tokens": 8000}})
+        assert a != b, "thinking config must be part of the cache key"
+
+    def test_thinking_config_is_stable(self) -> None:
+        """Same thinking config must produce the same key."""
+        thinking = {"type": "enabled", "budget_tokens": 8000}
+        a = compute_cache_key(**{**SAMPLE, "thinking": thinking})
+        b = compute_cache_key(**{**SAMPLE, "thinking": thinking})
+        assert a == b
+
 
 # ---------------------------------------------------------------------------
 # try_cache_lookup / store_cache / entry_to_response_body
