@@ -238,6 +238,8 @@ class AccountManager:
                 continue  # Skip path processing for refresh_token
 
             # Handle folder scanning for json/sqlite types
+            if path is None:
+                continue  # narrowed by the earlier `not path` guard; belt-and-braces for type-checkers
             expanded_path = Path(path).expanduser()
             if expanded_path.is_dir():
                 logger.info(f"Scanning folder for credentials: {path}")
@@ -581,6 +583,11 @@ class AccountManager:
             if response.status_code == 200:
                 data = response.json()
                 models_list = data.get("models", [])
+                if account.model_cache is None or account.model_resolver is None:
+                    logger.warning(
+                        f"Cannot refresh models for {account_id}: model_cache/resolver not initialized"
+                    )
+                    return
                 await account.model_cache.update(models_list)
                 account.models_cached_at = time.time()
 
@@ -712,6 +719,8 @@ class AccountManager:
                             logger.warning(f"Failed to refresh models for {account_id}: {e}")
 
                 # Check if model is available on this account
+                if account.model_resolver is None:
+                    continue
                 available_models = account.model_resolver.get_available_models()
                 if normalized_model not in available_models:
                     continue
