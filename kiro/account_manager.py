@@ -372,12 +372,21 @@ class AccountManager:
         state_path = Path(self._state_file)
         tmp_path = state_path.with_suffix('.json.tmp')
 
-        try:
+        def _write_and_rename() -> None:
+            """Sync helper — runs in the executor so it never blocks the event loop.
+
+            `_save_state` is on the hot path (periodic background save). Disk IO
+            via the sync `open()` would stall every concurrent request while the
+            event loop waited on fsync. Startup-only reads (load_credentials,
+            load_state) keep their sync `open()` — <10 ms at boot, not worth
+            the complexity of offloading.
+            """
             with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(state_data, f, indent=2, ensure_ascii=False)
-
-            # Atomic rename
             tmp_path.replace(state_path)
+
+        try:
+            await asyncio.to_thread(_write_and_rename)
             logger.debug("State saved successfully")
 
         except Exception as e:
