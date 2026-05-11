@@ -621,7 +621,7 @@ async def handle_native_web_search(
             }
         )
 
-    logger.info(f"WebSearch query (Path A - native): {query}")
+    logger.debug(f"WebSearch query (Path A - native): {query}")
 
     # Call MCP API
     tool_use_id, results = await call_kiro_mcp_api(query, auth_manager)

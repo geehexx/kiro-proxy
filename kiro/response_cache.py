@@ -119,6 +119,9 @@ class ResponseCache:
             raise ValueError(
                 f"max_entry_bytes must be between 1024 and {MAX_ENTRY_BYTES_HARDCAP}"
             )
+        # Cap max_entry_bytes to max_bytes so a single entry can never exceed the total budget.
+        # This avoids a configuration where put() would evict the entire cache and still fail.
+        max_entry_bytes = min(max_entry_bytes, max_bytes)
         self._max_entries = max_entries
         self._max_bytes = max_bytes
         self._ttl = ttl_seconds
@@ -143,7 +146,13 @@ class ResponseCache:
                 return None
             self._entries.move_to_end(key)
             self.hits += 1
-            return entry
+            # Return a copy so callers cannot mutate the cached headers dict.
+            return CacheEntry(
+                body=entry.body,
+                headers=dict(entry.headers),
+                created_at=entry.created_at,
+                size_bytes=entry.size_bytes,
+            )
 
     def put(
         self, key: str, body: bytes, headers: dict[str, str] | None = None

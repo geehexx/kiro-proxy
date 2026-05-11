@@ -502,9 +502,6 @@ async def messages(
                 )
 
                 if response.status_code == 200:
-                    # SUCCESS - report and return
-                    await account_manager.report_success(account.id, request_data.model)
-
                     if request_data.stream:
                         # Streaming mode
                         async def stream_wrapper():
@@ -546,6 +543,8 @@ async def messages(
                                 elif client_disconnected:
                                     logger.info("HTTP 200 - POST /v1/messages (streaming) - client disconnected")
                                 else:
+                                    # Body finished cleanly — safe to record success
+                                    await account_manager.report_success(account.id, request_data.model)
                                     logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
 
                                 if debug_logger:
@@ -576,6 +575,8 @@ async def messages(
                         )
 
                         await http_client.close()
+                        # Body collected cleanly — safe to record success
+                        await account_manager.report_success(account.id, request_data.model)
                         logger.info("HTTP 200 - POST /v1/messages (non-streaming) - completed")
 
                         if debug_logger:
