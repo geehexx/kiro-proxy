@@ -1,4 +1,3 @@
-
 # Kiro Gateway
 # https://github.com/jwadow/kiro-gateway
 # Copyright (C) 2025 Jwadow
@@ -94,7 +93,7 @@ logger.add(
     sys.stderr,
     level=LOG_LEVEL,
     colorize=True,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
 )
 
 
@@ -187,9 +186,9 @@ if VPN_PROXY_URL:
     proxy_url_with_scheme = VPN_PROXY_URL if "://" in VPN_PROXY_URL else f"http://{VPN_PROXY_URL}"
 
     # Set environment variables for httpx to pick up automatically
-    os.environ['HTTP_PROXY'] = proxy_url_with_scheme
-    os.environ['HTTPS_PROXY'] = proxy_url_with_scheme
-    os.environ['ALL_PROXY'] = proxy_url_with_scheme
+    os.environ["HTTP_PROXY"] = proxy_url_with_scheme
+    os.environ["HTTPS_PROXY"] = proxy_url_with_scheme
+    os.environ["ALL_PROXY"] = proxy_url_with_scheme
 
     # Exclude localhost from proxy to avoid routing local requests through it
     no_proxy_hosts = os.environ.get("NO_PROXY", "")
@@ -222,6 +221,7 @@ def validate_configuration() -> None:
     # Priority 1: Check if credentials.json exists (Account System)
     # If it exists, legacy .env validation is skipped
     from kiro.config import ACCOUNTS_CONFIG_FILE
+
     creds_json_path = Path(ACCOUNTS_CONFIG_FILE)
 
     if creds_json_path.exists():
@@ -272,7 +272,7 @@ def validate_configuration() -> None:
                 "      - Option 3: KIRO_CLI_DB_FILE to kiro-cli SQLite database\n"
                 "\n"
                 "Or use environment variables (for Docker):\n"
-                "   docker run -e PROXY_API_KEY=\"...\" -e REFRESH_TOKEN=\"...\" ...\n"
+                '   docker run -e PROXY_API_KEY="..." -e REFRESH_TOKEN="..." ...\n'
                 "\n"
                 "See README.md for detailed instructions."
             )
@@ -284,16 +284,16 @@ def validate_configuration() -> None:
                 "   Configure one of the following in your .env file:\n"
                 "\n"
                 "Set you super-secret password as PROXY_API_KEY\n"
-                "   PROXY_API_KEY=\"my-super-secret-password-123\"\n"
+                '   PROXY_API_KEY="my-super-secret-password-123"\n'
                 "\n"
                 "   Option 1 (Recommended): JSON credentials file\n"
-                "      KIRO_CREDS_FILE=\"path/to/your/kiro-credentials.json\"\n"
+                '      KIRO_CREDS_FILE="path/to/your/kiro-credentials.json"\n'
                 "\n"
                 "   Option 2: Refresh token\n"
-                "      REFRESH_TOKEN=\"your_refresh_token_here\"\n"
+                '      REFRESH_TOKEN="your_refresh_token_here"\n'
                 "\n"
                 "   Option 3: kiro-cli SQLite database (AWS SSO)\n"
-                "      KIRO_CLI_DB_FILE=\"~/.local/share/kiro-cli/data.sqlite3\"\n"
+                '      KIRO_CLI_DB_FILE="~/.local/share/kiro-cli/data.sqlite3"\n'
                 "\n"
                 "   See README.md for how to obtain credentials."
             )
@@ -305,7 +305,7 @@ def validate_configuration() -> None:
         logger.error("  CONFIGURATION ERROR")
         logger.error("=" * 60)
         for error in errors:
-            for line in error.split('\n'):
+            for line in error.split("\n"):
                 logger.error(f"  {line}")
         logger.error("=" * 60)
         logger.error("")
@@ -337,20 +337,16 @@ async def lifespan(app: FastAPI):
     limits = httpx.Limits(
         max_connections=100,
         max_keepalive_connections=20,
-        keepalive_expiry=30.0  # Close idle connections after 30 seconds
+        keepalive_expiry=30.0,  # Close idle connections after 30 seconds
     )
     # Timeout configuration for streaming (long read timeout for model "thinking")
     timeout = httpx.Timeout(
         connect=30.0,
         read=STREAMING_READ_TIMEOUT,  # 300 seconds for streaming
         write=30.0,
-        pool=30.0
+        pool=30.0,
     )
-    app.state.http_client = httpx.AsyncClient(
-        limits=limits,
-        timeout=timeout,
-        follow_redirects=True
-    )
+    app.state.http_client = httpx.AsyncClient(limits=limits, timeout=timeout, follow_redirects=True)
     logger.info("Shared HTTP client created with connection pooling")
 
     # Response cache singleton (in-memory LRU, disabled by default via env)
@@ -362,6 +358,7 @@ async def lifespan(app: FastAPI):
         RESPONSE_CACHE_TTL_SECONDS,
     )
     from kiro.response_cache import ResponseCache
+
     if RESPONSE_CACHE_ENABLED:
         app.state.response_cache = ResponseCache(
             max_entries=RESPONSE_CACHE_MAX_ENTRIES,
@@ -369,9 +366,11 @@ async def lifespan(app: FastAPI):
             ttl_seconds=RESPONSE_CACHE_TTL_SECONDS,
             max_entry_bytes=RESPONSE_CACHE_MAX_ENTRY_BYTES,
         )
-        logger.info("Response cache enabled: entries={} max_bytes={} ttl={}s".format(
-            RESPONSE_CACHE_MAX_ENTRIES, RESPONSE_CACHE_MAX_BYTES, RESPONSE_CACHE_TTL_SECONDS
-        ))
+        logger.info(
+            "Response cache enabled: entries={} max_bytes={} ttl={}s".format(
+                RESPONSE_CACHE_MAX_ENTRIES, RESPONSE_CACHE_MAX_BYTES, RESPONSE_CACHE_TTL_SECONDS
+            )
+        )
     else:
         app.state.response_cache = None
         logger.info("Response cache disabled (set RESPONSE_CACHE_ENABLED=true to enable)")
@@ -380,6 +379,7 @@ async def lifespan(app: FastAPI):
     # requests so only one upstream call fires. Wired into routes_anthropic.py
     # on the non-streaming path (cache_eligible only).
     from kiro.in_flight_dedup import InFlightDedup
+
     app.state.in_flight_dedup = InFlightDedup()
     logger.info("In-flight dedup initialized")
 
@@ -388,8 +388,19 @@ async def lifespan(app: FastAPI):
     # follows in a separate change.
     from kiro.config import GATEWAY_SESSION_CONCURRENCY
     from kiro.session_limiter import SessionLimiter
+
     app.state.session_limiter = SessionLimiter(default_concurrency=GATEWAY_SESSION_CONCURRENCY)
     logger.info(f"Session limiter initialized (default_concurrency={GATEWAY_SESSION_CONCURRENCY})")
+
+    # Baselines writer — append-only JSONL emitter used by routes_anthropic.py
+    # to record one datapoint per non-streaming /v1/messages response into
+    # ~/.claude/state/baselines-gateway-requests.jsonl. The parent repo's
+    # token-telemetry plan (Step 3) joins these records with CC transcripts
+    # on message_id.
+    from kiro.baselines import BaselinesWriter
+
+    app.state.baselines_writer = BaselinesWriter()
+    logger.info("Baselines writer initialized")
 
     # ==============================================================================
     # Legacy Fallback: .env → credentials.json
@@ -425,29 +436,20 @@ async def lifespan(app: FastAPI):
 
                 # Priority: SQLite DB > JSON file > environment variables (same as KiroAuthManager)
                 if has_cli_db:
-                    entry = {
-                        "type": "sqlite",
-                        "path": KIRO_CLI_DB_FILE
-                    }
+                    entry = {"type": "sqlite", "path": KIRO_CLI_DB_FILE}
                     _add_env_overrides(entry)
                     credentials.append(entry)
                 elif has_creds_file:
-                    entry = {
-                        "type": "json",
-                        "path": KIRO_CREDS_FILE
-                    }
+                    entry = {"type": "json", "path": KIRO_CREDS_FILE}
                     _add_env_overrides(entry)
                     credentials.append(entry)
                 elif has_refresh_token:
-                    entry = {
-                        "type": "refresh_token",
-                        "refresh_token": REFRESH_TOKEN
-                    }
+                    entry = {"type": "refresh_token", "refresh_token": REFRESH_TOKEN}
                     _add_env_overrides(entry)
                     credentials.append(entry)
 
                 # Save credentials.json
-                with open(creds_path, 'w', encoding='utf-8') as f:
+                with open(creds_path, "w", encoding="utf-8") as f:
                     json.dump(credentials, f, indent=2, ensure_ascii=False)
 
                 logger.info("Created credentials.json from .env (one-time migration)")
@@ -459,29 +461,20 @@ async def lifespan(app: FastAPI):
 
             # Priority: SQLite DB > JSON file > environment variables (same as KiroAuthManager)
             if has_cli_db:
-                entry = {
-                    "type": "sqlite",
-                    "path": KIRO_CLI_DB_FILE
-                }
+                entry = {"type": "sqlite", "path": KIRO_CLI_DB_FILE}
                 _add_env_overrides(entry)
                 credentials.append(entry)
             elif has_creds_file:
-                entry = {
-                    "type": "json",
-                    "path": KIRO_CREDS_FILE
-                }
+                entry = {"type": "json", "path": KIRO_CREDS_FILE}
                 _add_env_overrides(entry)
                 credentials.append(entry)
             elif has_refresh_token:
-                entry = {
-                    "type": "refresh_token",
-                    "refresh_token": REFRESH_TOKEN
-                }
+                entry = {"type": "refresh_token", "refresh_token": REFRESH_TOKEN}
                 _add_env_overrides(entry)
                 credentials.append(entry)
 
             # Save credentials.json (overwrite if exists)
-            with open(creds_path, 'w', encoding='utf-8') as f:
+            with open(creds_path, "w", encoding="utf-8") as f:
                 json.dump(credentials, f, indent=2, ensure_ascii=False)
 
             logger.debug("credentials.json recreated from .env (legacy mode)")
@@ -489,10 +482,7 @@ async def lifespan(app: FastAPI):
     # ==============================================================================
     # Create AccountManager
     # ==============================================================================
-    app.state.account_manager = AccountManager(
-        credentials_file=ACCOUNTS_CONFIG_FILE,
-        state_file=ACCOUNTS_STATE_FILE
-    )
+    app.state.account_manager = AccountManager(credentials_file=ACCOUNTS_CONFIG_FILE, state_file=ACCOUNTS_STATE_FILE)
 
     # Load credentials and state
     await app.state.account_manager.load_credentials()
@@ -539,9 +529,7 @@ async def lifespan(app: FastAPI):
     await app.state.account_manager._save_state()
 
     # Start background task for periodic state saving
-    save_task = asyncio.create_task(
-        app.state.account_manager.save_state_periodically()
-    )
+    save_task = asyncio.create_task(app.state.account_manager.save_state_periodically())
 
     logger.info("Account system initialized successfully")
 
@@ -570,12 +558,7 @@ async def lifespan(app: FastAPI):
 
 
 # --- FastAPI Application ---
-app = FastAPI(
-    title=APP_TITLE,
-    description=APP_DESCRIPTION,
-    version=APP_VERSION,
-    lifespan=lifespan
-)
+app = FastAPI(title=APP_TITLE, description=APP_DESCRIPTION, version=APP_VERSION, lifespan=lifespan)
 
 
 # --- CORS Middleware ---
@@ -654,30 +637,28 @@ Examples:
 
   SERVER_PORT=9000 python main.py         # Via environment
   uvicorn main:app --port 9000            # Via uvicorn directly
-        """
+        """,
     )
 
     parser.add_argument(
-        "-H", "--host",
+        "-H",
+        "--host",
         type=str,
         default=None,  # None means "use env or default"
         metavar="HOST",
-        help=f"Server host address (default: {DEFAULT_SERVER_HOST}, env: SERVER_HOST)"
+        help=f"Server host address (default: {DEFAULT_SERVER_HOST}, env: SERVER_HOST)",
     )
 
     parser.add_argument(
-        "-p", "--port",
+        "-p",
+        "--port",
         type=int,
         default=None,  # None means "use env or default"
         metavar="PORT",
-        help=f"Server port (default: {DEFAULT_SERVER_PORT}, env: SERVER_PORT)"
+        help=f"Server port (default: {DEFAULT_SERVER_PORT}, env: SERVER_PORT)",
     )
 
-    parser.add_argument(
-        "-v", "--version",
-        action="version",
-        version=f"%(prog)s {APP_VERSION}"
-    )
+    parser.add_argument("-v", "--version", action="version", version=f"%(prog)s {APP_VERSION}")
 
     return parser.parse_args()
 
