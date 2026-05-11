@@ -368,9 +368,6 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                 )
 
                 if response.status_code == 200:
-                    # SUCCESS - report and return
-                    await account_manager.report_success(account.id, request_data.model)
-
                     # Prepare data for token counting
                     messages_for_tokenizer = [msg.model_dump() for msg in request_data.messages]
                     tools_for_tokenizer = [tool.model_dump() for tool in request_data.tools] if request_data.tools else None
@@ -416,6 +413,8 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                                 elif client_disconnected:
                                     logger.info("HTTP 200 - POST /v1/chat/completions (streaming) - client disconnected")
                                 else:
+                                    # Body finished cleanly — safe to record success
+                                    await account_manager.report_success(account.id, request_data.model)
                                     logger.info("HTTP 200 - POST /v1/chat/completions (streaming) - completed")
                                 if debug_logger:
                                     if streaming_error:
@@ -438,6 +437,8 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                         )
 
                         await http_client.close()
+                        # Body collected cleanly — safe to record success
+                        await account_manager.report_success(account.id, request_data.model)
                         logger.info("HTTP 200 - POST /v1/chat/completions (non-streaming) - completed")
 
                         if debug_logger:
