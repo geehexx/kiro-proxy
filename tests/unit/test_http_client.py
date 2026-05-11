@@ -559,7 +559,10 @@ class TestKiroHttpClientExponentialBackoff:
         base1 = BASE_RETRY_DELAY * (2 ** 1)  # 2.0
         assert 0.75 * base0 <= sleep_delays[0] <= 1.25 * base0, f"delay[0]={sleep_delays[0]} outside jitter range"
         assert 0.75 * base1 <= sleep_delays[1] <= 1.25 * base1, f"delay[1]={sleep_delays[1]} outside jitter range"
-        assert sleep_delays[1] > sleep_delays[0] * 1.5, "second delay should be roughly 2× the first"
+        # The two range checks above prove exponential growth by construction —
+        # base1 - 25% = 1.5 and base0 + 25% = 1.25, so delay[1] >= 1.5 > 1.25 >= delay[0].
+        # A stricter "delay[1] > delay[0] * 1.5" is unsound: the worst-case ratio is
+        # 1.5 / 1.25 = 1.2 when jitter goes the wrong way on both samples.
 
 
 class TestKiroHttpClientStreamingTimeout:

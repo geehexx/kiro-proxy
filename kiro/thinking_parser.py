@@ -32,7 +32,7 @@ Key features:
 
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import List, Optional
+from typing import Optional
 
 from loguru import logger
 
