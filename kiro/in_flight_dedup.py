@@ -71,6 +71,12 @@ class InFlightDedup:
             result = await upstream()
             future.set_result(result)
             return result
+        except asyncio.CancelledError:
+            # CancelledError is BaseException in Python 3.11+; cancel the shared
+            # future so followers get a fresh attempt rather than inheriting the
+            # cancellation silently.
+            future.cancel()
+            raise
         except Exception as exc:
             future.set_exception(exc)
             raise

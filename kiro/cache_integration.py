@@ -37,7 +37,10 @@ def derive_session_id(api_key: Optional[str], client_header: Optional[str]) -> s
     not rely on its shape.
     """
     if client_header:
-        return hashlib.sha256(client_header.encode("utf-8")).hexdigest()[:16]
+        # Include api_key in the scope so two clients with different API keys
+        # but the same X-Kiro-Session-Id header cannot share a cache bucket.
+        scope = f"{api_key or ''}|{client_header}"
+        return hashlib.sha256(scope.encode("utf-8")).hexdigest()[:16]
     if api_key:
         return hashlib.sha256(api_key.encode("utf-8")).hexdigest()[:16]
     return "anonymous"
@@ -51,11 +54,14 @@ def compute_cache_key(
     model: str,
     max_tokens: int,
     tools: Optional[list[dict[str, Any]]] = None,
+    thinking: Optional[Any] = None,
 ) -> str:
     """Thin wrapper over :func:`kiro.response_cache.make_key`.
 
-    Centralised so a future hash-scheme change (e.g. adding
-    ``thinking.budget_tokens`` to the fingerprint) touches one file.
+    Centralised so a hash-scheme change touches one file.
+    ``thinking`` is included because extended-thinking config affects output;
+    a thinking-on vs thinking-off request with identical messages must not
+    share a cache bucket.
     """
     return make_key(
         session_id=session_id,
@@ -64,6 +70,7 @@ def compute_cache_key(
         model=model,
         max_tokens=max_tokens,
         tools=tools,
+        thinking=thinking,
     )
 
 

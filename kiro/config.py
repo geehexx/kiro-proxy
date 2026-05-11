@@ -37,43 +37,43 @@ load_dotenv()
 def _get_raw_env_value(var_name: str, env_file: str = ".env") -> Optional[str]:
     """
     Read variable value from .env file without processing escape sequences.
-    
+
     This is necessary for correct handling of Windows paths where backslashes
     (e.g., D:\\Projects\\file.json) may be incorrectly interpreted
     as escape sequences (\\a -> bell, \\n -> newline, etc.).
-    
+
     Args:
         var_name: Environment variable name
         env_file: Path to .env file (default ".env")
-    
+
     Returns:
         Raw variable value or None if not found
     """
     env_path = Path(env_file)
     if not env_path.exists():
         return None
-    
+
     try:
         # Read file as-is, without interpretation
         content = env_path.read_text(encoding="utf-8")
-        
+
         # Search for variable considering different formats:
         # VAR="value" or VAR='value' or VAR=value
         # Pattern captures value with or without quotes
         pattern = rf'^{re.escape(var_name)}=(["\']?)(.+?)\1\s*$'
-        
+
         for line in content.splitlines():
             line = line.strip()
             if line.startswith("#") or not line:
                 continue
-            
+
             match = re.match(pattern, line)
             if match:
                 # Return value as-is, without processing escape sequences
                 return match.group(2)
     except Exception:
         pass
-    
+
     return None
 
 # ==================================================================================================
@@ -220,7 +220,7 @@ HIDDEN_MODELS: Dict[str, str] = {
     # Claude 3.7 Sonnet - legacy flagship model, still works!
     # Hidden in Kiro API but functional. Great for users who prefer it.
     "claude-3.7-sonnet": "CLAUDE_3_7_SONNET_20250219_V1_0",
-    
+
     # Add other hidden/experimental models here as discovered.
     # Example: "claude-secret-model": "INTERNAL_SECRET_MODEL_ID",
 }
@@ -384,7 +384,7 @@ def _warn_timeout_configuration():
     """
     Print warning if timeout configuration is suboptimal.
     Called at application startup.
-    
+
     FIRST_TOKEN_TIMEOUT should be less than STREAMING_READ_TIMEOUT:
     - FIRST_TOKEN_TIMEOUT: time to wait for model to START responding
     - STREAMING_READ_TIMEOUT: time to wait BETWEEN chunks during streaming
@@ -393,18 +393,18 @@ def _warn_timeout_configuration():
         import sys
         YELLOW = "\033[93m"
         RESET = "\033[0m"
-        
+
         warning_text = f"""
 {YELLOW}⚠️  WARNING: Suboptimal timeout configuration detected.
-    
+
     FIRST_TOKEN_TIMEOUT ({FIRST_TOKEN_TIMEOUT}s) >= STREAMING_READ_TIMEOUT ({STREAMING_READ_TIMEOUT}s)
-    
+
     These timeouts serve different purposes:
       - FIRST_TOKEN_TIMEOUT: time to wait for model to START responding (default: 15s)
       - STREAMING_READ_TIMEOUT: time to wait BETWEEN chunks during streaming (default: 300s)
-    
+
     Recommendation: FIRST_TOKEN_TIMEOUT should be LESS than STREAMING_READ_TIMEOUT.
-    
+
     Example configuration:
       FIRST_TOKEN_TIMEOUT=15
       STREAMING_READ_TIMEOUT=300{RESET}
@@ -580,7 +580,7 @@ def get_kiro_q_host(region: str) -> str:
 # ==================================================================================================
 # Response Cache (in-memory LRU, session-scoped)
 # ==================================================================================================
-# Phase 1: disabled by default. See VerifAI/docs/kiro-gateway-prefix-cache-plan.md.
+# Disabled by default; enable via RESPONSE_CACHE_ENABLED=true.
 
 RESPONSE_CACHE_ENABLED: bool = os.getenv("RESPONSE_CACHE_ENABLED", "false").lower() == "true"
 RESPONSE_CACHE_MAX_ENTRIES: int = int(os.getenv("RESPONSE_CACHE_MAX_ENTRIES", "1000"))
