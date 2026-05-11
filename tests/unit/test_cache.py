@@ -7,6 +7,7 @@ Verifies the caching logic for model metadata.
 
 import asyncio
 import time
+
 import pytest
 
 from kiro.cache import ModelInfoCache

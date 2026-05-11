@@ -26,9 +26,9 @@ providing validation and serialization.
 
 import time
 from typing import Any, Dict, List, Literal, Optional, Union
-from typing_extensions import Annotated
-from pydantic import BaseModel, Field
 
+from pydantic import BaseModel, Field
+from typing_extensions import Annotated
 
 # ==================================================================================================
 # Models for /v1/models endpoint
@@ -57,7 +57,7 @@ class OpenAIModel(BaseModel):
 class ModelList(BaseModel):
     """
     List of models in OpenAI format.
-    
+
     Response of GET /v1/models endpoint.
     """
     object: str = "list"
@@ -71,10 +71,10 @@ class ModelList(BaseModel):
 class ChatMessage(BaseModel):
     """
     Chat message in OpenAI format.
-    
+
     Supports various roles (user, assistant, system, tool)
     and various content formats (string, list, object).
-    
+
     Attributes:
         role: Sender role (user, assistant, system, tool)
         content: Message content (can be string, list, or None)
@@ -87,14 +87,14 @@ class ChatMessage(BaseModel):
     name: Optional[str] = None
     tool_calls: Optional[List[Any]] = None
     tool_call_id: Optional[str] = None
-    
+
     model_config = {"extra": "allow"}
 
 
 class ToolFunction(BaseModel):
     """
     Tool function description.
-    
+
     Attributes:
         name: Function name
         description: Function description
@@ -108,11 +108,11 @@ class ToolFunction(BaseModel):
 class Tool(BaseModel):
     """
     Tool in OpenAI format.
-    
+
     Supports two formats:
     1. Standard OpenAI format: {"type": "function", "function": {...}}
     2. Flat format (Cursor-style): {"name": "...", "description": "...", "input_schema": {...}}
-    
+
     Attributes:
         type: Tool type (usually "function")
         function: Function description (standard format)
@@ -123,25 +123,25 @@ class Tool(BaseModel):
     # Standard OpenAI format fields
     type: str = "function"
     function: Optional[ToolFunction] = None
-    
+
     # Flat format fields (Cursor-style)
     name: Optional[str] = None
     description: Optional[str] = None
     input_schema: Optional[Dict[str, Any]] = None
-    
+
     model_config = {"extra": "allow"}
 
 
 class ChatCompletionRequest(BaseModel):
     """
     Request for response generation in OpenAI Chat Completions API format.
-    
+
     Supports all standard OpenAI API fields, including:
     - Basic parameters (model, messages, stream)
     - Generation parameters (temperature, top_p, max_tokens)
     - Tools (function calling)
     - Additional parameters (ignored but accepted for compatibility)
-    
+
     Attributes:
         model: Model ID for generation
         messages: List of chat messages
@@ -160,7 +160,7 @@ class ChatCompletionRequest(BaseModel):
     model: str
     messages: Annotated[List[ChatMessage], Field(min_length=1)]
     stream: bool = False
-    
+
     # Generation parameters
     temperature: Optional[float] = None
     top_p: Optional[float] = None
@@ -170,15 +170,15 @@ class ChatCompletionRequest(BaseModel):
     stop: Optional[Union[str, List[str]]] = None
     presence_penalty: Optional[float] = None
     frequency_penalty: Optional[float] = None
-    
+
     # Reasoning (OpenAI reasoning models)
     # Supports all official reasoning_effort levels from OpenAI API
     reasoning_effort: Optional[Literal["none", "minimal", "low", "medium", "high", "xhigh"]] = None
-    
+
     # Tools (function calling)
     tools: Optional[List[Tool]] = None
     tool_choice: Optional[Union[str, Dict]] = None
-    
+
     # Compatibility fields (ignored)
     stream_options: Optional[Dict[str, Any]] = None
     logit_bias: Optional[Dict[str, float]] = None
@@ -187,7 +187,7 @@ class ChatCompletionRequest(BaseModel):
     user: Optional[str] = None
     seed: Optional[int] = None
     parallel_tool_calls: Optional[bool] = None
-    
+
     model_config = {"extra": "allow"}
 
 
@@ -198,7 +198,7 @@ class ChatCompletionRequest(BaseModel):
 class ChatCompletionChoice(BaseModel):
     """
     Single response variant in Chat Completion.
-    
+
     Attributes:
         index: Variant index
         message: Response message
@@ -212,7 +212,7 @@ class ChatCompletionChoice(BaseModel):
 class ChatCompletionUsage(BaseModel):
     """
     Token usage information.
-    
+
     Attributes:
         prompt_tokens: Number of tokens in request
         completion_tokens: Number of tokens in response
@@ -228,7 +228,7 @@ class ChatCompletionUsage(BaseModel):
 class ChatCompletionResponse(BaseModel):
     """
     Full Chat Completion response (non-streaming).
-    
+
     Attributes:
         id: Unique response ID
         object: Object type ("chat.completion")
@@ -248,7 +248,7 @@ class ChatCompletionResponse(BaseModel):
 class ChatCompletionChunkDelta(BaseModel):
     """
     Delta of changes in streaming chunk.
-    
+
     Attributes:
         role: Role (only in first chunk)
         content: New content
@@ -262,7 +262,7 @@ class ChatCompletionChunkDelta(BaseModel):
 class ChatCompletionChunkChoice(BaseModel):
     """
     Single variant in streaming chunk.
-    
+
     Attributes:
         index: Variant index
         delta: Delta of changes
@@ -276,7 +276,7 @@ class ChatCompletionChunkChoice(BaseModel):
 class ChatCompletionChunk(BaseModel):
     """
     Streaming chunk in OpenAI format.
-    
+
     Attributes:
         id: Unique response ID
         object: Object type ("chat.completion.chunk")
