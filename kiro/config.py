@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 # Kiro Gateway
 # https://github.com/jwadow/kiro-gateway
@@ -31,7 +30,30 @@ from typing import Dict, List, Optional
 
 from dotenv import load_dotenv
 
+
 # Load environment variables
+def _parse_bool_env(var_name: str, default: bool) -> bool:
+    """Parse a boolean environment variable accepting common truthy/falsy strings.
+
+    Accepts: "true", "1", "yes", "on" (case-insensitive) as True.
+    Accepts: "false", "0", "no", "off" (case-insensitive) as False.
+    Falls back to ``default`` when the variable is unset or empty.
+
+    Args:
+        var_name: Environment variable name.
+        default: Value to return when the variable is absent or empty.
+
+    Returns:
+        Parsed boolean value.
+    """
+    val = os.getenv(var_name, "").strip().lower()
+    if val in ("true", "1", "yes", "on"):
+        return True
+    if val in ("false", "0", "no", "off"):
+        return False
+    return default
+
+
 load_dotenv()
 
 
@@ -554,7 +576,10 @@ STATE_SAVE_INTERVAL_SECONDS: int = int(os.getenv("STATE_SAVE_INTERVAL_SECONDS", 
 
 APP_VERSION: str = "2.4-dev.10"
 APP_TITLE: str = "Kiro Gateway"
-APP_DESCRIPTION: str = "Proxy gateway for Kiro API (Amazon Q Developer / AWS CodeWhisperer). OpenAI and Anthropic compatible. Made by @jwadow"
+APP_DESCRIPTION: str = (
+    "Proxy gateway for Kiro API (Amazon Q Developer / AWS CodeWhisperer). "
+    "OpenAI and Anthropic compatible. Made by @jwadow"
+)
 
 
 def get_kiro_refresh_url(region: str) -> str:
@@ -583,9 +608,9 @@ def get_kiro_q_host(region: str) -> str:
 # ==================================================================================================
 # Disabled by default; enable via RESPONSE_CACHE_ENABLED=true.
 
-RESPONSE_CACHE_ENABLED: bool = os.getenv("RESPONSE_CACHE_ENABLED", "false").lower() == "true"
+RESPONSE_CACHE_ENABLED: bool = _parse_bool_env("RESPONSE_CACHE_ENABLED", default=False)
 RESPONSE_CACHE_MAX_ENTRIES: int = int(os.getenv("RESPONSE_CACHE_MAX_ENTRIES", "1000"))
 RESPONSE_CACHE_MAX_BYTES: int = int(os.getenv("RESPONSE_CACHE_MAX_BYTES", str(500 * 1024 * 1024)))
 RESPONSE_CACHE_TTL_SECONDS: int = int(os.getenv("RESPONSE_CACHE_TTL_SECONDS", "3600"))
 RESPONSE_CACHE_MAX_ENTRY_BYTES: int = int(os.getenv("RESPONSE_CACHE_MAX_ENTRY_BYTES", str(5 * 1024 * 1024)))
-RESPONSE_CACHE_LOG_HITS: bool = os.getenv("RESPONSE_CACHE_LOG_HITS", "true").lower() == "true"
+RESPONSE_CACHE_LOG_HITS: bool = _parse_bool_env("RESPONSE_CACHE_LOG_HITS", default=True)

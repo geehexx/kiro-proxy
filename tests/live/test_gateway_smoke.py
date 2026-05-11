@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Live smoke tests against a running kiro-gateway.
@@ -117,6 +116,7 @@ class TestLiveModelsEndpoint:
         _skip_if_missing_api_key()
         with _client() as client:
             response = client.get("/v1/models")
+        assert response.status_code == 200, response.text
         for model in response.json()["data"]:
             assert "id" in model
             assert "object" in model

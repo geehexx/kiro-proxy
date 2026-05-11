@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Cache-integration helpers for the Anthropic /v1/messages route.

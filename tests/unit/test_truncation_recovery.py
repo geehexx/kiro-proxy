@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Unit tests for truncation_recovery.py - Synthetic message generation.

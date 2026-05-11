@@ -1,5 +1,4 @@
 
-# -*- coding: utf-8 -*-
 
 """
 Unit tests for Anthropic API endpoints (routes_anthropic.py).

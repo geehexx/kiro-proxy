@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 # Kiro Gateway
 # https://github.com/jwadow/kiro-gateway

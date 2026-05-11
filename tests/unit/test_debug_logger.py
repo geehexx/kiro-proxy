@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Unit tests for DebugLogger.
@@ -6,9 +5,10 @@ Verifies the buffering and write logic for debug logs in each mode.
 """
 
 import json
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 class TestDebugLoggerModeOff:
@@ -32,7 +32,7 @@ class TestDebugLoggerModeOff:
                 print("Action: Calling prepare_new_request...")
                 logger.prepare_new_request()
 
-                print(f"Check that the directory was not created...")
+                print("Check that the directory was not created...")
                 assert not (tmp_path / "debug_logs").exists()
 
     def test_log_request_body_does_nothing(self, tmp_path):
@@ -51,7 +51,7 @@ class TestDebugLoggerModeOff:
             print("Action: Calling log_request_body...")
             logger.log_request_body(b'{"test": "data"}')
 
-            print(f"Check that the file was not created...")
+            print("Check that the file was not created...")
             assert not (tmp_path / "debug_logs" / "request_body.json").exists()
 
 
@@ -79,9 +79,9 @@ class TestDebugLoggerModeAll:
             print("Action: Calling prepare_new_request...")
             logger.prepare_new_request()
 
-            print(f"Check that the old file was removed...")
+            print("Check that the old file was removed...")
             assert not old_file.exists()
-            print(f"Check that the directory exists...")
+            print("Check that the directory exists...")
             assert debug_dir.exists()
 
     def test_log_request_body_writes_immediately(self, tmp_path):
@@ -104,11 +104,11 @@ class TestDebugLoggerModeAll:
             test_data = b'{"model": "test", "messages": []}'
             logger.log_request_body(test_data)
 
-            print(f"Check that the file was created...")
+            print("Check that the file was created...")
             file_path = debug_dir / "request_body.json"
             assert file_path.exists()
 
-            print(f"Check the file contents...")
+            print("Check the file contents...")
             content = json.loads(file_path.read_text())
             assert content["model"] == "test"
 
@@ -132,7 +132,7 @@ class TestDebugLoggerModeAll:
             test_data = b'{"conversationState": {}}'
             logger.log_kiro_request_body(test_data)
 
-            print(f"Check that the file was created...")
+            print("Check that the file was created...")
             file_path = debug_dir / "kiro_request_body.json"
             assert file_path.exists()
 
@@ -156,7 +156,7 @@ class TestDebugLoggerModeAll:
             logger.log_raw_chunk(b'chunk1')
             logger.log_raw_chunk(b'chunk2')
 
-            print(f"Check the file contents...")
+            print("Check the file contents...")
             file_path = debug_dir / "response_stream_raw.txt"
             content = file_path.read_bytes()
             assert content == b'chunk1chunk2'
@@ -184,10 +184,10 @@ class TestDebugLoggerModeErrors:
             test_data = b'{"test": "buffered"}'
             logger.log_request_body(test_data)
 
-            print(f"Check that the file was NOT created...")
+            print("Check that the file was NOT created...")
             assert not debug_dir.exists()
 
-            print(f"Check that the data is in the buffer...")
+            print("Check that the data is in the buffer...")
             assert logger._request_body_buffer == test_data
 
     def test_flush_on_error_writes_buffers(self, tmp_path):
@@ -214,14 +214,14 @@ class TestDebugLoggerModeErrors:
             print("Action: Calling flush_on_error...")
             logger.flush_on_error(400, "Bad Request")
 
-            print(f"Check that all files were created...")
+            print("Check that all files were created...")
             assert (debug_dir / "request_body.json").exists()
             assert (debug_dir / "kiro_request_body.json").exists()
             assert (debug_dir / "response_stream_raw.txt").exists()
             assert (debug_dir / "response_stream_modified.txt").exists()
             assert (debug_dir / "error_info.json").exists()
 
-            print(f"Check error_info.json...")
+            print("Check error_info.json...")
             error_info = json.loads((debug_dir / "error_info.json").read_text())
             assert error_info["status_code"] == 400
             assert error_info["error_message"] == "Bad Request"
@@ -246,7 +246,7 @@ class TestDebugLoggerModeErrors:
             print("Action: Calling flush_on_error...")
             logger.flush_on_error(500, "Error")
 
-            print(f"Check that the buffers were cleared...")
+            print("Check that the buffers were cleared...")
             assert logger._request_body_buffer is None
             assert logger._kiro_request_body_buffer is None
             assert len(logger._raw_chunks_buffer) == 0
@@ -273,10 +273,10 @@ class TestDebugLoggerModeErrors:
             print("Action: Calling discard_buffers...")
             logger.discard_buffers()
 
-            print(f"Check that the directory was NOT created...")
+            print("Check that the directory was NOT created...")
             assert not debug_dir.exists()
 
-            print(f"Check that the buffers were cleared...")
+            print("Check that the buffers were cleared...")
             assert logger._request_body_buffer is None
             assert len(logger._raw_chunks_buffer) == 0
 
@@ -298,10 +298,10 @@ class TestDebugLoggerModeErrors:
             print("Action: Calling flush_on_error...")
             logger.flush_on_error(400, "Bad Request")
 
-            print(f"Check that error_info.json was created...")
+            print("Check that error_info.json was created...")
             assert (debug_dir / "error_info.json").exists()
 
-            print(f"Check error_info.json contents...")
+            print("Check error_info.json contents...")
             error_info = json.loads((debug_dir / "error_info.json").read_text())
             assert error_info["status_code"] == 400
             assert error_info["error_message"] == "Bad Request"
@@ -328,11 +328,11 @@ class TestDebugLoggerLogErrorInfo:
             print("Action: Calling log_error_info...")
             logger.log_error_info(500, "Internal Server Error")
 
-            print(f"Check that error_info.json was created...")
+            print("Check that error_info.json was created...")
             error_file = debug_dir / "error_info.json"
             assert error_file.exists()
 
-            print(f"Check the contents...")
+            print("Check the contents...")
             error_info = json.loads(error_file.read_text())
             assert error_info["status_code"] == 500
             assert error_info["error_message"] == "Internal Server Error"
@@ -355,7 +355,7 @@ class TestDebugLoggerLogErrorInfo:
             print("Action: Calling log_error_info...")
             logger.log_error_info(404, "Not Found")
 
-            print(f"Check that error_info.json was created...")
+            print("Check that error_info.json was created...")
             error_file = debug_dir / "error_info.json"
             assert error_file.exists()
 
@@ -377,7 +377,7 @@ class TestDebugLoggerLogErrorInfo:
             print("Action: Calling log_error_info...")
             logger.log_error_info(500, "Error")
 
-            print(f"Check that the directory was NOT created...")
+            print("Check that the directory was NOT created...")
             assert not debug_dir.exists()
 
 
@@ -396,7 +396,7 @@ class TestDebugLoggerHelperMethods:
             logger._initialized = False
             logger.__init__()
 
-            print(f"Check _is_enabled()...")
+            print("Check _is_enabled()...")
             assert logger._is_enabled() is True
 
     def test_is_enabled_returns_true_for_all(self):
@@ -411,7 +411,7 @@ class TestDebugLoggerHelperMethods:
             logger._initialized = False
             logger.__init__()
 
-            print(f"Check _is_enabled()...")
+            print("Check _is_enabled()...")
             assert logger._is_enabled() is True
 
     def test_is_enabled_returns_false_for_off(self):
@@ -426,7 +426,7 @@ class TestDebugLoggerHelperMethods:
             logger._initialized = False
             logger.__init__()
 
-            print(f"Check _is_enabled()...")
+            print("Check _is_enabled()...")
             assert logger._is_enabled() is False
 
     def test_is_immediate_write_returns_true_for_all(self):
@@ -441,7 +441,7 @@ class TestDebugLoggerHelperMethods:
             logger._initialized = False
             logger.__init__()
 
-            print(f"Check _is_immediate_write()...")
+            print("Check _is_immediate_write()...")
             assert logger._is_immediate_write() is True
 
     def test_is_immediate_write_returns_false_for_errors(self):
@@ -456,7 +456,7 @@ class TestDebugLoggerHelperMethods:
             logger._initialized = False
             logger.__init__()
 
-            print(f"Check _is_immediate_write()...")
+            print("Check _is_immediate_write()...")
             assert logger._is_immediate_write() is False
 
 
@@ -482,7 +482,7 @@ class TestDebugLoggerJsonHandling:
             print("Action: Calling log_request_body with JSON...")
             logger.log_request_body(b'{"key":"value"}')
 
-            print(f"Check the formatting...")
+            print("Check the formatting...")
             content = (debug_dir / "request_body.json").read_text()
             # Should be formatted with indentation
             assert "  " in content or "\n" in content
@@ -507,7 +507,7 @@ class TestDebugLoggerJsonHandling:
             invalid_data = b'not a json {{'
             logger.log_request_body(invalid_data)
 
-            print(f"Check that the data was written as-is...")
+            print("Check that the data was written as-is...")
             content = (debug_dir / "request_body.json").read_bytes()
             assert content == invalid_data
 
@@ -533,7 +533,7 @@ class TestDebugLoggerAppLogsCapture:
             print("Action: Calling prepare_new_request...")
             dbg_logger.prepare_new_request()
 
-            print(f"Check that the sink was created...")
+            print("Check that the sink was created...")
             assert dbg_logger._loguru_sink_id is not None
 
             # Cleanup
@@ -548,8 +548,9 @@ class TestDebugLoggerAppLogsCapture:
         debug_dir = tmp_path / "debug_logs"
 
         with patch('kiro.debug_logger.DEBUG_MODE', 'errors'):
-            from kiro.debug_logger import DebugLogger
             from loguru import logger as loguru_logger
+
+            from kiro.debug_logger import DebugLogger
 
             dbg_logger = DebugLogger.__new__(DebugLogger)
             dbg_logger._initialized = False
@@ -568,11 +569,11 @@ class TestDebugLoggerAppLogsCapture:
             print("Action: Calling flush_on_error...")
             dbg_logger.flush_on_error(500, "Test Error")
 
-            print(f"Check that app_logs.txt was created...")
+            print("Check that app_logs.txt was created...")
             app_logs_file = debug_dir / "app_logs.txt"
             assert app_logs_file.exists()
 
-            print(f"Check the contents...")
+            print("Check the contents...")
             content = app_logs_file.read_text()
             assert "Test log message" in content
 
@@ -602,11 +603,11 @@ class TestDebugLoggerAppLogsCapture:
             print("Action: Calling discard_buffers...")
             dbg_logger.discard_buffers()
 
-            print(f"Check that app_logs.txt was created...")
+            print("Check that app_logs.txt was created...")
             app_logs_file = debug_dir / "app_logs.txt"
             assert app_logs_file.exists()
 
-            print(f"Check the contents...")
+            print("Check the contents...")
             content = app_logs_file.read_text()
             assert "Success log message" in content
 
@@ -635,7 +636,7 @@ class TestDebugLoggerAppLogsCapture:
             print("Action: Calling discard_buffers...")
             dbg_logger.discard_buffers()
 
-            print(f"Check that the directory was NOT created...")
+            print("Check that the directory was NOT created...")
             assert not debug_dir.exists()
 
     def test_clear_app_logs_buffer_removes_sink(self, tmp_path):
@@ -660,7 +661,7 @@ class TestDebugLoggerAppLogsCapture:
             print("Action: Calling _clear_app_logs_buffer...")
             dbg_logger._clear_app_logs_buffer()
 
-            print(f"Check that sink_id was reset...")
+            print("Check that sink_id was reset...")
             assert dbg_logger._loguru_sink_id is None
 
     def test_app_logs_not_saved_when_empty(self, tmp_path):
@@ -685,6 +686,6 @@ class TestDebugLoggerAppLogsCapture:
             print("Action: Calling _write_app_logs_to_file...")
             dbg_logger._write_app_logs_to_file()
 
-            print(f"Check that app_logs.txt was NOT created...")
+            print("Check that app_logs.txt was NOT created...")
             app_logs_file = debug_dir / "app_logs.txt"
             assert not app_logs_file.exists()

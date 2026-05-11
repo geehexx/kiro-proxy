@@ -1,5 +1,4 @@
 
-# -*- coding: utf-8 -*-
 
 """
 Unit tests for OpenAI API endpoints (routes_openai.py).

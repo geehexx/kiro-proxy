@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Tests for kiro/account_errors.py - Error classification for failover logic.
