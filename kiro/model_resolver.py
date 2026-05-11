@@ -161,7 +161,7 @@ def normalize_model_name(name: str) -> str:
     return name
 
 
-def get_model_id_for_kiro(model_name: str, hidden_models: Dict[str, str]) -> str:
+def get_model_id_for_kiro(model_name: str, hidden_models: dict[str, str]) -> str:
     """
     Get the model ID to send to Kiro API.
 
@@ -248,9 +248,9 @@ class ModelResolver:
     def __init__(
         self,
         cache: ModelInfoCache,
-        hidden_models: Optional[Dict[str, str]] = None,
-        aliases: Optional[Dict[str, str]] = None,
-        hidden_from_list: Optional[List[str]] = None
+        hidden_models: Optional[dict[str, str]] = None,
+        aliases: Optional[dict[str, str]] = None,
+        hidden_from_list: Optional[list[str]] = None
     ):
         """
         Initialize the model resolver.
@@ -336,7 +336,7 @@ class ModelResolver:
             is_verified=False  # Not verified locally, Kiro will judge
         )
 
-    def get_available_models(self) -> List[str]:
+    def get_available_models(self) -> list[str]:
         """
         Get list of all available model IDs for /v1/models endpoint.
 
@@ -365,7 +365,7 @@ class ModelResolver:
 
         return sorted(models)
 
-    def get_models_by_family(self, family: str) -> List[str]:
+    def get_models_by_family(self, family: str) -> list[str]:
         """
         Get available models filtered by family.
 
@@ -380,7 +380,7 @@ class ModelResolver:
         all_models = self.get_available_models()
         return [m for m in all_models if family.lower() in m.lower()]
 
-    def get_suggestions_for_model(self, model_name: str) -> List[str]:
+    def get_suggestions_for_model(self, model_name: str) -> list[str]:
         """
         Get available models from the SAME family for error message.
 

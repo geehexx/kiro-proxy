@@ -56,12 +56,12 @@ class ModelInfoCache:
         Args:
             cache_ttl: Cache time-to-live in seconds (default from config)
         """
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache: dict[str, dict[str, Any]] = {}
         self._lock = asyncio.Lock()
         self._last_update: Optional[float] = None
         self._cache_ttl = cache_ttl
 
-    async def update(self, models_data: List[Dict[str, Any]]) -> None:
+    async def update(self, models_data: list[dict[str, Any]]) -> None:
         """
         Updates the model cache.
 
@@ -76,7 +76,7 @@ class ModelInfoCache:
             self._cache = {model["modelId"]: model for model in models_data}
             self._last_update = time.time()
 
-    def get(self, model_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, model_id: str) -> Optional[dict[str, Any]]:
         """
         Returns model information.
 
@@ -161,7 +161,7 @@ class ModelInfoCache:
             return True
         return time.time() - self._last_update > self._cache_ttl
 
-    def get_all_model_ids(self) -> List[str]:
+    def get_all_model_ids(self) -> list[str]:
         """
         Returns a list of all model IDs in the cache.
 

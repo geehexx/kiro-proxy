@@ -31,7 +31,8 @@ to convert Kiro events to their respective SSE formats.
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from collections.abc import AsyncGenerator, Awaitable, Callable
 
 import httpx
 from loguru import logger
@@ -79,8 +80,8 @@ class KiroEvent:
     type: str
     content: Optional[str] = None
     thinking_content: Optional[str] = None
-    tool_use: Optional[Dict[str, Any]] = None
-    usage: Optional[Dict[str, Any]] = None
+    tool_use: Optional[dict[str, Any]] = None
+    usage: Optional[dict[str, Any]] = None
     context_usage_percentage: Optional[float] = None
     is_first_thinking_chunk: bool = False
     is_last_thinking_chunk: bool = False
@@ -100,8 +101,8 @@ class StreamResult:
     """
     content: str = ""
     thinking_content: str = ""
-    tool_calls: List[Dict[str, Any]] = field(default_factory=list)
-    usage: Optional[Dict[str, Any]] = None
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    usage: Optional[dict[str, Any]] = None
     context_usage_percentage: Optional[float] = None
 
 
@@ -335,7 +336,7 @@ def calculate_tokens_from_context_usage(
     completion_tokens: int,
     model_cache: "ModelInfoCache",
     model: str
-) -> Tuple[int, int, str, str]:
+) -> tuple[int, int, str, str]:
     """
     Calculate token counts from Kiro's context usage percentage.
 

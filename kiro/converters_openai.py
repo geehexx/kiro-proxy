@@ -52,7 +52,7 @@ from kiro.models_openai import ChatCompletionRequest, ChatMessage, Tool
 # OpenAI-specific Message Processing
 # ==================================================================================================
 
-def _extract_tool_results_from_openai(content: Any) -> List[Dict[str, Any]]:
+def _extract_tool_results_from_openai(content: Any) -> list[dict[str, Any]]:
     """
     Extracts tool results from OpenAI message content.
 
@@ -76,7 +76,7 @@ def _extract_tool_results_from_openai(content: Any) -> List[Dict[str, Any]]:
     return tool_results
 
 
-def _extract_images_from_tool_message(content: Any) -> List[Dict[str, Any]]:
+def _extract_images_from_tool_message(content: Any) -> list[dict[str, Any]]:
     """
     Extracts images from OpenAI tool message content.
 
@@ -111,7 +111,7 @@ def _extract_images_from_tool_message(content: Any) -> List[Dict[str, Any]]:
     return images
 
 
-def _extract_tool_calls_from_openai(msg: ChatMessage) -> List[Dict[str, Any]]:
+def _extract_tool_calls_from_openai(msg: ChatMessage) -> list[dict[str, Any]]:
     """
     Extracts tool calls from OpenAI assistant message.
 
@@ -138,7 +138,7 @@ def _extract_tool_calls_from_openai(msg: ChatMessage) -> List[Dict[str, Any]]:
     return tool_calls
 
 
-def convert_openai_messages_to_unified(messages: List[ChatMessage]) -> Tuple[str, List[UnifiedMessage]]:
+def convert_openai_messages_to_unified(messages: list[ChatMessage]) -> tuple[str, list[UnifiedMessage]]:
     """
     Converts OpenAI messages to unified format.
 
@@ -249,7 +249,7 @@ def convert_openai_messages_to_unified(messages: List[ChatMessage]) -> Tuple[str
     return system_prompt, processed
 
 
-def convert_openai_tools_to_unified(tools: Optional[List[Tool]]) -> Optional[List[UnifiedTool]]:
+def convert_openai_tools_to_unified(tools: Optional[list[Tool]]) -> Optional[list[UnifiedTool]]:
     """
     Converts OpenAI tools to unified format.
 

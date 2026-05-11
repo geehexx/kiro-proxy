@@ -59,7 +59,7 @@ class KiroErrorInfo:
     original_message: str
 
 
-def enhance_kiro_error(error_json: Dict[str, Any]) -> KiroErrorInfo:
+def enhance_kiro_error(error_json: dict[str, Any]) -> KiroErrorInfo:
     """
     Enhances Kiro API error with user-friendly message.
 

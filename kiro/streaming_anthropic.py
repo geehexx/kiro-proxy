@@ -33,7 +33,8 @@ Reference: https://docs.anthropic.com/en/api/messages-streaming
 import json
 import time
 import uuid
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from collections.abc import AsyncGenerator
 
 import httpx
 from loguru import logger
@@ -66,7 +67,7 @@ def generate_message_id() -> str:
     return f"msg_{uuid.uuid4().hex[:24]}"
 
 
-def format_sse_event(event_type: str, data: Dict[str, Any]) -> str:
+def format_sse_event(event_type: str, data: dict[str, Any]) -> str:
     """
     Format data as Anthropic SSE event.
 
@@ -97,7 +98,7 @@ def generate_thinking_signature() -> str:
     return f"sig_{uuid.uuid4().hex[:32]}"
 
 
-def _extract_cache_usage_fields(usage: Optional[Dict[str, Any]]) -> Dict[str, int]:
+def _extract_cache_usage_fields(usage: Optional[dict[str, Any]]) -> dict[str, int]:
     """
     Extract cache token fields from upstream usage (if present).
 
@@ -110,7 +111,7 @@ def _extract_cache_usage_fields(usage: Optional[Dict[str, Any]]) -> Dict[str, in
     if not isinstance(usage, dict):
         return {}
 
-    extracted: Dict[str, int] = {}
+    extracted: dict[str, int] = {}
     key_map = {
         "cache_read_input_tokens": "cache_read_input_tokens",
         "cacheReadInputTokens": "cache_read_input_tokens",
@@ -187,18 +188,18 @@ async def stream_kiro_to_anthropic(
     thinking_block_index: Optional[int] = None
     text_block_started = False
     text_block_index: Optional[int] = None
-    tool_blocks: List[Dict[str, Any]] = []
-    _tool_input_buffers: Dict[int, str] = {}  # index -> accumulated JSON (reserved for future use)
+    tool_blocks: list[dict[str, Any]] = []
+    _tool_input_buffers: dict[int, str] = {}  # index -> accumulated JSON (reserved for future use)
 
     # Generate signature for thinking block (used if thinking is present)
     thinking_signature = generate_thinking_signature()
 
     # Track context usage for token calculation
     context_usage_percentage: Optional[float] = None
-    upstream_cache_usage: Dict[str, int] = {}
+    upstream_cache_usage: dict[str, int] = {}
 
     # Track truncated tool calls for recovery
-    truncated_tools: List[Dict[str, Any]] = []
+    truncated_tools: list[dict[str, Any]] = []
 
     try:
         # Send message_start event
@@ -852,7 +853,7 @@ async def collect_anthropic_response(
         f"tool_calls={len(result.tool_calls)}, stop_reason={stop_reason}"
     )
 
-    usage_payload: Dict[str, Any] = {
+    usage_payload: dict[str, Any] = {
         "input_tokens": input_tokens,
         "output_tokens": output_tokens
     }

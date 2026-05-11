@@ -101,7 +101,7 @@ class ThinkingParser:
     def __init__(
         self,
         handling_mode: Optional[str] = None,
-        open_tags: Optional[List[str]] = None,
+        open_tags: Optional[list[str]] = None,
         initial_buffer_size: int = FAKE_REASONING_INITIAL_BUFFER_SIZE,
     ):
         """

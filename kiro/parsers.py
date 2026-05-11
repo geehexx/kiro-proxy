@@ -88,7 +88,7 @@ def find_matching_brace(text: str, start_pos: int) -> int:
     return -1
 
 
-def parse_bracket_tool_calls(response_text: str) -> List[Dict[str, Any]]:
+def parse_bracket_tool_calls(response_text: str) -> list[dict[str, Any]]:
     """
     Parses tool calls in [Called func_name with args: {...}] format.
 
@@ -147,7 +147,7 @@ def parse_bracket_tool_calls(response_text: str) -> List[Dict[str, Any]]:
     return tool_calls
 
 
-def deduplicate_tool_calls(tool_calls: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def deduplicate_tool_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Removes duplicate tool calls.
 
@@ -163,7 +163,7 @@ def deduplicate_tool_calls(tool_calls: List[Dict[str, Any]]) -> List[Dict[str, A
         List of unique tool calls
     """
     # First deduplicate by id - keep tool call with non-empty arguments
-    by_id: Dict[str, Dict[str, Any]] = {}
+    by_id: dict[str, dict[str, Any]] = {}
     for tc in tool_calls:
         tc_id = tc.get("id", "")
         if not tc_id:
@@ -251,10 +251,10 @@ class AwsEventStreamParser:
         """Initializes the parser."""
         self.buffer = ""
         self.last_content: Optional[str] = None  # For deduplicating repeating content
-        self.current_tool_call: Optional[Dict[str, Any]] = None
-        self.tool_calls: List[Dict[str, Any]] = []
+        self.current_tool_call: Optional[dict[str, Any]] = None
+        self.tool_calls: list[dict[str, Any]] = []
 
-    def feed(self, chunk: bytes) -> List[Dict[str, Any]]:
+    def feed(self, chunk: bytes) -> list[dict[str, Any]]:
         """
         Adds chunk to buffer and returns parsed events.
 
@@ -304,7 +304,7 @@ class AwsEventStreamParser:
 
         return events
 
-    def _process_event(self, data: dict, event_type: str) -> Optional[Dict[str, Any]]:
+    def _process_event(self, data: dict, event_type: str) -> Optional[dict[str, Any]]:
         """
         Processes a parsed event.
 
@@ -330,7 +330,7 @@ class AwsEventStreamParser:
 
         return None
 
-    def _process_content_event(self, data: dict) -> Optional[Dict[str, Any]]:
+    def _process_content_event(self, data: dict) -> Optional[dict[str, Any]]:
         """Processes content event."""
         content = data.get('content', '')
 
@@ -346,7 +346,7 @@ class AwsEventStreamParser:
 
         return {"type": "content", "data": content}
 
-    def _process_tool_start_event(self, data: dict) -> Optional[Dict[str, Any]]:
+    def _process_tool_start_event(self, data: dict) -> Optional[dict[str, Any]]:
         """Processes tool call start."""
         # Finalize previous tool call if exists
         if self.current_tool_call:
@@ -373,7 +373,7 @@ class AwsEventStreamParser:
 
         return None
 
-    def _process_tool_input_event(self, data: dict) -> Optional[Dict[str, Any]]:
+    def _process_tool_input_event(self, data: dict) -> Optional[dict[str, Any]]:
         """Processes input continuation for tool call."""
         if self.current_tool_call:
             # input can be string or object
@@ -385,7 +385,7 @@ class AwsEventStreamParser:
             self.current_tool_call['function']['arguments'] += input_str
         return None
 
-    def _process_tool_stop_event(self, data: dict) -> Optional[Dict[str, Any]]:
+    def _process_tool_stop_event(self, data: dict) -> Optional[dict[str, Any]]:
         """Processes tool call end."""
         if self.current_tool_call and data.get('stop'):
             self._finalize_tool_call()
@@ -451,7 +451,7 @@ class AwsEventStreamParser:
         self.tool_calls.append(self.current_tool_call)
         self.current_tool_call = None
 
-    def _diagnose_json_truncation(self, json_str: str) -> Dict[str, Any]:
+    def _diagnose_json_truncation(self, json_str: str) -> dict[str, Any]:
         """
         Analyzes a malformed JSON string to determine if it was truncated.
 
@@ -535,7 +535,7 @@ class AwsEventStreamParser:
         # Doesn't look truncated, probably just malformed
         return {"is_truncated": False, "reason": "malformed JSON", "size_bytes": size_bytes}
 
-    def get_tool_calls(self) -> List[Dict[str, Any]]:
+    def get_tool_calls(self) -> list[dict[str, Any]]:
         """
         Returns all collected tool calls.
 

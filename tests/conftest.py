@@ -10,7 +10,8 @@ import asyncio
 import json
 import time
 from datetime import datetime, timezone
-from typing import Any, AsyncGenerator, Dict, List
+from typing import Any, Dict, List
+from collections.abc import AsyncGenerator
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
@@ -356,7 +357,7 @@ def mock_httpx_response():
     """
     def _create_response(
         status_code: int = 200,
-        json_data: Dict[str, Any] = None,
+        json_data: dict[str, Any] = None,
         text: str = None,
         stream_chunks: list = None
     ):

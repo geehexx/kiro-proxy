@@ -239,7 +239,7 @@ BASE_RETRY_DELAY: float = 1.0
 #
 # Why "hidden"? These models work but are not advertised by Kiro's /ListAvailableModels.
 # We expose them to our users because they're useful.
-HIDDEN_MODELS: Dict[str, str] = {
+HIDDEN_MODELS: dict[str, str] = {
     # Claude 3.7 Sonnet - legacy flagship model, still works!
     # Hidden in Kiro API but functional. Great for users who prefer it.
     "claude-3.7-sonnet": "CLAUDE_3_7_SONNET_20250219_V1_0",
@@ -273,7 +273,7 @@ HIDDEN_MODELS: Dict[str, str] = {
 #   }
 #
 # Default: {"auto-kiro": "auto"} to avoid Cursor IDE conflict
-MODEL_ALIASES: Dict[str, str] = {
+MODEL_ALIASES: dict[str, str] = {
     "auto-kiro": "auto",  # Default alias to avoid Cursor's "auto" model conflict
 }
 
@@ -287,7 +287,7 @@ MODEL_ALIASES: Dict[str, str] = {
 #   HIDDEN_FROM_LIST = ["auto", "claude-old-model"]
 #
 # Default: ["auto"] to show only "auto-kiro" alias
-HIDDEN_FROM_LIST: List[str] = ["auto"]
+HIDDEN_FROM_LIST: list[str] = ["auto"]
 
 # ==================================================================================================
 # Fallback Models Configuration (DNS Failure Recovery)
@@ -300,7 +300,7 @@ HIDDEN_FROM_LIST: List[str] = ["auto"]
 # - Some models may not be available on your Kiro plan (e.g., Opus on free tier)
 # - New models released after this version won't appear here
 # - Update gateway regularly to get the latest model list
-FALLBACK_MODELS: List[Dict[str, str]] = [
+FALLBACK_MODELS: list[dict[str, str]] = [
     {"modelId": "auto"},
     {"modelId": "claude-sonnet-4"},
     {"modelId": "claude-haiku-4.5"},
@@ -488,7 +488,7 @@ else:
 # List of opening tags to detect thinking blocks.
 # The parser will look for any of these tags at the start of the response.
 # Order matters - first match wins.
-FAKE_REASONING_OPEN_TAGS: List[str] = ["<thinking>", "<think>", "<reasoning>", "<thought>"]
+FAKE_REASONING_OPEN_TAGS: list[str] = ["<thinking>", "<think>", "<reasoning>", "<thought>"]
 
 # Maximum size of initial buffer for tag detection (characters).
 # If no thinking tag is found within this limit, content is treated as regular response.

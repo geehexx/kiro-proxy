@@ -46,8 +46,8 @@ def should_inject_recovery() -> bool:
 def generate_truncation_tool_result(
     tool_name: str,
     tool_use_id: str,
-    truncation_info: Dict[str, Any]
-) -> Dict[str, Any]:
+    truncation_info: dict[str, Any]
+) -> dict[str, Any]:
     """
     Generate synthetic tool_result for truncated tool call.
 
