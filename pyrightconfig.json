@@ -4,16 +4,8 @@
   "pythonVersion": "3.12",
   "typeCheckingMode": "basic",
   "include": ["kiro", "tests", "main.py", "manual_api_test.py"],
-  "exclude": [
-    ".venv",
-    "__pycache__",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".hypothesis",
-    "old",
-    "_notes",
-    "docs"
-  ],
+  "exclude": [".venv", "__pycache__", ".pytest_cache", ".ruff_cache",
+              ".hypothesis", "old", "_notes", "docs"],
   "reportMissingImports": "error",
   "reportMissingTypeStubs": "none"
 }
