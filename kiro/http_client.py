@@ -30,6 +30,7 @@ with connection pooling for better resource management.
 """
 
 import asyncio
+import random
 from typing import Optional
 
 import httpx
@@ -245,8 +246,15 @@ class KiroHttpClient:
                 if response.status_code == 429:
                     last_response = response  # Retain to return after retry exhaustion
                     if attempt < max_retries - 1:
-                        delay = BASE_RETRY_DELAY * (2 ** attempt)
-                        logger.warning(f"Received 429, waiting {delay}s (attempt {attempt + 1}/{max_retries})")
+                        # Respect Retry-After header if present; fall back to exponential backoff.
+                        retry_after = response.headers.get("retry-after") or response.headers.get("Retry-After")
+                        try:
+                            base_delay = float(retry_after) if retry_after else BASE_RETRY_DELAY * (2 ** attempt)
+                        except (ValueError, TypeError):
+                            base_delay = BASE_RETRY_DELAY * (2 ** attempt)
+                        # Add ±25% jitter to prevent thundering herd on concurrent 429s.
+                        delay = base_delay * (1.0 + random.uniform(-0.25, 0.25))
+                        logger.warning(f"Received 429, waiting {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
                         await asyncio.sleep(delay)
                     continue
 
