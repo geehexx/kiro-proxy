@@ -522,6 +522,7 @@ class TestKiroHttpClientExponentialBackoff:
 
         mock_response_429 = AsyncMock()
         mock_response_429.status_code = 429
+        mock_response_429.headers = {}  # no Retry-After header
 
         mock_response_200 = AsyncMock()
         mock_response_200.status_code = 200
@@ -550,11 +551,15 @@ class TestKiroHttpClientExponentialBackoff:
                         {"data": "value"}
                     )
 
-        print("Verification: Delays increase exponentially...")
+        print("Verification: Delays increase exponentially with ±25% jitter...")
         print(f"Delays: {sleep_delays}")
         assert len(sleep_delays) == 2
-        assert sleep_delays[0] == BASE_RETRY_DELAY * (2 ** 0)  # 1.0
-        assert sleep_delays[1] == BASE_RETRY_DELAY * (2 ** 1)  # 2.0
+        # Jitter adds ±25% — assert within [0.75×base, 1.25×base]
+        base0 = BASE_RETRY_DELAY * (2 ** 0)  # 1.0
+        base1 = BASE_RETRY_DELAY * (2 ** 1)  # 2.0
+        assert 0.75 * base0 <= sleep_delays[0] <= 1.25 * base0, f"delay[0]={sleep_delays[0]} outside jitter range"
+        assert 0.75 * base1 <= sleep_delays[1] <= 1.25 * base1, f"delay[1]={sleep_delays[1]} outside jitter range"
+        assert sleep_delays[1] > sleep_delays[0] * 1.5, "second delay should be roughly 2× the first"
 
 
 class TestKiroHttpClientStreamingTimeout:
