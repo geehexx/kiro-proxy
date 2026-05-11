@@ -29,7 +29,8 @@ Uses streaming_core.py for parsing Kiro stream into unified KiroEvent objects.
 
 import json
 import time
-from typing import TYPE_CHECKING, AsyncGenerator, Awaitable, Callable, Optional
+from typing import TYPE_CHECKING, Optional
+from collections.abc import AsyncGenerator, Awaitable, Callable
 
 import httpx
 from fastapi import HTTPException

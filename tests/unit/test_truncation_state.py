@@ -278,8 +278,8 @@ class TestThreadSafety:
 
         # Arrange
         num_threads = 10
-        results: List[ToolTruncationInfo] = []
-        errors: List[Exception] = []
+        results: list[ToolTruncationInfo] = []
+        errors: list[Exception] = []
 
         def save_and_retrieve(tool_id: str):
             try:
@@ -328,8 +328,8 @@ class TestThreadSafety:
 
         # Arrange
         num_threads = 10
-        results: List[ContentTruncationInfo] = []
-        errors: List[Exception] = []
+        results: list[ContentTruncationInfo] = []
+        errors: list[Exception] = []
 
         def save_and_retrieve(content: str):
             try:

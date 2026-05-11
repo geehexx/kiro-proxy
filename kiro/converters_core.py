@@ -96,9 +96,9 @@ class UnifiedMessage:
     """
     role: str
     content: Any = ""
-    tool_calls: Optional[List[Dict[str, Any]]] = None
-    tool_results: Optional[List[Dict[str, Any]]] = None
-    images: Optional[List[Dict[str, Any]]] = None
+    tool_calls: Optional[list[dict[str, Any]]] = None
+    tool_results: Optional[list[dict[str, Any]]] = None
+    images: Optional[list[dict[str, Any]]] = None
 
 
 @dataclass
@@ -113,7 +113,7 @@ class UnifiedTool:
     """
     name: str
     description: Optional[str] = None
-    input_schema: Optional[Dict[str, Any]] = None
+    input_schema: Optional[dict[str, Any]] = None
 
 
 @dataclass
@@ -125,7 +125,7 @@ class KiroPayloadResult:
         payload: The complete Kiro API payload
         tool_documentation: Documentation for tools with long descriptions (to add to system prompt)
     """
-    payload: Dict[str, Any]
+    payload: dict[str, Any]
     tool_documentation: str = ""
 
 
@@ -180,7 +180,7 @@ def extract_text_content(content: Any) -> str:
     return str(content)
 
 
-def extract_images_from_content(content: Any) -> List[Dict[str, Any]]:
+def extract_images_from_content(content: Any) -> list[dict[str, Any]]:
     """
     Extracts images from message content in unified format.
 
@@ -203,7 +203,7 @@ def extract_images_from_content(content: Any) -> List[Dict[str, Any]]:
         >>> extract_images_from_content([{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "abc123"}}])
         [{'media_type': 'image/png', 'data': 'abc123'}]
     """
-    images: List[Dict[str, Any]] = []
+    images: list[dict[str, Any]] = []
 
     if not isinstance(content, list):
         return images
@@ -434,7 +434,7 @@ def inject_thinking_tags(content: str, thinking_config: ThinkingConfig) -> str:
 # JSON Schema Sanitization
 # ==================================================================================================
 
-def sanitize_json_schema(schema: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+def sanitize_json_schema(schema: Optional[dict[str, Any]]) -> dict[str, Any]:
     """
     Sanitizes JSON Schema from fields that Kiro API doesn't accept.
 
@@ -489,8 +489,8 @@ def sanitize_json_schema(schema: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 # ==================================================================================================
 
 def process_tools_with_long_descriptions(
-    tools: Optional[List[UnifiedTool]]
-) -> Tuple[Optional[List[UnifiedTool]], str]:
+    tools: Optional[list[UnifiedTool]]
+) -> tuple[Optional[list[UnifiedTool]], str]:
     """
     Processes tools with long descriptions.
 
@@ -555,7 +555,7 @@ def process_tools_with_long_descriptions(
     return processed_tools if processed_tools else None, tool_documentation
 
 
-def validate_tool_names(tools: Optional[List[UnifiedTool]]) -> None:
+def validate_tool_names(tools: Optional[list[UnifiedTool]]) -> None:
     """
     Validates tool names against Kiro API 64-character limit.
 
@@ -597,7 +597,7 @@ def validate_tool_names(tools: Optional[List[UnifiedTool]]) -> None:
         )
 
 
-def convert_tools_to_kiro_format(tools: Optional[List[UnifiedTool]]) -> List[Dict[str, Any]]:
+def convert_tools_to_kiro_format(tools: Optional[list[UnifiedTool]]) -> list[dict[str, Any]]:
     """
     Converts unified tools to Kiro API format.
 
@@ -636,7 +636,7 @@ def convert_tools_to_kiro_format(tools: Optional[List[UnifiedTool]]) -> List[Dic
 # Image Conversion to Kiro Format
 # ==================================================================================================
 
-def convert_images_to_kiro_format(images: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+def convert_images_to_kiro_format(images: Optional[list[dict[str, Any]]]) -> list[dict[str, Any]]:
     """
     Converts unified images to Kiro API format.
 
@@ -706,7 +706,7 @@ def convert_images_to_kiro_format(images: Optional[List[Dict[str, Any]]]) -> Lis
 # Tool Results and Tool Uses Extraction
 # ==================================================================================================
 
-def convert_tool_results_to_kiro_format(tool_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def convert_tool_results_to_kiro_format(tool_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Converts unified tool results to Kiro API format.
 
@@ -740,7 +740,7 @@ def convert_tool_results_to_kiro_format(tool_results: List[Dict[str, Any]]) -> L
     return kiro_results
 
 
-def extract_tool_results_from_content(content: Any) -> List[Dict[str, Any]]:
+def extract_tool_results_from_content(content: Any) -> list[dict[str, Any]]:
     """
     Extracts tool results from message content.
 
@@ -769,8 +769,8 @@ def extract_tool_results_from_content(content: Any) -> List[Dict[str, Any]]:
 
 def extract_tool_uses_from_message(
     content: Any,
-    tool_calls: Optional[List[Dict[str, Any]]] = None
-) -> List[Dict[str, Any]]:
+    tool_calls: Optional[list[dict[str, Any]]] = None
+) -> list[dict[str, Any]]:
     """
     Extracts tool uses from assistant message.
 
@@ -821,7 +821,7 @@ def extract_tool_uses_from_message(
 # Tool Content to Text Conversion (for stripping when no tools defined)
 # ==================================================================================================
 
-def tool_calls_to_text(tool_calls: List[Dict[str, Any]]) -> str:
+def tool_calls_to_text(tool_calls: list[dict[str, Any]]) -> str:
     """
     Converts tool_calls to human-readable text representation.
 
@@ -858,7 +858,7 @@ def tool_calls_to_text(tool_calls: List[Dict[str, Any]]) -> str:
     return "\n\n".join(parts)
 
 
-def tool_results_to_text(tool_results: List[Dict[str, Any]]) -> str:
+def tool_results_to_text(tool_results: list[dict[str, Any]]) -> str:
     """
     Converts tool_results to human-readable text representation.
 
@@ -906,7 +906,7 @@ def tool_results_to_text(tool_results: List[Dict[str, Any]]) -> str:
 # Message Merging
 # ==================================================================================================
 
-def strip_all_tool_content(messages: List[UnifiedMessage]) -> Tuple[List[UnifiedMessage], bool]:
+def strip_all_tool_content(messages: list[UnifiedMessage]) -> tuple[list[UnifiedMessage], bool]:
     """
     Strips ALL tool-related content from messages, converting it to text representation.
 
@@ -990,7 +990,7 @@ def strip_all_tool_content(messages: List[UnifiedMessage]) -> Tuple[List[Unified
     return result, had_tool_content
 
 
-def ensure_assistant_before_tool_results(messages: List[UnifiedMessage]) -> Tuple[List[UnifiedMessage], bool]:
+def ensure_assistant_before_tool_results(messages: list[UnifiedMessage]) -> tuple[list[UnifiedMessage], bool]:
     """
     Ensures that messages with tool_results have a preceding assistant message with tool_calls.
 
@@ -1066,7 +1066,7 @@ def ensure_assistant_before_tool_results(messages: List[UnifiedMessage]) -> Tupl
     return result, converted_any_tool_results
 
 
-def merge_adjacent_messages(messages: List[UnifiedMessage]) -> List[UnifiedMessage]:
+def merge_adjacent_messages(messages: list[UnifiedMessage]) -> list[UnifiedMessage]:
     """
     Merges adjacent messages with the same role.
 
@@ -1150,7 +1150,7 @@ def merge_adjacent_messages(messages: List[UnifiedMessage]) -> List[UnifiedMessa
     return merged
 
 
-def ensure_first_message_is_user(messages: List[UnifiedMessage]) -> List[UnifiedMessage]:
+def ensure_first_message_is_user(messages: list[UnifiedMessage]) -> list[UnifiedMessage]:
     """
     Ensures that the first message in the conversation is from user role.
 
@@ -1200,7 +1200,7 @@ def ensure_first_message_is_user(messages: List[UnifiedMessage]) -> List[Unified
     return messages
 
 
-def normalize_message_roles(messages: List[UnifiedMessage]) -> List[UnifiedMessage]:
+def normalize_message_roles(messages: list[UnifiedMessage]) -> list[UnifiedMessage]:
     """
     Normalizes unknown message roles to 'user'.
 
@@ -1255,7 +1255,7 @@ def normalize_message_roles(messages: List[UnifiedMessage]) -> List[UnifiedMessa
     return normalized
 
 
-def ensure_alternating_roles(messages: List[UnifiedMessage]) -> List[UnifiedMessage]:
+def ensure_alternating_roles(messages: list[UnifiedMessage]) -> list[UnifiedMessage]:
     """
     Ensures alternating user/assistant roles by inserting synthetic assistant messages.
 
@@ -1316,7 +1316,7 @@ def ensure_alternating_roles(messages: List[UnifiedMessage]) -> List[UnifiedMess
 # Kiro History Building
 # ==================================================================================================
 
-def build_kiro_history(messages: List[UnifiedMessage], model_id: str) -> List[Dict[str, Any]]:
+def build_kiro_history(messages: list[UnifiedMessage], model_id: str) -> list[dict[str, Any]]:
     """
     Builds history array for Kiro API from unified messages.
 
@@ -1359,7 +1359,7 @@ def build_kiro_history(messages: List[UnifiedMessage], model_id: str) -> List[Di
                     user_input["images"] = kiro_images
 
             # Build userInputMessageContext for tools and toolResults only
-            user_input_context: Dict[str, Any] = {}
+            user_input_context: dict[str, Any] = {}
 
             # Process tool_results - convert to Kiro format if present
             if msg.tool_results:
@@ -1402,10 +1402,10 @@ def build_kiro_history(messages: List[UnifiedMessage], model_id: str) -> List[Di
 # ==================================================================================================
 
 def build_kiro_payload(
-    messages: List[UnifiedMessage],
+    messages: list[UnifiedMessage],
     system_prompt: str,
     model_id: str,
-    tools: Optional[List[UnifiedTool]],
+    tools: Optional[list[UnifiedTool]],
     conversation_id: str,
     profile_arn: str,
     thinking_config: ThinkingConfig
@@ -1526,7 +1526,7 @@ def build_kiro_payload(
             logger.debug(f"Added {len(kiro_images)} image(s) to current message")
 
     # Build user_input_context for tools and toolResults only (NOT images)
-    user_input_context: Dict[str, Any] = {}
+    user_input_context: dict[str, Any] = {}
 
     # Add tools if present
     kiro_tools = convert_tools_to_kiro_format(processed_tools)

@@ -76,7 +76,7 @@ def generate_random_id(length: int) -> str:
 async def call_kiro_mcp_api(
     query: str,
     auth_manager
-) -> Tuple[Optional[str], Optional[Dict]]:
+) -> tuple[Optional[str], Optional[dict]]:
     """
     Call Kiro MCP API for web_search.
 
@@ -201,7 +201,7 @@ async def call_kiro_mcp_api(
         return None, None
 
 
-def generate_search_summary(query: str, results: Dict) -> str:
+def generate_search_summary(query: str, results: dict) -> str:
     """
     Generate human-readable summary from search results wrapped in XML tags.
 
@@ -281,7 +281,7 @@ async def generate_anthropic_web_search_sse(
     model: str,
     query: str,
     tool_use_id: str,
-    results: Dict,
+    results: dict,
     input_tokens: int
 ):
     """
@@ -431,7 +431,7 @@ async def generate_openai_web_search_sse(
     model: str,
     query: str,
     tool_use_id: str,
-    results: Dict,
+    results: dict,
     input_tokens: int
 ):
     """

@@ -97,7 +97,7 @@ def generate_completion_id() -> str:
     return f"chatcmpl-{uuid.uuid4().hex}"
 
 
-def generate_conversation_id(messages: List[Dict[str, Any]] = None) -> str:
+def generate_conversation_id(messages: list[dict[str, Any]] = None) -> str:
     """
     Generates a stable conversation ID based on message history.
 

@@ -107,7 +107,7 @@ def count_tokens(text: str, apply_claude_correction: bool = True) -> int:
     return base_estimate
 
 
-def count_message_tokens(messages: List[Dict[str, Any]], apply_claude_correction: bool = True) -> int:
+def count_message_tokens(messages: list[dict[str, Any]], apply_claude_correction: bool = True) -> int:
     """
     Counts tokens in a list of chat messages.
 
@@ -210,7 +210,7 @@ def count_message_tokens(messages: List[Dict[str, Any]], apply_claude_correction
     return total_tokens
 
 
-def count_tools_tokens(tools: Optional[List[Dict[str, Any]]], apply_claude_correction: bool = True) -> int:
+def count_tools_tokens(tools: Optional[list[dict[str, Any]]], apply_claude_correction: bool = True) -> int:
     """
     Counts tokens in tool definitions.
 
@@ -294,11 +294,11 @@ def count_system_tokens(system_prompt: Optional[Any], apply_claude_correction: b
 
 
 def estimate_request_tokens(
-    messages: List[Dict[str, Any]],
-    tools: Optional[List[Dict[str, Any]]] = None,
+    messages: list[dict[str, Any]],
+    tools: Optional[list[dict[str, Any]]] = None,
     system_prompt: Optional[Any] = None,
     apply_claude_correction: bool = True
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """
     Estimates total number of tokens in request.
 

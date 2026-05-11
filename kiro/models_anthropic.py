@@ -74,7 +74,7 @@ class ToolUseContentBlock(BaseModel):
     type: Literal["tool_use"] = "tool_use"
     id: str
     name: str
-    input: Dict[str, Any]
+    input: dict[str, Any]
 
 
 class ToolReferenceContentBlock(BaseModel):
@@ -102,7 +102,7 @@ class ToolResultContentBlock(BaseModel):
     type: Literal["tool_result"] = "tool_result"
     tool_use_id: str
     content: Optional[
-        Union[str, List[Union["TextContentBlock", "ImageContentBlock", "ToolReferenceContentBlock"]]]
+        str | list[Union["TextContentBlock", "ImageContentBlock", "ToolReferenceContentBlock"]]
     ] = None
     is_error: Optional[bool] = None
 
@@ -158,7 +158,7 @@ class ImageContentBlock(BaseModel):
     """
 
     type: Literal["image"] = "image"
-    source: Union[Base64ImageSource, URLImageSource]
+    source: Base64ImageSource | URLImageSource
 
 
 # Union type for all content blocks (including images and thinking)
@@ -187,7 +187,7 @@ class AnthropicMessage(BaseModel):
     """
 
     role: Literal["user", "assistant"]
-    content: Union[str, List[ContentBlock]]
+    content: str | list[ContentBlock]
 
     model_config = {"extra": "allow"}
 
@@ -222,13 +222,13 @@ class AnthropicTool(BaseModel):
     # Common fields
     name: str
     description: Optional[str] = None
-    input_schema: Optional[Dict[str, Any]] = None  # Now optional for server-side tools
+    input_schema: Optional[dict[str, Any]] = None  # Now optional for server-side tools
 
     # Server-side tool parameters (Anthropic spec - accepted but not enforced)
     max_uses: Optional[int] = None
-    allowed_domains: Optional[List[str]] = None
-    blocked_domains: Optional[List[str]] = None
-    user_location: Optional[Dict[str, Any]] = None
+    allowed_domains: Optional[list[str]] = None
+    blocked_domains: Optional[list[str]] = None
+    user_location: Optional[dict[str, Any]] = None
 
     model_config = {"extra": "allow"}  # Forward compatibility
 
@@ -284,13 +284,13 @@ class SystemContentBlock(BaseModel):
 
     type: Literal["text"] = "text"
     text: str
-    cache_control: Optional[Dict[str, Any]] = None
+    cache_control: Optional[dict[str, Any]] = None
 
     model_config = {"extra": "allow"}
 
 
 # System can be a string or list of content blocks (for prompt caching)
-SystemPrompt = Union[str, List[SystemContentBlock], List[Dict[str, Any]]]
+SystemPrompt = Union[str, list[SystemContentBlock], list[dict[str, Any]]]
 
 
 class AnthropicMessagesRequest(BaseModel):
@@ -313,7 +313,7 @@ class AnthropicMessagesRequest(BaseModel):
     """
 
     model: str
-    messages: List[AnthropicMessage] = Field(min_length=1)
+    messages: list[AnthropicMessage] = Field(min_length=1)
     max_tokens: int
 
     # Optional parameters - system can be string or list of content blocks
@@ -321,11 +321,11 @@ class AnthropicMessagesRequest(BaseModel):
     stream: bool = False
 
     # Extended thinking (official Anthropic parameter)
-    thinking: Optional[Dict[str, Any]] = None
+    thinking: Optional[dict[str, Any]] = None
 
     # Tools
-    tools: Optional[List[AnthropicTool]] = None
-    tool_choice: Optional[Union[ToolChoice, Dict[str, Any]]] = None
+    tools: Optional[list[AnthropicTool]] = None
+    tool_choice: Optional[ToolChoice | dict[str, Any]] = None
 
     # Sampling parameters
     temperature: Optional[float] = Field(default=None, ge=0, le=1)
@@ -333,8 +333,8 @@ class AnthropicMessagesRequest(BaseModel):
     top_k: Optional[int] = Field(default=None, ge=0)
 
     # Other parameters
-    stop_sequences: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    stop_sequences: Optional[list[str]] = None
+    metadata: Optional[dict[str, Any]] = None
 
     model_config = {"extra": "allow"}
 
@@ -354,11 +354,11 @@ class AnthropicCountTokensRequest(BaseModel):
     """
 
     model: str
-    messages: List[AnthropicMessage] = Field(min_length=1)
+    messages: list[AnthropicMessage] = Field(min_length=1)
 
     # Optional parameters - only those that affect token count
     system: Optional[SystemPrompt] = None
-    tools: Optional[List[AnthropicTool]] = None
+    tools: Optional[list[AnthropicTool]] = None
 
     model_config = {"extra": "allow"}
 
@@ -446,7 +446,7 @@ class AnthropicMessagesResponse(BaseModel):
     id: str
     type: Literal["message"] = "message"
     role: Literal["assistant"] = "assistant"
-    content: List[Union[ThinkingContentBlock, TextContentBlock, ToolUseContentBlock]]
+    content: list[ThinkingContentBlock | TextContentBlock | ToolUseContentBlock]
     model: str
     stop_reason: Optional[
         Literal["end_turn", "max_tokens", "stop_sequence", "tool_use"]
@@ -468,7 +468,7 @@ class MessageStartEvent(BaseModel):
     """
 
     type: Literal["message_start"] = "message_start"
-    message: Dict[str, Any]
+    message: dict[str, Any]
 
 
 class ContentBlockStartEvent(BaseModel):
@@ -482,7 +482,7 @@ class ContentBlockStartEvent(BaseModel):
 
     type: Literal["content_block_start"] = "content_block_start"
     index: int
-    content_block: Dict[str, Any]
+    content_block: dict[str, Any]
 
 
 class TextDelta(BaseModel):
@@ -517,7 +517,7 @@ class ContentBlockDeltaEvent(BaseModel):
 
     type: Literal["content_block_delta"] = "content_block_delta"
     index: int
-    delta: Union[TextDelta, ThinkingDelta, InputJsonDelta, Dict[str, Any]]
+    delta: TextDelta | ThinkingDelta | InputJsonDelta | dict[str, Any]
 
 
 class ContentBlockStopEvent(BaseModel):
@@ -545,7 +545,7 @@ class MessageDeltaEvent(BaseModel):
     """
 
     type: Literal["message_delta"] = "message_delta"
-    delta: Dict[str, Any]
+    delta: dict[str, Any]
     usage: MessageDeltaUsage
 
 
@@ -571,7 +571,7 @@ class ErrorEvent(BaseModel):
     """
 
     type: Literal["error"] = "error"
-    error: Dict[str, Any]
+    error: dict[str, Any]
 
 
 # Union of all streaming events
