@@ -12,8 +12,6 @@ Tests cover:
 
 from unittest.mock import patch
 
-import pytest
-
 from kiro.thinking_parser import (
     ParserState,
     ThinkingParser,

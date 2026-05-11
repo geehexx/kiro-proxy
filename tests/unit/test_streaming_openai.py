@@ -10,7 +10,6 @@ Tests for:
 - collect_stream_response() function
 """
 
-import asyncio
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -21,7 +20,6 @@ from kiro.streaming_openai import (
     FirstTokenTimeoutError,
     collect_stream_response,
     stream_kiro_to_openai,
-    stream_kiro_to_openai_internal,
     stream_with_first_token_retry,
 )
 

@@ -11,7 +11,7 @@ Tests for Anthropic Messages API to Kiro format conversion:
 - Full Anthropic → Kiro payload conversion
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -26,7 +26,7 @@ from kiro.converters_anthropic import (
     extract_tool_results_from_anthropic_content,
     extract_tool_uses_from_anthropic_content,
 )
-from kiro.converters_core import UnifiedMessage, UnifiedTool
+from kiro.converters_core import UnifiedTool
 from kiro.models_anthropic import (
     AnthropicMessage,
     AnthropicMessagesRequest,

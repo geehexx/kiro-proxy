@@ -13,7 +13,6 @@ Tests for:
 """
 
 import asyncio
-from dataclasses import asdict
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest

@@ -10,19 +10,15 @@ Tests the AccountManager class that manages multiple Kiro accounts with:
 - State persistence
 """
 
-import asyncio
 import json
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
 from kiro.account_errors import ErrorType
-from kiro.account_manager import Account, AccountManager, AccountStats, ModelAccountList, _format_duration
-from kiro.auth import AuthType, KiroAuthManager
-from kiro.cache import ModelInfoCache
-from kiro.model_resolver import ModelResolver
+from kiro.account_manager import Account, AccountManager, AccountStats, _format_duration
 
 
 class TestAccountDataclass:

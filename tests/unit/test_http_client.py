@@ -4,16 +4,14 @@ Unit tests for KiroHttpClient.
 Tests retry logic, error handling, and HTTP client management.
 """
 
-import asyncio
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
 from fastapi import HTTPException
 
 from kiro.auth import KiroAuthManager
-from kiro.config import BASE_RETRY_DELAY, FIRST_TOKEN_MAX_RETRIES, MAX_RETRIES, STREAMING_READ_TIMEOUT
+from kiro.config import BASE_RETRY_DELAY, FIRST_TOKEN_MAX_RETRIES, STREAMING_READ_TIMEOUT
 from kiro.http_client import KiroHttpClient
 
 

@@ -7,7 +7,6 @@ Tests classify_network_error(), format_error_for_user(), and get_short_error_mes
 import socket
 
 import httpx
-import pytest
 
 from kiro.network_errors import (
     ErrorCategory,

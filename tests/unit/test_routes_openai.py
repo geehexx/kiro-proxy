@@ -12,14 +12,11 @@ Tests the following endpoints:
 For Anthropic API tests, see test_routes_anthropic.py.
 """
 
-import json
 import time
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
 
 from kiro.config import APP_VERSION, PROXY_API_KEY
 from kiro.routes_openai import router, verify_api_key
@@ -1008,7 +1005,6 @@ class TestTruncationRecoveryMessageModification:
 
         print("Action: Processing messages through truncation recovery logic...")
         # Import the function that modifies messages
-        from kiro.routes_openai import router
         from kiro.truncation_recovery import generate_truncation_tool_result, should_inject_recovery
         from kiro.truncation_state import get_tool_truncation
 
@@ -1313,7 +1309,7 @@ class TestContentTruncationRecovery:
         ]
 
         print("Action: Processing messages through content truncation recovery...")
-        from kiro.truncation_recovery import generate_truncation_user_message, should_inject_recovery
+        from kiro.truncation_recovery import generate_truncation_user_message
         from kiro.truncation_state import get_content_truncation
 
         modified_messages = []

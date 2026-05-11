@@ -11,17 +11,14 @@ Tests cover:
 - TTL refresh on usage
 """
 
-import asyncio
 import json
 import time
-from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from kiro.account_errors import ErrorType
-from kiro.account_manager import Account, AccountManager, AccountStats
+from kiro.account_manager import AccountManager
 
 # =============================================================================
 # Integration Tests: Full Failover Flow
