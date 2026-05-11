@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Common fixtures and utilities for testing Kiro Gateway.
@@ -9,15 +8,15 @@ All tests MUST be completely isolated from the network.
 
 import asyncio
 import json
-import pytest
 import time
-from typing import AsyncGenerator, Dict, Any, List
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
 from datetime import datetime, timezone
+from typing import Any, Dict, List
+from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpx
+import pytest
 from fastapi.testclient import TestClient
-
 
 # =============================================================================
 # Event Loop Fixtures
@@ -44,11 +43,11 @@ def event_loop():
 def setup_test_environment(tmp_path_factory):
     """
     CRITICAL FIXTURE: Sets up isolated test environment.
-    
+
     Creates temporary credentials.json and state.json to prevent:
     1. Tests failing when .env doesn't exist
     2. Pollution of working directory with test files
-    
+
     This fixture:
     - Creates temporary directory for test files
     - Creates mock credentials.json with valid test data
@@ -56,10 +55,10 @@ def setup_test_environment(tmp_path_factory):
     - Patches config paths to use temporary files
     """
     print("🔧 Setting up isolated test environment...")
-    
+
     # Create temporary directory for test files
     tmp_dir = tmp_path_factory.mktemp("test_config")
-    
+
     # Create mock Kiro credentials file (JSON format)
     mock_kiro_creds = {
         "accessToken": "mock_access_token_from_fixture",
@@ -70,7 +69,7 @@ def setup_test_environment(tmp_path_factory):
     }
     mock_creds_file = tmp_dir / "mock_kiro_creds.json"
     mock_creds_file.write_text(json.dumps(mock_kiro_creds, indent=2))
-    
+
     # Create credentials.json pointing to mock file
     credentials_data = [
         {
@@ -81,24 +80,24 @@ def setup_test_environment(tmp_path_factory):
     ]
     creds_file = tmp_dir / "credentials.json"
     creds_file.write_text(json.dumps(credentials_data, indent=2))
-    
+
     # Patch config paths to use temporary files
     import kiro.config
     original_creds_file = kiro.config.ACCOUNTS_CONFIG_FILE
     original_state_file = kiro.config.ACCOUNTS_STATE_FILE
-    
+
     kiro.config.ACCOUNTS_CONFIG_FILE = str(creds_file)
     kiro.config.ACCOUNTS_STATE_FILE = str(tmp_dir / "state.json")
-    
+
     print(f"✅ Test credentials: {creds_file}")
     print(f"✅ Test state: {tmp_dir / 'state.json'}")
-    
+
     yield
-    
+
     # Restore original paths
     kiro.config.ACCOUNTS_CONFIG_FILE = original_creds_file
     kiro.config.ACCOUNTS_STATE_FILE = original_state_file
-    
+
     print("🧹 Test environment cleaned up")
 
 
@@ -149,7 +148,7 @@ def mock_kiro_token_response(valid_kiro_token):
 def valid_proxy_api_key():
     """
     Returns the actual PROXY_API_KEY that the application is using.
-    
+
     This reads the value from kiro.config, which was loaded when the app
     was imported. This ensures tests use the same key the app validates against.
     """
@@ -173,7 +172,7 @@ def auth_headers(valid_proxy_api_key):
             return {"Authorization": "Bearer wrong_key_123"}
         key = api_key or valid_proxy_api_key
         return {"Authorization": f"Bearer {key}"}
-    
+
     return _create_headers
 
 
@@ -287,23 +286,23 @@ def sample_openai_chat_request():
     ):
         if messages is None:
             messages = [{"role": "user", "content": "Hello, AI!"}]
-        
+
         request = {
             "model": model,
             "messages": messages,
             "stream": stream
         }
-        
+
         if temperature is not None:
             request["temperature"] = temperature
         if max_tokens is not None:
             request["max_tokens"] = max_tokens
         if tools is not None:
             request["tools"] = tools
-        
+
         request.update(kwargs)
         return request
-    
+
     return _create_request
 
 
@@ -339,7 +338,7 @@ async def mock_httpx_client():
     """
     print("Creating mocked httpx.AsyncClient...")
     mock_client = AsyncMock(spec=httpx.AsyncClient)
-    
+
     # Mock methods
     mock_client.post = AsyncMock()
     mock_client.get = AsyncMock()
@@ -347,7 +346,7 @@ async def mock_httpx_client():
     mock_client.build_request = Mock()
     mock_client.send = AsyncMock()
     mock_client.is_closed = False
-    
+
     return mock_client
 
 
@@ -358,35 +357,35 @@ def mock_httpx_response():
     """
     def _create_response(
         status_code: int = 200,
-        json_data: Dict[str, Any] = None,
+        json_data: dict[str, Any] = None,
         text: str = None,
         stream_chunks: list = None
     ):
         print(f"Creating mock httpx.Response (status={status_code})...")
         mock_response = AsyncMock(spec=httpx.Response)
         mock_response.status_code = status_code
-        
+
         if json_data is not None:
             mock_response.json = Mock(return_value=json_data)
-        
+
         if text is not None:
             mock_response.text = text
             mock_response.content = text.encode()
-        
+
         if stream_chunks is not None:
             # For streaming responses
             async def mock_aiter_bytes():
                 for chunk in stream_chunks:
                     yield chunk
-            
+
             mock_response.aiter_bytes = mock_aiter_bytes
-        
+
         mock_response.raise_for_status = Mock()
         mock_response.aclose = AsyncMock()
         mock_response.aread = AsyncMock(return_value=b'{"error": "mocked error"}')
-        
+
         return mock_response
-    
+
     return _create_response
 
 
@@ -399,13 +398,13 @@ def block_all_network_calls():
     """
     CRITICAL FIXTURE: Globally blocks ALL network calls.
     Ensures that NO test can make a real network request.
-    
+
     Provides mock responses for:
     - Token refresh (Kiro Desktop Auth and AWS SSO OIDC)
     - ListAvailableModels API
     - Streaming responses (for route tests)
     """
-    
+
     # Create a mock that will be used for all AsyncClient instances
     mock_async_client = AsyncMock(spec=httpx.AsyncClient)
 
@@ -451,7 +450,7 @@ def block_all_network_calls():
     # Used by test_routes_openai.py and test_routes_anthropic.py
     mock_streaming_response = AsyncMock(spec=httpx.Response)
     mock_streaming_response.status_code = 200
-    
+
     # Create proper bytes chunks for streaming (NOT AsyncMock)
     async def mock_aiter_bytes():
         """Generator that yields real bytes chunks, not AsyncMock objects."""
@@ -462,7 +461,7 @@ def block_all_network_calls():
         ]
         for chunk in chunks:
             yield chunk
-    
+
     mock_streaming_response.aiter_bytes = mock_aiter_bytes
     mock_streaming_response.raise_for_status = Mock()
     mock_streaming_response.aclose = AsyncMock()
@@ -474,7 +473,7 @@ def block_all_network_calls():
     mock_async_client.get = AsyncMock(return_value=mock_models_response)
     mock_async_client.request = AsyncMock(return_value=mock_models_response)
     mock_async_client.send = AsyncMock(return_value=mock_streaming_response)
-    
+
     # Mock stream() method for streaming requests
     # Returns a context manager that yields streaming response
     async def mock_stream(*args, **kwargs):
@@ -485,9 +484,9 @@ def block_all_network_calls():
             async def __aexit__(self, *args):
                 pass
         return StreamContextManager()
-    
+
     mock_async_client.stream = mock_stream
-    
+
     # Mock context manager
     mock_async_client.__aenter__ = AsyncMock(return_value=mock_async_client)
     mock_async_client.__aexit__ = AsyncMock()
@@ -501,19 +500,19 @@ def block_all_network_calls():
         patch('kiro.streaming_openai.httpx.AsyncClient', return_value=mock_async_client),
         patch('kiro.account_manager.httpx.AsyncClient', return_value=mock_async_client),
     ]
-    
+
     # Start patchers
     for patcher in patchers:
         patcher.start()
-    
+
     print("🛡️ GLOBAL NETWORK BLOCKING ACTIVATED")
-    
+
     yield
 
     # Stop patchers
     for patcher in patchers:
         patcher.stop()
-    
+
     print("🛡️ GLOBAL NETWORK BLOCKING DEACTIVATED")
 
 
@@ -551,12 +550,12 @@ async def async_test_client(clean_app):
     Creates an asynchronous test client for async endpoints.
     """
     print("Creating async test client...")
-    from httpx import AsyncClient, ASGITransport
-    
+    from httpx import ASGITransport, AsyncClient
+
     transport = ASGITransport(app=clean_app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
-    
+
     print("Closing async test client...")
 
 
@@ -570,19 +569,19 @@ def mock_auth_manager():
     Creates a mocked KiroAuthManager for tests.
     """
     from kiro.auth import KiroAuthManager
-    
+
     manager = KiroAuthManager(
         refresh_token="test_refresh_token",
         profile_arn="arn:aws:codewhisperer:us-east-1:123456789:profile/test",
         region="us-east-1"
     )
-    
+
     # Set valid token
     manager._access_token = "test_access_token"
     manager._expires_at = datetime.now(timezone.utc).replace(
         year=2099  # Far in the future
     )
-    
+
     return manager
 
 
@@ -592,19 +591,19 @@ def expired_auth_manager():
     Creates a KiroAuthManager with an expired token.
     """
     from kiro.auth import KiroAuthManager
-    
+
     manager = KiroAuthManager(
         refresh_token="test_refresh_token",
         profile_arn="arn:aws:codewhisperer:us-east-1:123456789:profile/test",
         region="us-east-1"
     )
-    
+
     # Set expired token
     manager._access_token = "expired_token"
     manager._expires_at = datetime.now(timezone.utc).replace(
         year=2020  # In the past
     )
-    
+
     return manager
 
 
@@ -660,7 +659,7 @@ async def populated_model_cache(mock_kiro_models_response):
     Creates a ModelInfoCache with pre-populated data.
     """
     from kiro.cache import ModelInfoCache
-    
+
     cache = ModelInfoCache()
     await cache.update(mock_kiro_models_response["models"])
     return cache
@@ -687,7 +686,7 @@ def mock_datetime():
     Mocks datetime.now() for predictable behavior.
     """
     fixed_time = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
-    
+
     with patch('kiro.auth.datetime') as mock_dt:
         mock_dt.now.return_value = fixed_time
         mock_dt.fromisoformat = datetime.fromisoformat
@@ -739,17 +738,17 @@ def temp_aws_sso_creds_file(tmp_path):
 def temp_sqlite_db(tmp_path):
     """
     Creates a temporary SQLite database for tests (kiro-cli format).
-    
+
     Contains auth_kv table with keys:
     - 'codewhisperer:odic:token': JSON with access_token, refresh_token, expires_at, region
     - 'codewhisperer:odic:device-registration': JSON with client_id, client_secret
     """
     import sqlite3
-    
+
     db_file = tmp_path / "data.sqlite3"
     conn = sqlite3.connect(str(db_file))
     cursor = conn.cursor()
-    
+
     # Create auth_kv table
     cursor.execute("""
         CREATE TABLE auth_kv (
@@ -757,7 +756,7 @@ def temp_sqlite_db(tmp_path):
             value TEXT
         )
     """)
-    
+
     # Insert token data
     token_data = {
         "access_token": "sqlite_access_token",
@@ -769,7 +768,7 @@ def temp_sqlite_db(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("codewhisperer:odic:token", json.dumps(token_data))
     )
-    
+
     # Insert device registration data
     registration_data = {
         "client_id": "sqlite_client_id",
@@ -780,10 +779,10 @@ def temp_sqlite_db(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("codewhisperer:odic:device-registration", json.dumps(registration_data))
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     return str(db_file)
 
 
@@ -794,18 +793,18 @@ def temp_sqlite_db_token_only(tmp_path):
     Used for testing partial loading.
     """
     import sqlite3
-    
+
     db_file = tmp_path / "data_token_only.sqlite3"
     conn = sqlite3.connect(str(db_file))
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         CREATE TABLE auth_kv (
             key TEXT PRIMARY KEY,
             value TEXT
         )
     """)
-    
+
     token_data = {
         "access_token": "partial_access_token",
         "refresh_token": "partial_refresh_token",
@@ -815,10 +814,10 @@ def temp_sqlite_db_token_only(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("codewhisperer:odic:token", json.dumps(token_data))
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     return str(db_file)
 
 
@@ -829,27 +828,27 @@ def temp_sqlite_db_invalid_json(tmp_path):
     Used for testing error handling.
     """
     import sqlite3
-    
+
     db_file = tmp_path / "data_invalid.sqlite3"
     conn = sqlite3.connect(str(db_file))
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         CREATE TABLE auth_kv (
             key TEXT PRIMARY KEY,
             value TEXT
         )
     """)
-    
+
     # Insert invalid JSON
     cursor.execute(
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("codewhisperer:odic:token", "not a valid json {{{")
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     return str(db_file)
 
 
@@ -938,18 +937,18 @@ def create_kiro_context_usage_chunk(percentage: float) -> bytes:
 def temp_sqlite_db_social(tmp_path):
     """
     Creates a temporary SQLite database with social login credentials.
-    
+
     Contains auth_kv table with key:
     - 'kirocli:social:token': JSON with access_token, refresh_token, expires_at, provider
-    
+
     This simulates kiro-cli with Google/GitHub social login (no client_id/client_secret).
     """
     import sqlite3
-    
+
     db_file = tmp_path / "data_social.sqlite3"
     conn = sqlite3.connect(str(db_file))
     cursor = conn.cursor()
-    
+
     # Create auth_kv table
     cursor.execute("""
         CREATE TABLE auth_kv (
@@ -957,7 +956,7 @@ def temp_sqlite_db_social(tmp_path):
             value TEXT
         )
     """)
-    
+
     # Insert social login token data
     token_data = {
         "access_token": "social_access_token",
@@ -971,10 +970,10 @@ def temp_sqlite_db_social(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("kirocli:social:token", json.dumps(token_data))
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     return str(db_file)
 
 
@@ -982,25 +981,25 @@ def temp_sqlite_db_social(tmp_path):
 def temp_sqlite_db_all_keys(tmp_path):
     """
     Creates a SQLite database with ALL three token keys.
-    
+
     Used for testing key priority:
     1. kirocli:social:token (highest priority)
     2. kirocli:odic:token
     3. codewhisperer:odic:token (lowest priority)
     """
     import sqlite3
-    
+
     db_file = tmp_path / "data_all_keys.sqlite3"
     conn = sqlite3.connect(str(db_file))
     cursor = conn.cursor()
-    
+
     cursor.execute("""
         CREATE TABLE auth_kv (
             key TEXT PRIMARY KEY,
             value TEXT
         )
     """)
-    
+
     # Insert all three keys with different tokens
     social_data = {
         "access_token": "social_token",
@@ -1012,7 +1011,7 @@ def temp_sqlite_db_all_keys(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("kirocli:social:token", json.dumps(social_data))
     )
-    
+
     odic_data = {
         "access_token": "odic_token",
         "refresh_token": "odic_refresh",
@@ -1022,7 +1021,7 @@ def temp_sqlite_db_all_keys(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("kirocli:odic:token", json.dumps(odic_data))
     )
-    
+
     legacy_data = {
         "access_token": "legacy_token",
         "refresh_token": "legacy_refresh",
@@ -1032,10 +1031,10 @@ def temp_sqlite_db_all_keys(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("codewhisperer:odic:token", json.dumps(legacy_data))
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     return str(db_file)
 
 
@@ -1047,11 +1046,11 @@ def temp_sqlite_db_all_keys(tmp_path):
 def temp_enterprise_ide_creds_file(tmp_path):
     """
     Creates a temporary credentials file for Enterprise Kiro IDE.
-    
+
     Contains:
     - clientIdHash: Hash used to locate device registration file
     - refreshToken, accessToken, expiresAt, region
-    
+
     This simulates Enterprise Kiro IDE with IdC (AWS IAM Identity Center) login.
     """
     creds_file = tmp_path / "kiro-auth-token.json"
@@ -1071,14 +1070,14 @@ def temp_enterprise_ide_creds_file(tmp_path):
 def temp_enterprise_device_registration(tmp_path):
     """
     Creates a temporary device registration file for Enterprise Kiro IDE.
-    
+
     Located at: ~/.aws/sso/cache/{clientIdHash}.json
     Contains: clientId, clientSecret
     """
     # Create .aws/sso/cache directory structure
     aws_dir = tmp_path / ".aws" / "sso" / "cache"
     aws_dir.mkdir(parents=True, exist_ok=True)
-    
+
     # Create device registration file
     device_reg_file = aws_dir / "abc123def456.json"
     device_reg_data = {
@@ -1087,7 +1086,7 @@ def temp_enterprise_device_registration(tmp_path):
         "region": "us-east-1"
     }
     device_reg_file.write_text(json.dumps(device_reg_data))
-    
+
     return str(device_reg_file)
 
 
@@ -1095,12 +1094,12 @@ def temp_enterprise_device_registration(tmp_path):
 def temp_enterprise_ide_complete(tmp_path, monkeypatch):
     """
     Creates a complete Enterprise IDE setup with both credentials and device registration.
-    
+
     Returns tuple: (creds_file_path, device_reg_file_path)
     """
     # Mock Path.home() to return tmp_path
     monkeypatch.setattr('pathlib.Path.home', lambda: tmp_path)
-    
+
     # Create credentials file
     creds_file = tmp_path / "kiro-auth-token.json"
     creds_data = {
@@ -1112,11 +1111,11 @@ def temp_enterprise_ide_complete(tmp_path, monkeypatch):
         "clientIdHash": "abc123def456"
     }
     creds_file.write_text(json.dumps(creds_data))
-    
+
     # Create device registration file
     aws_dir = tmp_path / ".aws" / "sso" / "cache"
     aws_dir.mkdir(parents=True, exist_ok=True)
-    
+
     device_reg_file = aws_dir / "abc123def456.json"
     device_reg_data = {
         "clientId": "enterprise_client_id_12345",
@@ -1124,7 +1123,7 @@ def temp_enterprise_ide_complete(tmp_path, monkeypatch):
         "region": "us-east-1"
     }
     device_reg_file.write_text(json.dumps(device_reg_data))
-    
+
     return (str(creds_file), str(device_reg_file))
 
 
@@ -1136,19 +1135,19 @@ def temp_enterprise_ide_complete(tmp_path, monkeypatch):
 def temp_sqlite_db_with_profile_arn(tmp_path):
     """
     Creates SQLite database with state table containing profile ARN.
-    
+
     Tables:
     - auth_kv: token data with SSO region=eu-west-1
     - state: profile ARN with API region=eu-central-1
-    
+
     This simulates kiro-cli with profile ARN that has different API region.
     """
     import sqlite3
-    
+
     db_file = tmp_path / "data_with_arn.sqlite3"
     conn = sqlite3.connect(str(db_file))
     cursor = conn.cursor()
-    
+
     # Create auth_kv table
     cursor.execute("""
         CREATE TABLE auth_kv (
@@ -1156,7 +1155,7 @@ def temp_sqlite_db_with_profile_arn(tmp_path):
             value TEXT
         )
     """)
-    
+
     # Insert token data with SSO region
     token_data = {
         "access_token": "arn_access_token",
@@ -1168,7 +1167,7 @@ def temp_sqlite_db_with_profile_arn(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("codewhisperer:odic:token", json.dumps(token_data))
     )
-    
+
     # Insert device registration
     registration_data = {
         "client_id": "test_client_id",
@@ -1179,7 +1178,7 @@ def temp_sqlite_db_with_profile_arn(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("codewhisperer:odic:device-registration", json.dumps(registration_data))
     )
-    
+
     # Create state table with profile ARN
     cursor.execute("""
         CREATE TABLE state (
@@ -1187,7 +1186,7 @@ def temp_sqlite_db_with_profile_arn(tmp_path):
             value TEXT
         )
     """)
-    
+
     # Insert profile with ARN containing different API region
     profile_data = {
         "arn": "arn:aws:codewhisperer:eu-central-1:123456789012:profile/test-profile",
@@ -1197,10 +1196,10 @@ def temp_sqlite_db_with_profile_arn(tmp_path):
         "INSERT INTO state (key, value) VALUES (?, ?)",
         ("api.codewhisperer.profile", json.dumps(profile_data))
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     return str(db_file)
 
 
@@ -1208,15 +1207,15 @@ def temp_sqlite_db_with_profile_arn(tmp_path):
 def temp_sqlite_db_with_empty_state_table(tmp_path):
     """
     Creates SQLite database with empty state table (no profile key).
-    
+
     Used for testing fallback behavior when state table exists but has no profile.
     """
     import sqlite3
-    
+
     db_file = tmp_path / "data_empty_state.sqlite3"
     conn = sqlite3.connect(str(db_file))
     cursor = conn.cursor()
-    
+
     # Create auth_kv table
     cursor.execute("""
         CREATE TABLE auth_kv (
@@ -1224,7 +1223,7 @@ def temp_sqlite_db_with_empty_state_table(tmp_path):
             value TEXT
         )
     """)
-    
+
     # Insert token data
     token_data = {
         "access_token": "empty_state_access",
@@ -1236,7 +1235,7 @@ def temp_sqlite_db_with_empty_state_table(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("codewhisperer:odic:token", json.dumps(token_data))
     )
-    
+
     # Create empty state table
     cursor.execute("""
         CREATE TABLE state (
@@ -1244,10 +1243,10 @@ def temp_sqlite_db_with_empty_state_table(tmp_path):
             value TEXT
         )
     """)
-    
+
     conn.commit()
     conn.close()
-    
+
     return str(db_file)
 
 
@@ -1260,7 +1259,7 @@ def temp_sqlite_db_with_empty_state_table(tmp_path):
 def temp_sqlite_db_with_invalid_arn(tmp_path, request):
     """
     Creates SQLite database with invalid ARN formats.
-    
+
     Parametrized fixture that tests various invalid ARN formats:
     - Not an ARN at all
     - Too short ARN
@@ -1268,11 +1267,11 @@ def temp_sqlite_db_with_invalid_arn(tmp_path, request):
     - Empty region
     """
     import sqlite3
-    
+
     db_file = tmp_path / f"data_invalid_arn_{request.param_index}.sqlite3"
     conn = sqlite3.connect(str(db_file))
     cursor = conn.cursor()
-    
+
     # Create auth_kv table
     cursor.execute("""
         CREATE TABLE auth_kv (
@@ -1280,7 +1279,7 @@ def temp_sqlite_db_with_invalid_arn(tmp_path, request):
             value TEXT
         )
     """)
-    
+
     # Insert token data
     token_data = {
         "access_token": "invalid_arn_access",
@@ -1292,7 +1291,7 @@ def temp_sqlite_db_with_invalid_arn(tmp_path, request):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("codewhisperer:odic:token", json.dumps(token_data))
     )
-    
+
     # Create state table with invalid ARN
     cursor.execute("""
         CREATE TABLE state (
@@ -1300,7 +1299,7 @@ def temp_sqlite_db_with_invalid_arn(tmp_path, request):
             value TEXT
         )
     """)
-    
+
     profile_data = {
         "arn": request.param,  # Invalid ARN from parametrize
         "name": "test-profile"
@@ -1309,10 +1308,10 @@ def temp_sqlite_db_with_invalid_arn(tmp_path, request):
         "INSERT INTO state (key, value) VALUES (?, ?)",
         ("api.codewhisperer.profile", json.dumps(profile_data))
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     return str(db_file)
 
 
@@ -1320,15 +1319,15 @@ def temp_sqlite_db_with_invalid_arn(tmp_path, request):
 def temp_sqlite_db_with_malformed_state_json(tmp_path):
     """
     Creates SQLite database with malformed JSON in state table.
-    
+
     Used for testing graceful error handling when state table contains invalid JSON.
     """
     import sqlite3
-    
+
     db_file = tmp_path / "data_malformed_state.sqlite3"
     conn = sqlite3.connect(str(db_file))
     cursor = conn.cursor()
-    
+
     # Create auth_kv table
     cursor.execute("""
         CREATE TABLE auth_kv (
@@ -1336,7 +1335,7 @@ def temp_sqlite_db_with_malformed_state_json(tmp_path):
             value TEXT
         )
     """)
-    
+
     # Insert token data
     token_data = {
         "access_token": "malformed_state_access",
@@ -1348,7 +1347,7 @@ def temp_sqlite_db_with_malformed_state_json(tmp_path):
         "INSERT INTO auth_kv (key, value) VALUES (?, ?)",
         ("codewhisperer:odic:token", json.dumps(token_data))
     )
-    
+
     # Create state table with malformed JSON
     cursor.execute("""
         CREATE TABLE state (
@@ -1356,16 +1355,16 @@ def temp_sqlite_db_with_malformed_state_json(tmp_path):
             value TEXT
         )
     """)
-    
+
     # Insert malformed JSON
     cursor.execute(
         "INSERT INTO state (key, value) VALUES (?, ?)",
         ("api.codewhisperer.profile", "not a valid json {{{")
     )
-    
+
     conn.commit()
     conn.close()
-    
+
     return str(db_file)
 
 
@@ -1562,17 +1561,17 @@ def sample_state_with_failures():
 def temp_credentials_json(tmp_path, sample_credentials_single_account):
     """
     Creates a temporary credentials.json file.
-    
+
     Factory fixture that accepts credentials data.
     """
     def _create_file(credentials_data=None):
         if credentials_data is None:
             credentials_data = sample_credentials_single_account
-        
+
         creds_file = tmp_path / "credentials.json"
         creds_file.write_text(json.dumps(credentials_data, indent=2))
         return str(creds_file)
-    
+
     return _create_file
 
 
@@ -1580,17 +1579,17 @@ def temp_credentials_json(tmp_path, sample_credentials_single_account):
 def temp_state_json(tmp_path, sample_state_empty):
     """
     Creates a temporary state.json file.
-    
+
     Factory fixture that accepts state data.
     """
     def _create_file(state_data=None):
         if state_data is None:
             state_data = sample_state_empty
-        
+
         state_file = tmp_path / "state.json"
         state_file.write_text(json.dumps(state_data, indent=2))
         return str(state_file)
-    
+
     return _create_file
 
 
@@ -1598,12 +1597,12 @@ def temp_state_json(tmp_path, sample_state_empty):
 def temp_credentials_folder(tmp_path):
     """
     Creates a temporary folder with multiple credential files.
-    
+
     Returns tuple: (folder_path, list_of_created_files)
     """
     folder = tmp_path / "kiro-accounts"
     folder.mkdir()
-    
+
     # Create valid JSON credentials
     valid_file1 = folder / "account1.json"
     valid_file1.write_text(json.dumps({
@@ -1613,7 +1612,7 @@ def temp_credentials_folder(tmp_path):
         "profileArn": "arn:aws:codewhisperer:us-east-1:123456789:profile/test1",
         "region": "us-east-1"
     }))
-    
+
     valid_file2 = folder / "account2.json"
     valid_file2.write_text(json.dumps({
         "accessToken": "token2",
@@ -1622,15 +1621,15 @@ def temp_credentials_folder(tmp_path):
         "profileArn": "arn:aws:codewhisperer:us-east-1:123456789:profile/test2",
         "region": "us-east-1"
     }))
-    
+
     # Create invalid file (should be skipped)
     invalid_file = folder / "invalid.json"
     invalid_file.write_text("not a valid json {{{")
-    
+
     # Create non-JSON file (should be skipped)
     text_file = folder / "readme.txt"
     text_file.write_text("This is not a credentials file")
-    
+
     return (str(folder), [str(valid_file1), str(valid_file2)])
 
 
@@ -1643,7 +1642,7 @@ def mock_account():
     from kiro.auth import KiroAuthManager
     from kiro.cache import ModelInfoCache
     from kiro.model_resolver import ModelResolver
-    
+
     # Create mock auth_manager
     auth_manager = KiroAuthManager(
         refresh_token="test_refresh_token",
@@ -1652,10 +1651,10 @@ def mock_account():
     )
     auth_manager._access_token = "test_access_token"
     auth_manager._expires_at = datetime(2099, 1, 1, tzinfo=timezone.utc)
-    
+
     # Create mock model_cache
     model_cache = ModelInfoCache()
-    
+
     # Create mock model_resolver
     model_resolver = ModelResolver(
         cache=model_cache,
@@ -1663,7 +1662,7 @@ def mock_account():
         aliases={},
         hidden_from_list=set()
     )
-    
+
     # Create Account
     account = Account(
         id="/home/user/.aws/sso/cache/test.json",
@@ -1675,7 +1674,7 @@ def mock_account():
         models_cached_at=time.time(),
         stats=AccountStats()
     )
-    
+
     return account
 
 
@@ -1683,16 +1682,16 @@ def mock_account():
 def mock_account_manager(tmp_path):
     """
     Creates a mock AccountManager with temporary files.
-    
+
     Factory fixture that accepts credentials and state data.
     """
     async def _create_manager(credentials_data=None, state_data=None):
         from kiro.account_manager import AccountManager
-        
+
         # Create temporary files
         creds_file = tmp_path / "credentials.json"
         state_file = tmp_path / "state.json"
-        
+
         if credentials_data is None:
             credentials_data = [
                 {
@@ -1710,20 +1709,20 @@ def mock_account_manager(tmp_path):
                 "profileArn": "arn:aws:codewhisperer:us-east-1:123456789:profile/test",
                 "region": "us-east-1"
             }))
-        
+
         creds_file.write_text(json.dumps(credentials_data, indent=2))
-        
+
         if state_data is not None:
             state_file.write_text(json.dumps(state_data, indent=2))
-        
+
         # Create AccountManager
         manager = AccountManager(
             credentials_file=str(creds_file),
             state_file=str(state_file)
         )
-        
+
         return manager
-    
+
     return _create_manager
 
 
@@ -1731,7 +1730,7 @@ def mock_account_manager(tmp_path):
 def mock_list_models_response():
     """
     Mock response from Kiro API /ListAvailableModels endpoint.
-    
+
     Returns list of models for account initialization.
     """
     return {
@@ -1775,13 +1774,13 @@ def mock_kiro_error_response():
         }
         if reason:
             error_data["reason"] = reason
-        
+
         return {
             "status_code": status_code,
             "json": error_data,
             "text": json.dumps(error_data)
         }
-    
+
     return _create_error
 
 
@@ -1789,11 +1788,11 @@ def mock_kiro_error_response():
 def temp_account_credentials_files(tmp_path):
     """
     Creates multiple temporary credential files for multi-account testing.
-    
+
     Returns dict with account_id -> file_path mapping.
     """
     files = {}
-    
+
     # Account 1: JSON (Kiro Desktop)
     account1 = tmp_path / "account1.json"
     account1.write_text(json.dumps({
@@ -1804,7 +1803,7 @@ def temp_account_credentials_files(tmp_path):
         "region": "us-east-1"
     }))
     files["account1"] = str(account1)
-    
+
     # Account 2: JSON (AWS SSO OIDC)
     account2 = tmp_path / "account2.json"
     account2.write_text(json.dumps({
@@ -1816,7 +1815,7 @@ def temp_account_credentials_files(tmp_path):
         "clientSecret": "client_secret_2"
     }))
     files["account2"] = str(account2)
-    
+
     # Account 3: SQLite
     import sqlite3
     account3 = tmp_path / "account3.sqlite3"
@@ -1850,5 +1849,5 @@ def temp_account_credentials_files(tmp_path):
     conn.commit()
     conn.close()
     files["account3"] = str(account3)
-    
+
     return files

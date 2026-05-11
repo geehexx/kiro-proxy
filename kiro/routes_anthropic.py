@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 # Kiro Gateway
 # https://github.com/jwadow/kiro-gateway
@@ -29,32 +28,31 @@ import json
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Security, Header
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 from loguru import logger
 
-from kiro.config import PROXY_API_KEY
-from kiro.models_anthropic import (
-    AnthropicMessagesRequest,
-    AnthropicCountTokensRequest,
-    AnthropicMessagesResponse,
-    AnthropicErrorResponse,
-    AnthropicErrorDetail,
-)
-from kiro.auth import KiroAuthManager, AuthType
+from kiro.auth import AuthType, KiroAuthManager
 from kiro.cache import ModelInfoCache
+from kiro.config import PROXY_API_KEY, WEB_SEARCH_ENABLED
 from kiro.converters_anthropic import anthropic_to_kiro
+from kiro.http_client import KiroHttpClient
+from kiro.mcp_tools import handle_native_web_search
+from kiro.models_anthropic import (
+    AnthropicCountTokensRequest,
+    AnthropicErrorDetail,
+    AnthropicErrorResponse,
+    AnthropicMessagesRequest,
+    AnthropicMessagesResponse,
+)
 from kiro.streaming_anthropic import (
-    stream_kiro_to_anthropic,
     collect_anthropic_response,
+    stream_kiro_to_anthropic,
     stream_with_first_token_retry_anthropic,
 )
-from kiro.http_client import KiroHttpClient
-from kiro.utils import generate_conversation_id
 from kiro.tokenizer import estimate_request_tokens
-from kiro.config import WEB_SEARCH_ENABLED
-from kiro.mcp_tools import handle_native_web_search
+from kiro.utils import generate_conversation_id
 
 # Import debug_logger
 try:
@@ -76,29 +74,29 @@ async def verify_anthropic_api_key(
 ) -> bool:
     """
     Verify API key for Anthropic API.
-    
+
     Supports two authentication methods:
     1. x-api-key header (Anthropic native)
     2. Authorization: Bearer header (for compatibility)
-    
+
     Args:
         x_api_key: Value from x-api-key header
         authorization: Value from Authorization header
-    
+
     Returns:
         True if key is valid
-    
+
     Raises:
         HTTPException: 401 if key is invalid or missing
     """
     # Check x-api-key first (Anthropic native)
     if x_api_key and x_api_key == PROXY_API_KEY:
         return True
-    
+
     # Fall back to Authorization: Bearer
     if authorization and authorization == f"Bearer {PROXY_API_KEY}":
         return True
-    
+
     logger.warning("Access attempt with invalid API key (Anthropic endpoint)")
     raise HTTPException(
         status_code=401,
@@ -124,50 +122,92 @@ async def messages(
 ):
     """
     Anthropic Messages API endpoint.
-    
+
     Compatible with Anthropic's /v1/messages endpoint.
     Accepts requests in Anthropic format and translates them to Kiro API.
-    
+
     Required headers:
     - x-api-key: Your API key (or Authorization: Bearer)
     - anthropic-version: API version (optional, for compatibility)
     - Content-Type: application/json
-    
+
     Args:
         request: FastAPI Request for accessing app.state
         request_data: Request in Anthropic MessagesRequest format
         anthropic_version: Anthropic API version header (optional)
-    
+
     Returns:
         StreamingResponse for streaming mode (SSE)
         JSONResponse for non-streaming mode
-    
+
     Raises:
         HTTPException: On validation or API errors
     """
     logger.info(f"Request to /v1/messages (model={request_data.model}, stream={request_data.stream})")
-    
+
     if anthropic_version:
         logger.debug(f"Anthropic-Version header: {anthropic_version}")
-    
+
+    # ==============================================================================
+    # Response cache setup (non-streaming only)
+    # ==============================================================================
+    # Streaming cache (capture + replay chunks) is a separate follow-up.
+    # The cache is a singleton on app.state; if disabled it is None.
+    # NOTE: Key computation is deferred until after truncation recovery so the
+    # key reflects the actual messages sent upstream, not the pre-mutation form.
+    from kiro.cache_integration import (
+        compute_cache_key,
+        derive_session_id,
+        entry_to_response_body,
+        store_cache,
+        try_cache_lookup,
+    )
+
+    response_cache = getattr(request.app.state, "response_cache", None)
+    cache_key: Optional[str] = None
+    cache_eligible = response_cache is not None and not request_data.stream
+    session_id: Optional[str] = None
+    if cache_eligible:
+        client_session_id = request.headers.get("x-kiro-session-id")
+        api_key_for_scope = (
+            request.headers.get("x-api-key")
+            or request.headers.get("authorization", "").removeprefix("Bearer ").strip()
+            or None
+        )
+        session_id = derive_session_id(api_key_for_scope, client_session_id)
+
+    # Per-session concurrency limiter — default OFF via
+    # GATEWAY_SESSION_LIMITER_ENABLED. When enabled, caps concurrent upstream
+    # calls per caller so one chatty session can't starve other sessions.
+    # Acquired AFTER in-flight dedup (so dedup collapses dupes first) and
+    # only when session_id is known (i.e., cache_eligible path today).
+    from kiro.config import GATEWAY_SESSION_LIMITER_ENABLED
+    session_limiter = getattr(request.app.state, "session_limiter", None)
+    limiter_active = (
+        GATEWAY_SESSION_LIMITER_ENABLED
+        and session_limiter is not None
+        and session_id is not None
+        and not request_data.stream
+    )
+
     # Note: prepare_new_request() and log_request_body() are now called by DebugLoggerMiddleware
     # This ensures debug logging works even for requests that fail Pydantic validation (422 errors)
-    
+
     # Check for truncation recovery opportunities
-    from kiro.truncation_state import get_tool_truncation, get_content_truncation
-    from kiro.truncation_recovery import generate_truncation_tool_result, generate_truncation_user_message
     from kiro.models_anthropic import AnthropicMessage
-    
+    from kiro.truncation_recovery import generate_truncation_tool_result, generate_truncation_user_message
+    from kiro.truncation_state import get_content_truncation, get_tool_truncation
+
     modified_messages = []
     tool_results_modified = 0
     content_notices_added = 0
-    
+
     for msg in request_data.messages:
         # Check if this is a user message with tool_result blocks
         if msg.role == "user" and msg.content and isinstance(msg.content, list):
             modified_content_blocks = []
             has_modifications = False
-            
+
             for block in msg.content:
                 # Handle both dict and Pydantic objects (ToolResultContentBlock)
                 if isinstance(block, dict):
@@ -181,7 +221,7 @@ async def messages(
                 else:
                     modified_content_blocks.append(block)
                     continue
-                
+
                 if block_type == "tool_result" and tool_use_id:
                     truncation_info = get_tool_truncation(tool_use_id)
                     if truncation_info:
@@ -193,7 +233,7 @@ async def messages(
                         )
                         # Prepend truncation notice to original content
                         modified_content = f"{synthetic['content']}\n\n---\n\nOriginal tool result:\n{original_content}"
-                        
+
                         # Create modified block (handle both dict and Pydantic)
                         if isinstance(block, dict):
                             modified_block = block.copy()
@@ -201,21 +241,21 @@ async def messages(
                         else:
                             # Pydantic object - use model_copy
                             modified_block = block.model_copy(update={"content": modified_content})
-                        
+
                         modified_content_blocks.append(modified_block)
                         tool_results_modified += 1
                         has_modifications = True
                         logger.debug(f"Modified tool_result for {tool_use_id} to include truncation notice")
                         continue
-                
+
                 modified_content_blocks.append(block)
-            
+
             # Create NEW AnthropicMessage object if modifications were made (Pydantic immutability)
             if has_modifications:
                 modified_msg = msg.model_copy(update={"content": modified_content_blocks})
                 modified_messages.append(modified_msg)
                 continue  # Skip normal append since we already added modified version
-        
+
         # Check if this is an assistant message with truncated content
         if msg.role == "assistant" and msg.content:
             # Extract text content for hash check
@@ -226,7 +266,7 @@ async def messages(
                 for block in msg.content:
                     if isinstance(block, dict) and block.get("type") == "text":
                         text_content += block.get("text", "")
-            
+
             if text_content:
                 truncation_info = get_content_truncation(text_content)
                 if truncation_info:
@@ -241,28 +281,73 @@ async def messages(
                     content_notices_added += 1
                     logger.debug(f"Added truncation notice after assistant message (hash: {truncation_info.message_hash})")
                     continue  # Skip normal append since we already added it
-        
+
         modified_messages.append(msg)
-    
+
     if tool_results_modified > 0 or content_notices_added > 0:
         request_data.messages = modified_messages
         logger.info(f"Truncation recovery: modified {tool_results_modified} tool_result(s), added {content_notices_added} content notice(s)")
-    
+
+    # ==============================================================================
+    # Response cache lookup — runs AFTER truncation recovery so the key
+    # reflects the actual messages that will be sent upstream.
+    # ==============================================================================
+    if cache_eligible and session_id is not None:
+        messages_for_cache = [msg.model_dump() for msg in request_data.messages]
+        tools_for_cache = (
+            [tool.model_dump() for tool in request_data.tools]
+            if request_data.tools
+            else None
+        )
+        if isinstance(request_data.system, list):
+            system_for_cache = [
+                b.model_dump() if hasattr(b, "model_dump") else b
+                for b in request_data.system
+            ]
+        else:
+            system_for_cache = request_data.system
+
+        cache_key = compute_cache_key(
+            session_id=session_id,
+            system=system_for_cache,
+            messages=messages_for_cache,
+            model=request_data.model,
+            max_tokens=request_data.max_tokens,
+            tools=tools_for_cache,
+            thinking=request_data.thinking,
+        )
+
+        hit = try_cache_lookup(response_cache, cache_key)
+        if hit is not None:
+            hit_body = entry_to_response_body(hit)
+            logger.info(
+                f"HTTP 200 - POST /v1/messages (non-streaming, cache hit) "
+                f"key={cache_key[:8]} "
+                f"msg_id={hit_body.get('id', 'unknown')} "
+                f"response_model={hit_body.get('model', 'unknown')}"
+            )
+            if debug_logger:
+                debug_logger.discard_buffers()
+            return JSONResponse(
+                content=hit_body,
+                headers={"x-kiro-cache": "hit"},
+            )
+
     # ==============================================================================
     # WebSearch Support - Path B: Auto-Injection (MCP Tool Emulation)
     # ==============================================================================
-    
+
     # Auto-inject web_search tool if enabled (Path B - MCP emulation)
     if WEB_SEARCH_ENABLED:
         if request_data.tools is None:
             request_data.tools = []
-        
+
         # Check if web_search already exists (by name)
         has_ws = any(
             getattr(tool, "name", "") == "web_search"
             for tool in request_data.tools
         )
-        
+
         if not has_ws:
             from kiro.models_anthropic import AnthropicTool
             web_search_tool = AnthropicTool(
@@ -278,11 +363,11 @@ async def messages(
             )
             request_data.tools.append(web_search_tool)
             logger.debug("Auto-injected web_search tool for MCP emulation (Path B)")
-    
+
     # ==============================================================================
     # WebSearch Support - Path A: Native Anthropic (Early Return)
     # ==============================================================================
-    
+
     # Check for native Anthropic server-side tool (Path A)
     # This works ALWAYS, regardless of WEB_SEARCH_ENABLED setting
     if request_data.tools:
@@ -305,35 +390,35 @@ async def messages(
                         }
                     )
                 auth_manager = account.auth_manager
-                
+
                 logger.info("Detected native Anthropic web_search (Path A), routing to MCP API")
                 return await handle_native_web_search(request, request_data, auth_manager, api_format="anthropic")
-    
+
     # ==============================================================================
     # Account System: Account System Failover or Legacy Mode
     # ==============================================================================
-    
+
     if request.app.state.account_system:
         # ==============================================================================
         # ACCOUNT SYSTEM ENABLED: Failover Loop
         # ==============================================================================
-        from kiro.account_errors import classify_error, ErrorType
-        
+        from kiro.account_errors import ErrorType, classify_error
+
         account_manager = request.app.state.account_manager
         all_accounts = list(account_manager._accounts.keys())
         MAX_ATTEMPTS = len(all_accounts) * 2  # Full circle with margin
-        
+
         last_error_message = None
         last_error_status = None
         tried_accounts = set()  # Track tried accounts in current failover loop
-        
+
         for attempt in range(MAX_ATTEMPTS):
             # Get next available account (excluding already tried)
             account = await account_manager.get_next_account(
                 request_data.model,
                 exclude_accounts=tried_accounts
             )
-            
+
             if account is None:
                 # All accounts unavailable
                 if len(all_accounts) == 1:
@@ -363,23 +448,22 @@ async def messages(
                             }
                         }
                     )
-            
+
             # Mark account as tried in current failover loop
             tried_accounts.add(account.id)
-            
+
             # Use objects from account
             auth_manager = account.auth_manager
             model_cache = account.model_cache
-            model_resolver = account.model_resolver
-            
+
             # Generate conversation ID
             conversation_id = generate_conversation_id()
-            
+
             # Build payload for Kiro
             profile_arn_for_payload = ""
             if auth_manager.auth_type == AuthType.KIRO_DESKTOP and auth_manager.profile_arn:
                 profile_arn_for_payload = auth_manager.profile_arn
-            
+
             try:
                 kiro_payload = anthropic_to_kiro(
                     request_data,
@@ -398,7 +482,7 @@ async def messages(
                         }
                     }
                 )
-            
+
             # Log Kiro payload
             try:
                 kiro_request_body = json.dumps(kiro_payload, ensure_ascii=False, indent=2).encode('utf-8')
@@ -406,17 +490,17 @@ async def messages(
                     debug_logger.log_kiro_request_body(kiro_request_body)
             except Exception as e:
                 logger.warning(f"Failed to log Kiro request: {e}")
-            
+
             # Create HTTP client
             url = f"{auth_manager.api_host}/generateAssistantResponse"
             logger.debug(f"Kiro API URL: {url} (account: {account.id})")
-            
+
             if request_data.stream:
                 http_client = KiroHttpClient(auth_manager, shared_client=None)
             else:
                 shared_client = request.app.state.http_client
                 http_client = KiroHttpClient(auth_manager, shared_client=shared_client)
-            
+
             # Prepare data for token counting
             messages_for_tokenizer = [msg.model_dump() for msg in request_data.messages]
             tools_for_tokenizer = [tool.model_dump() for tool in request_data.tools] if request_data.tools else None
@@ -424,7 +508,7 @@ async def messages(
                 system_for_tokenizer = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]
             else:
                 system_for_tokenizer = request_data.system
-            
+
             try:
                 # Make request to Kiro API
                 response = await http_client.request_with_retry(
@@ -433,11 +517,8 @@ async def messages(
                     kiro_payload,
                     stream=True
                 )
-                
+
                 if response.status_code == 200:
-                    # SUCCESS - report and return
-                    await account_manager.report_success(account.id, request_data.model)
-                    
                     if request_data.stream:
                         # Streaming mode
                         async def stream_wrapper():
@@ -448,7 +529,7 @@ async def messages(
                                     return await http_client.request_with_retry(
                                         "POST", url, kiro_payload, stream=True
                                     )
-                                
+
                                 async for chunk in stream_with_first_token_retry_anthropic(
                                     make_request=make_retry_request,
                                     model=request_data.model,
@@ -477,16 +558,18 @@ async def messages(
                                     error_msg = str(streaming_error) if str(streaming_error) else "(empty message)"
                                     logger.error(f"HTTP 500 - POST /v1/messages (streaming) - [{error_type}] {error_msg[:100]}")
                                 elif client_disconnected:
-                                    logger.info(f"HTTP 200 - POST /v1/messages (streaming) - client disconnected")
+                                    logger.info("HTTP 200 - POST /v1/messages (streaming) - client disconnected")
                                 else:
-                                    logger.info(f"HTTP 200 - POST /v1/messages (streaming) - completed")
-                                
+                                    # Body finished cleanly — safe to record success
+                                    await account_manager.report_success(account.id, request_data.model)
+                                    logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
+
                                 if debug_logger:
                                     if streaming_error:
                                         debug_logger.flush_on_error(500, str(streaming_error))
                                     else:
                                         debug_logger.discard_buffers()
-                        
+
                         return StreamingResponse(
                             stream_wrapper(),
                             media_type="text/event-stream",
@@ -495,37 +578,73 @@ async def messages(
                                 "Connection": "keep-alive",
                             }
                         )
-                    
+
                     else:
                         # Non-streaming mode
-                        anthropic_response = await collect_anthropic_response(
-                            response,
-                            request_data.model,
-                            model_cache,
-                            auth_manager,
-                            request_messages=messages_for_tokenizer,
-                            request_tools=tools_for_tokenizer,
-                            request_system=system_for_tokenizer,
-                        )
-                        
+                        if limiter_active:
+                            async with session_limiter.acquire(session_id):
+                                anthropic_response = await collect_anthropic_response(
+                                    response,
+                                    request_data.model,
+                                    model_cache,
+                                    auth_manager,
+                                    request_messages=messages_for_tokenizer,
+                                    request_tools=tools_for_tokenizer,
+                                    request_system=system_for_tokenizer,
+                                )
+                        else:
+                            anthropic_response = await collect_anthropic_response(
+                                response,
+                                request_data.model,
+                                model_cache,
+                                auth_manager,
+                                request_messages=messages_for_tokenizer,
+                                request_tools=tools_for_tokenizer,
+                                request_system=system_for_tokenizer,
+                            )
+
                         await http_client.close()
-                        logger.info(f"HTTP 200 - POST /v1/messages (non-streaming) - completed")
-                        
+                        # Body collected cleanly — safe to record success
+                        await account_manager.report_success(account.id, request_data.model)
+                        logger.info(
+                            "HTTP 200 - POST /v1/messages (non-streaming) - completed "
+                            f"msg_id={anthropic_response.get('id', 'unknown')} "
+                            f"response_model={anthropic_response.get('model', 'unknown')}"
+                        )
+
                         if debug_logger:
                             debug_logger.discard_buffers()
-                        
-                        return JSONResponse(content=anthropic_response)
-                
+
+                        # Persist into the response cache if enabled.
+                        if (
+                            cache_eligible
+                            and cache_key is not None
+                            and response_cache is not None
+                        ):
+                            stored = store_cache(
+                                response_cache, cache_key, anthropic_response
+                            )
+                            if stored:
+                                logger.debug(
+                                    f"response-cache stored key={cache_key[:8]} "
+                                    f"entries={response_cache.stats()['entries']}"
+                                )
+
+                        return JSONResponse(
+                            content=anthropic_response,
+                            headers={"x-kiro-cache": "miss"} if cache_eligible else None,
+                        )
+
                 else:
                     # ERROR - classify and decide
                     try:
                         error_content = await response.aread()
                     except Exception:
                         error_content = b"Unknown error"
-                    
+
                     await http_client.close()
                     error_text = error_content.decode('utf-8', errors='replace')
-                    
+
                     # Extract error reason and save for final return
                     error_reason = None
                     try:
@@ -539,22 +658,22 @@ async def messages(
                     except (json.JSONDecodeError, KeyError):
                         last_error_message = error_text
                         last_error_status = response.status_code
-                    
+
                     # Classify error
                     error_type = classify_error(response.status_code, error_reason)
-                    
+
                     if error_type == ErrorType.FATAL:
                         # FATAL - return to client immediately
                         await account_manager.report_failure(
                             account.id, request_data.model, error_type,
                             response.status_code, error_reason
                         )
-                        
+
                         logger.warning(f"HTTP {response.status_code} - POST /v1/messages - {last_error_message[:100]}")
-                        
+
                         if debug_logger:
                             debug_logger.flush_on_error(response.status_code, last_error_message)
-                        
+
                         return JSONResponse(
                             status_code=response.status_code,
                             content={
@@ -565,23 +684,23 @@ async def messages(
                                 }
                             }
                         )
-                    
+
                     else:  # ErrorType.RECOVERABLE
                         # RECOVERABLE - try next account
                         await account_manager.report_failure(
                             account.id, request_data.model, error_type,
                             response.status_code, error_reason
                         )
-                        
+
                         # Single account - no point in failover, break immediately
                         if len(all_accounts) == 1:
                             break
-                        
+
                         continue  # Next iteration
-            
+
             except HTTPException as e:
                 await http_client.close()
-                
+
                 # Network errors (502/504 from request_with_retry) = RECOVERABLE
                 # These are thrown ONLY for network-level issues (timeouts, connection errors)
                 # NOT for HTTP-level errors (which are returned as response objects)
@@ -591,17 +710,17 @@ async def messages(
                         account.id, request_data.model, ErrorType.RECOVERABLE,
                         e.status_code, None
                     )
-                    
+
                     last_error_message = str(e.detail)
                     last_error_status = e.status_code
-                    
+
                     # Single account - no point in failover, break immediately
                     if len(all_accounts) == 1:
                         break
-                    
+
                     logger.warning(f"Network error on account {account.id}, trying next account")
                     continue  # Try next account
-                
+
                 # All other HTTPException (400, 500, etc.) = application errors
                 # These come from build_kiro_payload() or other places → re-raise immediately
                 logger.error(f"HTTP {e.status_code} - POST /v1/messages - {e.detail}")
@@ -614,7 +733,7 @@ async def messages(
                 logger.error(f"HTTP 500 - POST /v1/messages - {str(e)[:100]}")
                 if debug_logger:
                     debug_logger.flush_on_error(500, str(e))
-                
+
                 return JSONResponse(
                     status_code=500,
                     content={
@@ -625,7 +744,7 @@ async def messages(
                         }
                     }
                 )
-        
+
         # All attempts exhausted
         if len(all_accounts) == 1:
             # Single account - return its original error
@@ -655,7 +774,7 @@ async def messages(
                     }
                 }
             )
-    
+
     else:
         # ==============================================================================
         # LEGACY MODE: Single Account (no failover)
@@ -675,21 +794,21 @@ async def messages(
             )
         auth_manager = account.auth_manager
         model_cache = account.model_cache
-        model_resolver = account.model_resolver
-    
+        _ = account.model_resolver
+
     # ==============================================================================
     # Normal Flow (Path B will be intercepted in streaming, or no web_search)
     # ==============================================================================
-    
+
     # Generate conversation ID for Kiro API (random UUID, not used for tracking)
     conversation_id = generate_conversation_id()
-    
+
     # Build payload for Kiro
     # profileArn is only needed for Kiro Desktop auth
     profile_arn_for_payload = ""
     if auth_manager.auth_type == AuthType.KIRO_DESKTOP and auth_manager.profile_arn:
         profile_arn_for_payload = auth_manager.profile_arn
-    
+
     try:
         kiro_payload = anthropic_to_kiro(
             request_data,
@@ -708,7 +827,7 @@ async def messages(
                 }
             }
         )
-    
+
     # Log Kiro payload
     try:
         kiro_request_body = json.dumps(kiro_payload, ensure_ascii=False, indent=2).encode('utf-8')
@@ -716,13 +835,13 @@ async def messages(
             debug_logger.log_kiro_request_body(kiro_request_body)
     except Exception as e:
         logger.warning(f"Failed to log Kiro request: {e}")
-    
+
     # Create HTTP client with retry logic
     # For streaming: use per-request client to avoid CLOSE_WAIT leak on VPN disconnect (issue #54)
     # For non-streaming: use shared client for connection pooling
     url = f"{auth_manager.api_host}/generateAssistantResponse"
     logger.debug(f"Kiro API URL: {url}")
-    
+
     if request_data.stream:
         # Streaming mode: per-request client prevents orphaned connections
         # when network interface changes (VPN disconnect/reconnect)
@@ -731,7 +850,7 @@ async def messages(
         # Non-streaming mode: shared client for efficient connection reuse
         shared_client = request.app.state.http_client
         http_client = KiroHttpClient(auth_manager, shared_client=shared_client)
-    
+
     # Prepare data for token counting
     # Convert Pydantic models to dicts for tokenizer
     messages_for_tokenizer = [msg.model_dump() for msg in request_data.messages]
@@ -741,7 +860,7 @@ async def messages(
         system_for_tokenizer = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]
     else:
         system_for_tokenizer = request_data.system
-    
+
     try:
         # Make request to Kiro API (for both streaming and non-streaming modes)
         # Important: we wait for Kiro response BEFORE returning StreamingResponse,
@@ -752,16 +871,16 @@ async def messages(
             kiro_payload,
             stream=True
         )
-        
+
         if response.status_code != 200:
             try:
                 error_content = await response.aread()
             except Exception:
                 error_content = b"Unknown error"
-            
+
             await http_client.close()
             error_text = error_content.decode('utf-8', errors='replace')
-            
+
             # Try to parse JSON response from Kiro to extract error message
             error_message = error_text
             try:
@@ -774,16 +893,16 @@ async def messages(
                 logger.debug(f"Original Kiro error: {error_info.original_message} (reason: {error_info.reason})")
             except (json.JSONDecodeError, KeyError):
                 pass
-            
+
             # Log access log for error (before flush, so it gets into app_logs)
             logger.warning(
                 f"HTTP {response.status_code} - POST /v1/messages - {error_message[:100]}"
             )
-            
+
             # Flush debug logs on error
             if debug_logger:
                 debug_logger.flush_on_error(response.status_code, error_message)
-            
+
             # Return error in Anthropic format
             return JSONResponse(
                 status_code=response.status_code,
@@ -795,7 +914,7 @@ async def messages(
                     }
                 }
             )
-        
+
         if request_data.stream:
             # Streaming mode with first token retry
             async def stream_wrapper():
@@ -807,7 +926,7 @@ async def messages(
                         return await http_client.request_with_retry(
                             "POST", url, kiro_payload, stream=True
                         )
-                    
+
                     # Use retry wrapper with initial response
                     async for chunk in stream_with_first_token_retry_anthropic(
                         make_request=make_retry_request,
@@ -838,16 +957,16 @@ async def messages(
                         error_msg = str(streaming_error) if str(streaming_error) else "(empty message)"
                         logger.error(f"HTTP 500 - POST /v1/messages (streaming) - [{error_type}] {error_msg[:100]}")
                     elif client_disconnected:
-                        logger.info(f"HTTP 200 - POST /v1/messages (streaming) - client disconnected")
+                        logger.info("HTTP 200 - POST /v1/messages (streaming) - client disconnected")
                     else:
-                        logger.info(f"HTTP 200 - POST /v1/messages (streaming) - completed")
-                    
+                        logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
+
                     if debug_logger:
                         if streaming_error:
                             debug_logger.flush_on_error(500, str(streaming_error))
                         else:
                             debug_logger.discard_buffers()
-            
+
             return StreamingResponse(
                 stream_wrapper(),
                 media_type="text/event-stream",
@@ -856,36 +975,66 @@ async def messages(
                     "Connection": "keep-alive",
                 }
             )
-        
+
         else:
             # Non-streaming mode - collect entire response
-            anthropic_response = await collect_anthropic_response(
-                response,
-                request_data.model,
-                model_cache,
-                auth_manager,
-                request_messages=messages_for_tokenizer,
-                request_tools=tools_for_tokenizer,
-                request_system=system_for_tokenizer,
-            )
-            
+            if limiter_active:
+                async with session_limiter.acquire(session_id):
+                    anthropic_response = await collect_anthropic_response(
+                        response,
+                        request_data.model,
+                        model_cache,
+                        auth_manager,
+                        request_messages=messages_for_tokenizer,
+                        request_tools=tools_for_tokenizer,
+                        request_system=system_for_tokenizer,
+                    )
+            else:
+                anthropic_response = await collect_anthropic_response(
+                    response,
+                    request_data.model,
+                    model_cache,
+                    auth_manager,
+                    request_messages=messages_for_tokenizer,
+                    request_tools=tools_for_tokenizer,
+                    request_system=system_for_tokenizer,
+                )
+
             await http_client.close()
-            
-            logger.info(f"HTTP 200 - POST /v1/messages (non-streaming) - completed")
-            
+
+            logger.info(
+                "HTTP 200 - POST /v1/messages (non-streaming) - completed "
+                f"msg_id={anthropic_response.get('id', 'unknown')} "
+                f"response_model={anthropic_response.get('model', 'unknown')}"
+            )
+
             if debug_logger:
                 debug_logger.discard_buffers()
-            
-            return JSONResponse(content=anthropic_response)
-    
+
+            # Persist into the response cache if enabled. We store only
+            # on clean 200 responses — errors and partial replies must
+            # not be cached.
+            if cache_eligible and cache_key is not None and response_cache is not None:
+                stored = store_cache(response_cache, cache_key, anthropic_response)
+                if stored:
+                    logger.debug(
+                        f"response-cache stored key={cache_key[:8]} "
+                        f"entries={response_cache.stats()['entries']}"
+                    )
+
+            return JSONResponse(
+                content=anthropic_response,
+                headers={"x-kiro-cache": "miss"} if cache_eligible else None,
+            )
+
     except HTTPException as e:
         await http_client.close()
-        
+
         # Network errors (502/504 from request_with_retry) = RECOVERABLE
         # In legacy mode, we still log them but re-raise (no failover available)
         if e.status_code in (502, 504):
-            logger.warning(f"Network error (legacy mode, no failover available)")
-        
+            logger.warning("Network error (legacy mode, no failover available)")
+
         logger.error(f"HTTP {e.status_code} - POST /v1/messages - {e.detail}")
         if debug_logger:
             debug_logger.flush_on_error(e.status_code, str(e.detail))
@@ -896,7 +1045,7 @@ async def messages(
         logger.error(f"HTTP 500 - POST /v1/messages - {str(e)[:100]}")
         if debug_logger:
             debug_logger.flush_on_error(500, str(e))
-        
+
         return JSONResponse(
             status_code=500,
             content={
@@ -916,37 +1065,37 @@ async def count_tokens_endpoint(
 ):
     """
     Anthropic Count Tokens API endpoint.
-    
+
     Returns estimated token count for the given request payload.
     Used by Claude Code to decide when to trigger conversation compaction.
-    
+
     Uses the same fallback estimation as Anthropic streaming (message_start event),
     since Kiro API only provides accurate token counts after request completion.
     This endpoint is called BEFORE the actual request, so we cannot use Kiro's
     contextUsagePercentage (which is only available after generation completes).
-    
+
     Args:
         request: FastAPI Request for accessing app.state
         request_data: Request in Anthropic MessagesRequest format
-    
+
     Returns:
         JSONResponse with {"input_tokens": int}
-    
+
     Raises:
         HTTPException: 401 if authentication fails (handled by dependency)
     """
     logger.info(f"Request to /v1/messages/count_tokens (model={request_data.model}, messages={len(request_data.messages)})")
-    
+
     # Prepare data for tokenizer (same format as streaming message_start)
     messages_for_tokenizer = [msg.model_dump() for msg in request_data.messages]
     tools_for_tokenizer = [tool.model_dump() for tool in request_data.tools] if request_data.tools else None
-    
+
     # Handle system prompt (can be string or list of content blocks)
     if isinstance(request_data.system, list):
         system_for_tokenizer = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]
     else:
         system_for_tokenizer = request_data.system
-    
+
     # Use the SAME estimation logic as Anthropic streaming message_start
     request_token_stats = estimate_request_tokens(
         messages=messages_for_tokenizer,
@@ -954,9 +1103,9 @@ async def count_tokens_endpoint(
         system_prompt=system_for_tokenizer,
         apply_claude_correction=True  # CRITICAL: Enable correction for Claude models
     )
-    
+
     input_tokens = request_token_stats["total_tokens"]
-    
+
     logger.info(f"Token count estimate: {input_tokens} tokens")
-    
+
     return JSONResponse(content={"input_tokens": input_tokens})
