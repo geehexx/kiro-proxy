@@ -383,6 +383,14 @@ async def lifespan(app: FastAPI):
     app.state.in_flight_dedup = InFlightDedup()
     logger.info("In-flight dedup initialized")
 
+    # Per-session concurrency limiter — caps upstream calls per caller
+    # session. Instantiated here so app.state is ready; route wiring
+    # follows in a separate change.
+    from kiro.config import GATEWAY_SESSION_CONCURRENCY
+    from kiro.session_limiter import SessionLimiter
+    app.state.session_limiter = SessionLimiter(default_concurrency=GATEWAY_SESSION_CONCURRENCY)
+    logger.info(f"Session limiter initialized (default_concurrency={GATEWAY_SESSION_CONCURRENCY})")
+
     # ==============================================================================
     # Legacy Fallback: .env → credentials.json
     # ==============================================================================

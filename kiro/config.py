@@ -564,6 +564,19 @@ ACCOUNT_PROBABILISTIC_RETRY_CHANCE: float = float(os.getenv("ACCOUNT_PROBABILIST
 ACCOUNT_CACHE_TTL: int = int(os.getenv("ACCOUNT_CACHE_TTL", "43200"))
 
 # ==================================================================================================
+# Per-Session Concurrency Limit
+# ==================================================================================================
+
+# Maximum concurrent upstream calls per caller session. Prevents one chatty
+# session from starving the shared httpx pool for other sessions. Acquired
+# AFTER the in-flight dedup check so dedup still collapses identical
+# concurrent requests before the semaphore is contested.
+# Default 8 matches the httpx AsyncClient pool_limits.max_connections
+# ÷ expected concurrent sessions. Raise to 16 if a single session
+# legitimately needs more parallel tool calls.
+GATEWAY_SESSION_CONCURRENCY: int = int(os.getenv("GATEWAY_SESSION_CONCURRENCY", "8"))
+
+# ==================================================================================================
 # State Persistence Settings
 # ==================================================================================================
 
