@@ -1,0 +1,8 @@
+# Development-only dependencies for kiro-gateway.
+# Installed separately from requirements.txt so runtime containers stay lean.
+#
+# Install: .venv/bin/python -m pip install -r requirements-dev.txt
+#   (or)   uv pip install -r requirements-dev.txt
+ruff>=0.6
+pyright>=1.1.400
+bandit>=1.7

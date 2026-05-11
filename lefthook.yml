@@ -1,0 +1,44 @@
+# lefthook.yml — git hooks for kiro-gateway (geehexx/kiro-gateway fork)
+#
+# Runs pre-commit against staged files only so commits stay fast. Hooks
+# use the in-venv binaries directly (no uv dependency because this
+# project is vanilla pip + requirements.txt, not a uv workspace).
+#
+# Install once: lefthook install
+# Disable a hook for a specific commit: LEFTHOOK=0 git commit
+#
+# To update dev tool versions, edit requirements-dev.txt and re-run:
+#   .venv/bin/python -m pip install -r requirements-dev.txt
+
+pre-commit:
+  parallel: true
+  commands:
+    ruff-check:
+      glob: "{kiro,tests,main.py,manual_api_test.py}/**/*.py"
+      run: .venv/bin/ruff check {staged_files}
+      stage_fixed: true
+    pyright:
+      # Only the kiro/ package — test files import from kiro which pulls
+      # in the transitive type surface we care about. Running pyright on
+      # the whole tests/ tree doubles time for minimal signal on new code.
+      glob: "kiro/**/*.py"
+      run: .venv/bin/pyright --level error {staged_files}
+    pytest-unit:
+      # Run the full unit suite (it's fast, ~14s), not just the staged
+      # files — regressions in one module show up elsewhere. Two known
+      # pre-existing config-module-load test isolation failures are
+      # deselected; they fail when env vars like SERVER_HOST are set
+      # locally (direnv), independent of any change.
+      glob: "{kiro,tests}/**/*.py"
+      run: |
+        .venv/bin/python -m pytest tests/unit -x -q --tb=short -m "not integration" \
+          --deselect tests/unit/test_config.py::TestServerHostConfig::test_default_server_host_is_0_0_0_0 \
+          --deselect tests/unit/test_config.py::TestServerPortConfig::test_default_server_port_is_8000
+
+pre-push:
+  commands:
+    pytest-all:
+      run: |
+        .venv/bin/python -m pytest tests/unit -q --tb=short \
+          --deselect tests/unit/test_config.py::TestServerHostConfig::test_default_server_host_is_0_0_0_0 \
+          --deselect tests/unit/test_config.py::TestServerPortConfig::test_default_server_port_is_8000

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 # Kiro Gateway
 # https://github.com/jwadow/kiro-gateway
@@ -33,16 +32,15 @@ Architecture:
 import socket
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 import httpx
-from loguru import logger
 
 
 class ErrorCategory(str, Enum):
     """
     Categories of network errors.
-    
+
     Each category represents a distinct type of network failure
     with specific troubleshooting steps.
     """
@@ -62,7 +60,7 @@ class ErrorCategory(str, Enum):
 class NetworkErrorInfo:
     """
     Structured information about a network error.
-    
+
     Attributes:
         category: Error category for classification
         user_message: Clear, non-technical message for end users
@@ -73,7 +71,7 @@ class NetworkErrorInfo:
     """
     category: ErrorCategory
     user_message: str
-    troubleshooting_steps: List[str]
+    troubleshooting_steps: list[str]
     technical_details: str
     is_retryable: bool
     suggested_http_code: int
@@ -82,17 +80,17 @@ class NetworkErrorInfo:
 def classify_network_error(error: Exception) -> NetworkErrorInfo:
     """
     Classifies a network error and returns structured information.
-    
+
     Analyzes the exception type, error message, and underlying cause
     to determine the specific type of network failure and provide
     appropriate user-facing messages and troubleshooting steps.
-    
+
     Args:
         error: The exception that occurred (typically httpx.RequestError)
-    
+
     Returns:
         NetworkErrorInfo with classification and user-friendly details
-    
+
     Example:
         >>> try:
         ...     response = await client.get("https://example.com")
@@ -102,18 +100,18 @@ def classify_network_error(error: Exception) -> NetworkErrorInfo:
     """
     error_type = type(error).__name__
     error_str = str(error)
-    
+
     # Extract technical details for logging
     technical_details = f"{error_type}: {error_str}"
-    
+
     # Analyze httpx.ConnectError (connection establishment failures)
     if isinstance(error, httpx.ConnectError):
         return _classify_connect_error(error, technical_details)
-    
+
     # Analyze httpx.TimeoutException (various timeout types)
     if isinstance(error, httpx.TimeoutException):
         return _classify_timeout_error(error, technical_details)
-    
+
     # Analyze httpx.TooManyRedirects
     if isinstance(error, httpx.TooManyRedirects):
         return NetworkErrorInfo(
@@ -128,7 +126,7 @@ def classify_network_error(error: Exception) -> NetworkErrorInfo:
             is_retryable=False,
             suggested_http_code=502
         )
-    
+
     # Analyze httpx.ProxyError
     if isinstance(error, httpx.ProxyError):
         return NetworkErrorInfo(
@@ -144,7 +142,7 @@ def classify_network_error(error: Exception) -> NetworkErrorInfo:
             is_retryable=True,
             suggested_http_code=502
         )
-    
+
     # Generic httpx.RequestError (catch-all)
     if isinstance(error, httpx.RequestError):
         return NetworkErrorInfo(
@@ -160,7 +158,7 @@ def classify_network_error(error: Exception) -> NetworkErrorInfo:
             is_retryable=True,
             suggested_http_code=502
         )
-    
+
     # Non-httpx errors (shouldn't happen, but handle gracefully)
     return NetworkErrorInfo(
         category=ErrorCategory.UNKNOWN,
@@ -179,19 +177,19 @@ def classify_network_error(error: Exception) -> NetworkErrorInfo:
 def _classify_connect_error(error: httpx.ConnectError, technical_details: str) -> NetworkErrorInfo:
     """
     Classifies httpx.ConnectError into specific subcategories.
-    
+
     Args:
         error: The ConnectError exception
         technical_details: Technical error string for logging
-    
+
     Returns:
         NetworkErrorInfo with specific classification
     """
     error_str = str(error)
-    
+
     # Check underlying cause chain for more specific errors
     cause = error.__cause__
-    
+
     # Check for DNS errors (socket.gaierror)
     if cause and isinstance(cause, socket.gaierror):
         # DNS resolution failed
@@ -199,7 +197,7 @@ def _classify_connect_error(error: httpx.ConnectError, technical_details: str) -
         # - 11001 (Windows): WSAHOST_NOT_FOUND
         # - -2, -3, -5 (Unix): EAI_NONAME, EAI_AGAIN, EAI_NODATA
         errno = getattr(cause, 'errno', None)
-        
+
         return NetworkErrorInfo(
             category=ErrorCategory.DNS_RESOLUTION,
             user_message="DNS resolution failed - cannot resolve the provider's domain name.",
@@ -214,7 +212,7 @@ def _classify_connect_error(error: httpx.ConnectError, technical_details: str) -
             is_retryable=True,
             suggested_http_code=502
         )
-    
+
     # Check for connection refused
     if "Connection refused" in error_str or "ECONNREFUSED" in error_str:
         return NetworkErrorInfo(
@@ -230,7 +228,7 @@ def _classify_connect_error(error: httpx.ConnectError, technical_details: str) -
             is_retryable=True,
             suggested_http_code=502
         )
-    
+
     # Check for connection reset
     if "Connection reset" in error_str or "ECONNRESET" in error_str:
         return NetworkErrorInfo(
@@ -246,7 +244,7 @@ def _classify_connect_error(error: httpx.ConnectError, technical_details: str) -
             is_retryable=True,
             suggested_http_code=502
         )
-    
+
     # Check for network unreachable
     if "Network is unreachable" in error_str or "No route to host" in error_str or "ENETUNREACH" in error_str:
         return NetworkErrorInfo(
@@ -263,7 +261,7 @@ def _classify_connect_error(error: httpx.ConnectError, technical_details: str) -
             is_retryable=True,
             suggested_http_code=502
         )
-    
+
     # Check for SSL/TLS errors
     if "SSL" in error_str or "TLS" in error_str or "certificate" in error_str.lower():
         return NetworkErrorInfo(
@@ -279,7 +277,7 @@ def _classify_connect_error(error: httpx.ConnectError, technical_details: str) -
             is_retryable=False,
             suggested_http_code=502
         )
-    
+
     # Generic connection error
     return NetworkErrorInfo(
         category=ErrorCategory.UNKNOWN,
@@ -299,11 +297,11 @@ def _classify_connect_error(error: httpx.ConnectError, technical_details: str) -
 def _classify_timeout_error(error: httpx.TimeoutException, technical_details: str) -> NetworkErrorInfo:
     """
     Classifies httpx.TimeoutException into specific subcategories.
-    
+
     Args:
         error: The TimeoutException
         technical_details: Technical error string for logging
-    
+
     Returns:
         NetworkErrorInfo with specific classification
     """
@@ -322,7 +320,7 @@ def _classify_timeout_error(error: httpx.TimeoutException, technical_details: st
             is_retryable=True,
             suggested_http_code=504
         )
-    
+
     # ReadTimeout: Server stopped sending data
     if isinstance(error, httpx.ReadTimeout):
         return NetworkErrorInfo(
@@ -338,7 +336,7 @@ def _classify_timeout_error(error: httpx.TimeoutException, technical_details: st
             is_retryable=True,
             suggested_http_code=504
         )
-    
+
     # Generic timeout
     return NetworkErrorInfo(
         category=ErrorCategory.TIMEOUT_READ,
@@ -358,21 +356,21 @@ def format_error_for_user(
     error_info: NetworkErrorInfo,
     format_type: str = "openai",
     include_troubleshooting: bool = True
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Formats NetworkErrorInfo for API response.
-    
+
     Converts structured error information into the appropriate format
     for OpenAI or Anthropic API responses.
-    
+
     Args:
         error_info: The classified error information
         format_type: "openai" or "anthropic" format
         include_troubleshooting: Whether to include troubleshooting steps
-    
+
     Returns:
         Dictionary formatted for API response
-    
+
     Example:
         >>> error_info = classify_network_error(exception)
         >>> response = format_error_for_user(error_info, format_type="openai")
@@ -380,12 +378,12 @@ def format_error_for_user(
     """
     # Build the message
     message = error_info.user_message
-    
+
     if include_troubleshooting and error_info.troubleshooting_steps:
         message += "\n\nTroubleshooting steps:\n"
         for i, step in enumerate(error_info.troubleshooting_steps, 1):
             message += f"{i}. {step}\n"
-    
+
     # Format for OpenAI API
     if format_type == "openai":
         return {
@@ -396,7 +394,7 @@ def format_error_for_user(
                 "param": None
             }
         }
-    
+
     # Format for Anthropic API
     elif format_type == "anthropic":
         return {
@@ -406,7 +404,7 @@ def format_error_for_user(
                 "message": message.strip()
             }
         }
-    
+
     # Generic format (fallback)
     else:
         return {
@@ -422,13 +420,13 @@ def format_error_for_user(
 def get_short_error_message(error_info: NetworkErrorInfo) -> str:
     """
     Returns a short, single-line error message for logging.
-    
+
     Args:
         error_info: The classified error information
-    
+
     Returns:
         Short error message suitable for log files
-    
+
     Example:
         >>> error_info = classify_network_error(exception)
         >>> logger.warning(get_short_error_message(error_info))
