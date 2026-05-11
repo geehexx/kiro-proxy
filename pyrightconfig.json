@@ -1,5 +1,5 @@
 {
-  "venvPath": ".",
+  "venvPath": "/home/gxx/tools/kiro-gateway",
   "venv": ".venv",
   "pythonVersion": "3.12",
   "typeCheckingMode": "basic",

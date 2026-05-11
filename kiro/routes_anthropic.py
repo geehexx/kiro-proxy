@@ -29,32 +29,31 @@ import json
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request, Security, Header
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 from loguru import logger
 
-from kiro.config import PROXY_API_KEY
-from kiro.models_anthropic import (
-    AnthropicMessagesRequest,
-    AnthropicCountTokensRequest,
-    AnthropicMessagesResponse,
-    AnthropicErrorResponse,
-    AnthropicErrorDetail,
-)
-from kiro.auth import KiroAuthManager, AuthType
+from kiro.auth import AuthType, KiroAuthManager
 from kiro.cache import ModelInfoCache
+from kiro.config import PROXY_API_KEY, WEB_SEARCH_ENABLED
 from kiro.converters_anthropic import anthropic_to_kiro
+from kiro.http_client import KiroHttpClient
+from kiro.mcp_tools import handle_native_web_search
+from kiro.models_anthropic import (
+    AnthropicCountTokensRequest,
+    AnthropicErrorDetail,
+    AnthropicErrorResponse,
+    AnthropicMessagesRequest,
+    AnthropicMessagesResponse,
+)
 from kiro.streaming_anthropic import (
-    stream_kiro_to_anthropic,
     collect_anthropic_response,
+    stream_kiro_to_anthropic,
     stream_with_first_token_retry_anthropic,
 )
-from kiro.http_client import KiroHttpClient
-from kiro.utils import generate_conversation_id
 from kiro.tokenizer import estimate_request_tokens
-from kiro.config import WEB_SEARCH_ENABLED
-from kiro.mcp_tools import handle_native_web_search
+from kiro.utils import generate_conversation_id
 
 # Import debug_logger
 try:
@@ -182,9 +181,9 @@ async def messages(
     # This ensures debug logging works even for requests that fail Pydantic validation (422 errors)
 
     # Check for truncation recovery opportunities
-    from kiro.truncation_state import get_tool_truncation, get_content_truncation
-    from kiro.truncation_recovery import generate_truncation_tool_result, generate_truncation_user_message
     from kiro.models_anthropic import AnthropicMessage
+    from kiro.truncation_recovery import generate_truncation_tool_result, generate_truncation_user_message
+    from kiro.truncation_state import get_content_truncation, get_tool_truncation
 
     modified_messages = []
     tool_results_modified = 0
@@ -387,7 +386,7 @@ async def messages(
         # ==============================================================================
         # ACCOUNT SYSTEM ENABLED: Failover Loop
         # ==============================================================================
-        from kiro.account_errors import classify_error, ErrorType
+        from kiro.account_errors import ErrorType, classify_error
 
         account_manager = request.app.state.account_manager
         all_accounts = list(account_manager._accounts.keys())
@@ -440,7 +439,6 @@ async def messages(
             # Use objects from account
             auth_manager = account.auth_manager
             model_cache = account.model_cache
-            model_resolver = account.model_resolver
 
             # Generate conversation ID
             conversation_id = generate_conversation_id()
@@ -547,9 +545,9 @@ async def messages(
                                     error_msg = str(streaming_error) if str(streaming_error) else "(empty message)"
                                     logger.error(f"HTTP 500 - POST /v1/messages (streaming) - [{error_type}] {error_msg[:100]}")
                                 elif client_disconnected:
-                                    logger.info(f"HTTP 200 - POST /v1/messages (streaming) - client disconnected")
+                                    logger.info("HTTP 200 - POST /v1/messages (streaming) - client disconnected")
                                 else:
-                                    logger.info(f"HTTP 200 - POST /v1/messages (streaming) - completed")
+                                    logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
 
                                 if debug_logger:
                                     if streaming_error:
@@ -579,7 +577,7 @@ async def messages(
                         )
 
                         await http_client.close()
-                        logger.info(f"HTTP 200 - POST /v1/messages (non-streaming) - completed")
+                        logger.info("HTTP 200 - POST /v1/messages (non-streaming) - completed")
 
                         if debug_logger:
                             debug_logger.discard_buffers()
@@ -763,7 +761,7 @@ async def messages(
             )
         auth_manager = account.auth_manager
         model_cache = account.model_cache
-        model_resolver = account.model_resolver
+        _ = account.model_resolver
 
     # ==============================================================================
     # Normal Flow (Path B will be intercepted in streaming, or no web_search)
@@ -926,9 +924,9 @@ async def messages(
                         error_msg = str(streaming_error) if str(streaming_error) else "(empty message)"
                         logger.error(f"HTTP 500 - POST /v1/messages (streaming) - [{error_type}] {error_msg[:100]}")
                     elif client_disconnected:
-                        logger.info(f"HTTP 200 - POST /v1/messages (streaming) - client disconnected")
+                        logger.info("HTTP 200 - POST /v1/messages (streaming) - client disconnected")
                     else:
-                        logger.info(f"HTTP 200 - POST /v1/messages (streaming) - completed")
+                        logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
 
                     if debug_logger:
                         if streaming_error:
@@ -959,7 +957,7 @@ async def messages(
 
             await http_client.close()
 
-            logger.info(f"HTTP 200 - POST /v1/messages (non-streaming) - completed")
+            logger.info("HTTP 200 - POST /v1/messages (non-streaming) - completed")
 
             if debug_logger:
                 debug_logger.discard_buffers()
@@ -986,7 +984,7 @@ async def messages(
         # Network errors (502/504 from request_with_retry) = RECOVERABLE
         # In legacy mode, we still log them but re-raise (no failover available)
         if e.status_code in (502, 504):
-            logger.warning(f"Network error (legacy mode, no failover available)")
+            logger.warning("Network error (legacy mode, no failover available)")
 
         logger.error(f"HTTP {e.status_code} - POST /v1/messages - {e.detail}")
         if debug_logger:

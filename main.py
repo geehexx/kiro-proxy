@@ -43,8 +43,8 @@ import argparse
 import asyncio
 import json
 import logging
-import sys
 import os
+import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -54,41 +54,40 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
+from kiro.account_manager import AccountManager
+from kiro.auth import KiroAuthManager
+from kiro.cache import ModelInfoCache
 from kiro.config import (
-    APP_TITLE,
-    APP_DESCRIPTION,
-    APP_VERSION,
-    REFRESH_TOKEN,
-    PROFILE_ARN,
-    REGION,
-    KIRO_CREDS_FILE,
-    KIRO_CLI_DB_FILE,
-    PROXY_API_KEY,
-    LOG_LEVEL,
-    SERVER_HOST,
-    SERVER_PORT,
-    DEFAULT_SERVER_HOST,
-    DEFAULT_SERVER_PORT,
-    STREAMING_READ_TIMEOUT,
-    HIDDEN_MODELS,
-    MODEL_ALIASES,
-    HIDDEN_FROM_LIST,
-    FALLBACK_MODELS,
-    VPN_PROXY_URL,
     ACCOUNT_SYSTEM,
     ACCOUNTS_CONFIG_FILE,
     ACCOUNTS_STATE_FILE,
+    APP_DESCRIPTION,
+    APP_TITLE,
+    APP_VERSION,
+    DEFAULT_SERVER_HOST,
+    DEFAULT_SERVER_PORT,
+    FALLBACK_MODELS,
+    HIDDEN_FROM_LIST,
+    HIDDEN_MODELS,
+    KIRO_CLI_DB_FILE,
+    KIRO_CREDS_FILE,
+    LOG_LEVEL,
+    MODEL_ALIASES,
+    PROFILE_ARN,
+    PROXY_API_KEY,
+    REFRESH_TOKEN,
+    REGION,
+    SERVER_HOST,
+    SERVER_PORT,
+    STREAMING_READ_TIMEOUT,
+    VPN_PROXY_URL,
     _warn_timeout_configuration,
 )
-from kiro.auth import KiroAuthManager
-from kiro.cache import ModelInfoCache
-from kiro.model_resolver import ModelResolver
-from kiro.account_manager import AccountManager
-from kiro.routes_openai import router as openai_router
-from kiro.routes_anthropic import router as anthropic_router
-from kiro.exceptions import validation_exception_handler
 from kiro.debug_middleware import DebugLoggerMiddleware
-
+from kiro.exceptions import validation_exception_handler
+from kiro.model_resolver import ModelResolver
+from kiro.routes_anthropic import router as anthropic_router
+from kiro.routes_openai import router as openai_router
 
 # --- Loguru Configuration ---
 logger.remove()
@@ -356,12 +355,14 @@ async def lifespan(app: FastAPI):
     logger.info("Shared HTTP client created with connection pooling")
 
     # Response cache singleton (in-memory LRU, disabled by default via env)
-    from kiro.response_cache import ResponseCache
     from kiro.config import (
-        RESPONSE_CACHE_ENABLED, RESPONSE_CACHE_MAX_ENTRIES,
-        RESPONSE_CACHE_MAX_BYTES, RESPONSE_CACHE_TTL_SECONDS,
+        RESPONSE_CACHE_ENABLED,
+        RESPONSE_CACHE_MAX_BYTES,
+        RESPONSE_CACHE_MAX_ENTRIES,
         RESPONSE_CACHE_MAX_ENTRY_BYTES,
+        RESPONSE_CACHE_TTL_SECONDS,
     )
+    from kiro.response_cache import ResponseCache
     if RESPONSE_CACHE_ENABLED:
         app.state.response_cache = ResponseCache(
             max_entries=RESPONSE_CACHE_MAX_ENTRIES,
@@ -721,7 +722,6 @@ def print_startup_banner(host: str, port: int) -> None:
     """
     # ANSI color codes
     GREEN = "\033[92m"
-    CYAN = "\033[96m"
     YELLOW = "\033[93m"
     WHITE = "\033[97m"
     BOLD = "\033[1m"
