@@ -1,0 +1,164 @@
+"""Tests for _emit_gateway_baseline — Step 1b non-streaming emit."""
+
+from __future__ import annotations
+
+import time
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from fastapi import Request
+
+from kiro.routes_anthropic import _emit_gateway_baseline
+
+
+def _make_request_with_writer(writer: AsyncMock | None = None) -> Request:
+    """Minimal Request stub with app.state.baselines_writer wired."""
+    app = MagicMock()
+    app.state = MagicMock()
+    if writer is None:
+        app.state.baselines_writer = None
+    else:
+        app.state.baselines_writer = writer
+    req = MagicMock(spec=Request)
+    req.app = app
+    return req
+
+
+@pytest.mark.asyncio
+async def test_emits_record_with_expected_shape() -> None:
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    response_body = {
+        "id": "msg_123",
+        "model": "claude-opus-4-7",
+        "usage": {
+            "input_tokens": 42,
+            "output_tokens": 7,
+            "cache_read_input_tokens": 10,
+            "cache_creation_input_tokens": 5,
+        },
+    }
+
+    ts_before = time.time()
+    await _emit_gateway_baseline(
+        request,
+        response_body=response_body,
+        request_model="claude-opus-4-7",
+        session_id_gw="sess-abc",
+        cache_key="0123456789abcdef" + "extra",
+        upstream_ms=120,
+        gateway_cache="miss",
+        status=200,
+    )
+    ts_after = time.time()
+
+    assert writer.write.call_count == 1
+    args, _kwargs = writer.write.call_args
+    assert args[0] == "gateway-requests"
+    rec = args[1]
+    assert rec["message_id"] == "msg_123"
+    assert rec["session_id_gw"] == "sess-abc"
+    assert rec["cache_key"] == "0123456789abcdef"  # clamped to 16 chars
+    assert rec["model"] == "claude-opus-4-7"
+    assert rec["input_tokens"] == 42
+    assert rec["output_tokens"] == 7
+    assert rec["cache_read_input_tokens"] == 10
+    assert rec["cache_creation_input_tokens"] == 5
+    assert rec["upstream_ms_first_token"] == 120
+    assert rec["gateway_cache"] == "miss"
+    assert rec["stream"] is False
+    assert rec["status"] == 200
+    assert ts_before <= rec["ts"] <= ts_after
+
+
+@pytest.mark.asyncio
+async def test_cache_hit_emits_with_none_upstream_ms() -> None:
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    await _emit_gateway_baseline(
+        request,
+        response_body={"id": "msg_hit", "usage": {}},
+        request_model="claude-opus-4-7",
+        session_id_gw="sess-x",
+        cache_key="k" * 32,
+        upstream_ms=None,
+        gateway_cache="hit",
+        status=200,
+    )
+    rec = writer.write.call_args.args[1]
+    assert rec["upstream_ms_first_token"] is None
+    assert rec["gateway_cache"] == "hit"
+
+
+@pytest.mark.asyncio
+async def test_missing_writer_is_no_op() -> None:
+    request = _make_request_with_writer(writer=None)
+    # must not raise even though no writer is installed
+    await _emit_gateway_baseline(
+        request,
+        response_body={"id": "msg_x", "usage": {}},
+        request_model="m",
+        session_id_gw=None,
+        cache_key=None,
+        upstream_ms=None,
+        gateway_cache="bypass",
+        status=200,
+    )
+
+
+@pytest.mark.asyncio
+async def test_writer_failure_is_swallowed(caplog: pytest.LogCaptureFixture) -> None:
+    writer = AsyncMock()
+    writer.write.side_effect = RuntimeError("disk full")
+    request = _make_request_with_writer(writer)
+
+    # must not raise
+    await _emit_gateway_baseline(
+        request,
+        response_body={"id": "msg_y", "usage": {"input_tokens": 1, "output_tokens": 1}},
+        request_model="m",
+        session_id_gw="s",
+        cache_key=None,
+        upstream_ms=5,
+        gateway_cache="miss",
+        status=200,
+    )
+    assert writer.write.called
+
+
+@pytest.mark.asyncio
+async def test_null_cache_key_passed_through() -> None:
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    await _emit_gateway_baseline(
+        request,
+        response_body={"id": "msg_z", "usage": {}},
+        request_model="m",
+        session_id_gw=None,
+        cache_key=None,
+        upstream_ms=10,
+        gateway_cache="bypass",
+        status=200,
+    )
+    rec = writer.write.call_args.args[1]
+    assert rec["cache_key"] is None
+    assert rec["session_id_gw"] is None
+
+
+@pytest.mark.asyncio
+async def test_missing_usage_emits_none_tokens() -> None:
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    await _emit_gateway_baseline(
+        request,
+        response_body={"id": "msg_no_usage"},  # no usage key
+        request_model="m",
+        session_id_gw="s",
+        cache_key=None,
+        upstream_ms=1,
+        gateway_cache="miss",
+        status=200,
+    )
+    rec = writer.write.call_args.args[1]
+    assert rec["input_tokens"] is None
+    assert rec["output_tokens"] is None
