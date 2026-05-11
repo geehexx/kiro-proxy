@@ -7,8 +7,7 @@ Caches upstream responses keyed by request prefix (system + messages except
 the trailing user turn + model + max_tokens + tool signature). Session-scoped
 via session_id to prevent cross-session context leaks.
 
-Phase 1: in-memory LRU, bounded by entry count and total bytes. Phase 2
-(future) may add disk persistence.
+In-memory LRU, bounded by entry count and total bytes.
 
 Why this exists: Anthropic cache_control beta is dropped by this gateway
 (converters_anthropic.py lines 87 and 105), and AWS Q upstream does not
@@ -73,6 +72,7 @@ def make_key(
     model: str,
     max_tokens: int,
     tools: list[dict[str, Any]] | None = None,
+    thinking: Any = None,
 ) -> str:
     """Derive a deterministic SHA256 cache key.
 
@@ -93,6 +93,7 @@ def make_key(
         "model": model,
         "max_tokens": max_tokens,
         "tool_signature": _tool_signature(tools),
+        "thinking": thinking,
     }
     serialised = _canonical(key_material).encode("utf-8")
     return hashlib.sha256(serialised).hexdigest()
@@ -181,8 +182,8 @@ class ResponseCache:
     def invalidate_session(self, session_id: str) -> int:
         """Evict all entries for a session_id.
 
-        Phase 1: clears the whole cache. session_id is baked into the hash
-        so we cannot target without a secondary index. Phase 2 may add one.
+        Currently clears the whole cache because session_id is baked into
+        the hash and cannot be targeted without a secondary index.
         """
         with self._lock:
             count = len(self._entries)

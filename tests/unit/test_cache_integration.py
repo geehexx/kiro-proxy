@@ -28,9 +28,24 @@ from kiro.response_cache import ResponseCache
 
 
 class TestDeriveSessionId:
-    def test_client_header_beats_api_key(self) -> None:
-        sid = derive_session_id(api_key="key-abc", client_header="session-xyz")
-        assert sid == derive_session_id(None, "session-xyz")
+    def test_client_header_with_api_key_is_deterministic(self) -> None:
+        # Same api_key + same header → same session ID
+        sid1 = derive_session_id(api_key="key-abc", client_header="session-xyz")
+        sid2 = derive_session_id(api_key="key-abc", client_header="session-xyz")
+        assert sid1 == sid2
+
+    def test_different_api_keys_same_header_get_different_sessions(self) -> None:
+        # Security fix: two clients with different API keys but the same
+        # X-Kiro-Session-Id header must NOT share a cache bucket.
+        sid_a = derive_session_id(api_key="key-a", client_header="session-xyz")
+        sid_b = derive_session_id(api_key="key-b", client_header="session-xyz")
+        assert sid_a != sid_b
+
+    def test_no_api_key_header_only_is_deterministic(self) -> None:
+        # When no api_key is present, header alone determines the session.
+        sid1 = derive_session_id(None, "session-xyz")
+        sid2 = derive_session_id(None, "session-xyz")
+        assert sid1 == sid2
 
     def test_api_key_hashes_deterministically(self) -> None:
         assert derive_session_id("key-abc", None) == derive_session_id("key-abc", None)
