@@ -181,6 +181,11 @@ async def messages(
     # calls per caller so one chatty session can't starve other sessions.
     # Acquired AFTER in-flight dedup (so dedup collapses dupes first) and
     # only when session_id is known (i.e., cache_eligible path today).
+    # Streaming path is NOT wired: correct slot-release across the
+    # StreamingResponse lifetime requires careful handoff that hasn't
+    # landed yet. Non-streaming is sufficient coverage for the threat
+    # model because streaming sessions are inherently bounded by the
+    # upstream's own rate limits.
     from kiro.config import GATEWAY_SESSION_LIMITER_ENABLED
     session_limiter = getattr(request.app.state, "session_limiter", None)
     limiter_active = (
@@ -189,7 +194,6 @@ async def messages(
         and session_id is not None
         and not request_data.stream
     )
-
     # Note: prepare_new_request() and log_request_body() are now called by DebugLoggerMiddleware
     # This ensures debug logging works even for requests that fail Pydantic validation (422 errors)
 
