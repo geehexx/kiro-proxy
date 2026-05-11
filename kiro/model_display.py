@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Human-readable presentation of Claude model identifiers.
@@ -49,23 +48,27 @@ _NON_CLAUDE_DISPLAY: dict[str, str] = {
 
 
 def canonical_model_id(name: str) -> str:
-    """
-    Return the canonical dotted form of a Claude model identifier.
+    """Return the canonical dotted form of a Claude model identifier.
 
-    Examples
-    --------
-    >>> canonical_model_id("claude-opus-4-7")
-    'claude-opus-4.7'
-    >>> canonical_model_id("claude-sonnet-4-5-20250929")
-    'claude-sonnet-4.5'
-    >>> canonical_model_id("claude-haiku-4-5-latest")
-    'claude-haiku-4.5'
-    >>> canonical_model_id("claude-opus-4.7")
-    'claude-opus-4.7'
-    >>> canonical_model_id("")
-    ''
+    Args:
+        name: Raw model identifier string (any format).
 
-    The function is idempotent and side-effect free.
+    Returns:
+        Canonical dotted form, e.g. ``"claude-opus-4.7"``.
+        Returns ``""`` for empty or whitespace-only input.
+        Non-Claude identifiers are returned unchanged.
+
+    Examples:
+        >>> canonical_model_id("claude-opus-4-7")
+        'claude-opus-4.7'
+        >>> canonical_model_id("claude-sonnet-4-5-20250929")
+        'claude-sonnet-4.5'
+        >>> canonical_model_id("claude-haiku-4-5-latest")
+        'claude-haiku-4.5'
+        >>> canonical_model_id("claude-opus-4.7")
+        'claude-opus-4.7'
+        >>> canonical_model_id("")
+        ''
     """
     if not name:
         return ""
@@ -105,23 +108,22 @@ def canonical_model_id(name: str) -> str:
 
 
 def display_name(model_id: str) -> str:
-    """
-    Build a human-readable label for a model picker.
+    """Build a human-readable label for a model picker.
 
-    Examples
-    --------
-    >>> display_name("claude-opus-4.7")
-    'Claude Opus 4.7'
-    >>> display_name("claude-opus-4-7")
-    'Claude Opus 4.7'
-    >>> display_name("claude-sonnet-4")
-    'Claude Sonnet 4'
-    >>> display_name("auto-kiro")
-    'Auto (Kiro)'
-    >>> display_name("deepseek-3.2")
-    'DeepSeek 3.2'
-    >>> display_name("")
-    ''
+    Args:
+        model_id: Raw or canonical model identifier.
+
+    Returns:
+        Human-readable label, e.g. ``"Claude Opus 4.7"``.
+        Returns ``""`` for empty input.
+
+    Examples:
+        >>> display_name("claude-opus-4.7")
+        'Claude Opus 4.7'
+        >>> display_name("auto-kiro")
+        'Auto (Kiro)'
+        >>> display_name("")
+        ''
     """
     if not model_id:
         return ""
@@ -154,9 +156,13 @@ def display_name(model_id: str) -> str:
 
 
 def describe_model(model_id: str) -> Optional[str]:
-    """
-    Return a short one-line description for a model, suitable for a
-    picker tooltip. Returns ``None`` when no curated description exists.
+    """Return a short one-line description for a model, suitable for a picker tooltip.
+
+    Args:
+        model_id: Raw or canonical model identifier.
+
+    Returns:
+        One-line description string, or ``None`` when no curated description exists.
     """
     canonical = canonical_model_id(model_id).lower()
     if canonical.startswith("claude-opus"):

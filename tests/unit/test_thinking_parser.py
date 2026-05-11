@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Unit tests for ThinkingParser - FSM-based parser for thinking blocks in streaming responses.

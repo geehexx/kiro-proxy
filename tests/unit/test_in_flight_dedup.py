@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Unit tests for kiro.in_flight_dedup - request coalescing.

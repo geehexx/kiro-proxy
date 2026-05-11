@@ -125,6 +125,9 @@ class TestPropertyInvariants:
 
     @given(st.text(max_size=80))
     def test_canonical_preserves_empty(self, raw: str) -> None:
-        """canonical('') == '' and canonical(x) is '' iff x.strip() is ''."""
+        """canonical(x) == '' if and only if x.strip() == ''."""
+        result = canonical_model_id(raw)
         if raw.strip() == "":
-            assert canonical_model_id(raw) == ""
+            assert result == ""
+        else:
+            assert result != ""

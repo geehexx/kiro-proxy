@@ -1,5 +1,4 @@
 
-# -*- coding: utf-8 -*-
 
 """
 Unit tests for streaming_anthropic module.

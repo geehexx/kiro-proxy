@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Tests for kiro/cache_integration.py — the glue between the route
