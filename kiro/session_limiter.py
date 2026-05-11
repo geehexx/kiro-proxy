@@ -5,10 +5,25 @@ Caps the number of in-flight upstream calls per caller (session) so that
 one session making many parallel tool calls cannot starve the shared
 httpx connection pool for other sessions.
 
-Usage:
+Usage (async-with, for work that completes inside a single handler):
     limiter = SessionLimiter(default_concurrency=8)
     async with limiter.acquire(session_id):
         response = await upstream.call(...)
+
+Usage (explicit slot, for work that outlives the handler — e.g. the
+body of a StreamingResponse which runs AFTER the handler returns):
+    slot = await limiter.acquire_slot(session_id)
+    try:
+        initial = await upstream.call(...)
+        async def stream_wrapper():
+            try:
+                async for chunk in initial.aiter_bytes(): yield chunk
+            finally:
+                slot.release()
+        return StreamingResponse(stream_wrapper(), ...)
+    except Exception:
+        slot.release()
+        raise
 
 Semantics:
 - One `asyncio.Semaphore(N)` per session_id. Sessions are created on
@@ -32,6 +47,25 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+
+
+class SessionLimiterSlot:
+    """A held semaphore slot from SessionLimiter.acquire_slot().
+
+    Call release() exactly once. Idempotent — second release is a no-op,
+    so a `finally: slot.release()` after a success-path release is safe.
+    """
+
+    __slots__ = ("_sem", "_released")
+
+    def __init__(self, sem: asyncio.Semaphore) -> None:
+        self._sem = sem
+        self._released = False
+
+    def release(self) -> None:
+        if not self._released:
+            self._sem.release()
+            self._released = True
 
 
 class SessionLimiter:
@@ -77,6 +111,21 @@ class SessionLimiter:
             self.waits += 1
         async with sem:
             yield
+
+    async def acquire_slot(self, session_id: str) -> SessionLimiterSlot:
+        """Acquire a slot and return a releasable handle.
+
+        Use this for work whose lifetime exceeds the current handler
+        scope — e.g. StreamingResponse bodies that run AFTER the handler
+        returns. Caller MUST ensure release() is eventually called
+        (typically in a finally: block in the stream generator).
+        """
+        sem = await self._get_or_create(session_id)
+        self.acquires += 1
+        if sem.locked():
+            self.waits += 1
+        await sem.acquire()
+        return SessionLimiterSlot(sem)
 
     def stats(self) -> dict[str, int]:
         return {
