@@ -655,6 +655,8 @@ class TestAccountManagerLoadState:
         assert account.last_failure_time == 1704110400.0
         assert account.models_cached_at == 1704106800.0
         assert account.stats.total_requests == 100
+        assert account.stats.successful_requests == 97
+        assert account.stats.failed_requests == 3
 
     @pytest.mark.asyncio
     async def test_load_state_file_not_found(self, tmp_path):
