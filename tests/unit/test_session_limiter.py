@@ -153,3 +153,53 @@ async def test_session_sem_reused_across_acquires() -> None:
     async with limiter.acquire("a"):
         pass
     assert limiter.stats()["sessions"] == 1
+
+
+@pytest.mark.asyncio
+async def test_acquire_slot_holds_capacity_until_release() -> None:
+    """acquire_slot() takes a slot that only frees on explicit release()."""
+    limiter = SessionLimiter(default_concurrency=1)
+    slot = await limiter.acquire_slot("a")
+
+    # Another acquire on the same session must block while the slot is held.
+    second_done = asyncio.Event()
+
+    async def second() -> None:
+        async with limiter.acquire("a"):
+            second_done.set()
+
+    task = asyncio.create_task(second())
+    # Give the second task time to enter acquire() and hit the locked semaphore
+    await asyncio.sleep(0.05)
+    assert not second_done.is_set()
+
+    slot.release()
+    await asyncio.wait_for(second_done.wait(), timeout=0.5)
+    await task
+
+
+@pytest.mark.asyncio
+async def test_acquire_slot_release_is_idempotent() -> None:
+    """Double-release must not over-release the semaphore."""
+    limiter = SessionLimiter(default_concurrency=1)
+    slot = await limiter.acquire_slot("a")
+    slot.release()
+    slot.release()  # idempotent; no effect
+
+    # Capacity should be 1, not 2 — double-release would let 2 concurrent holders in.
+    held_count = 0
+    peak = 0
+    lock = asyncio.Lock()
+
+    async def w() -> None:
+        nonlocal held_count, peak
+        async with limiter.acquire("a"):
+            async with lock:
+                held_count += 1
+                peak = max(peak, held_count)
+            await asyncio.sleep(0.02)
+            async with lock:
+                held_count -= 1
+
+    await asyncio.gather(*[w() for _ in range(4)])
+    assert peak == 1, f"double-release leaked capacity: peak {peak} > 1"
