@@ -376,6 +376,13 @@ async def lifespan(app: FastAPI):
         app.state.response_cache = None
         logger.info("Response cache disabled (set RESPONSE_CACHE_ENABLED=true to enable)")
 
+    # In-flight dedup singleton — coalesces concurrent identical non-streaming
+    # requests so only one upstream call fires. Wired into routes_anthropic.py
+    # on the non-streaming path (cache_eligible only).
+    from kiro.in_flight_dedup import InFlightDedup
+    app.state.in_flight_dedup = InFlightDedup()
+    logger.info("In-flight dedup initialized")
+
     # ==============================================================================
     # Legacy Fallback: .env → credentials.json
     # ==============================================================================
