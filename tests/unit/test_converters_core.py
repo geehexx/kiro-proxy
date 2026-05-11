@@ -13,8 +13,6 @@ Tests for shared conversion logic used by both OpenAI and Anthropic adapters:
 import os
 from unittest.mock import patch
 
-import pytest
-
 from kiro.converters_core import (
     ThinkingConfig,
     UnifiedMessage,
@@ -6361,7 +6359,7 @@ class TestInjectThinkingTagsWithConfig:
         What it does: Verifies that budget > cap is capped and WARNING is logged
         Purpose: Ensure cap prevents excessive thinking budget
         """
-        from unittest.mock import call, patch
+        from unittest.mock import patch
 
         print("Setting FAKE_REASONING_ENABLED=True, cap=10000...")
         monkeypatch.setattr("kiro.converters_core.FAKE_REASONING_ENABLED", True)

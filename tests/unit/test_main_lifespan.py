@@ -11,10 +11,7 @@ Tests cover:
 
 import asyncio
 import json
-import sys
-from contextlib import asynccontextmanager
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, Mock, call, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 

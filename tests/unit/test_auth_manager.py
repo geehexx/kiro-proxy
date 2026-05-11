@@ -13,7 +13,7 @@ import httpx
 import pytest
 
 from kiro.auth import AuthType, KiroAuthManager
-from kiro.config import TOKEN_REFRESH_THRESHOLD, get_aws_sso_oidc_url
+from kiro.config import TOKEN_REFRESH_THRESHOLD
 
 
 class TestKiroAuthManagerInitialization:

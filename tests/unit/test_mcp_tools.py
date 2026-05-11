@@ -12,8 +12,7 @@ Tests cover:
 """
 
 import json
-from datetime import datetime
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -24,7 +23,6 @@ from kiro.mcp_tools import (
     generate_openai_web_search_sse,
     generate_random_id,
     generate_search_summary,
-    handle_native_web_search,
 )
 
 # ==================================================================================================

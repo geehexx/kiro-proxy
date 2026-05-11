@@ -6,10 +6,7 @@ Tests check_payload_size() and trim_payload_to_limit() functions.
 
 import json
 
-import pytest
-
 from kiro.payload_guards import (
-    PayloadTrimStats,
     check_payload_size,
     trim_payload_to_limit,
 )

@@ -12,7 +12,6 @@ Tests cover:
 
 import threading
 import time
-from typing import List
 
 import pytest
 

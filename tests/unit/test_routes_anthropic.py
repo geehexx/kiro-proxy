@@ -9,13 +9,10 @@ Tests the following endpoint:
 For OpenAI API tests, see test_routes_openai.py.
 """
 
-import json
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
 
 from kiro.config import PROXY_API_KEY
 from kiro.routes_anthropic import router, verify_anthropic_api_key
@@ -1512,7 +1509,7 @@ class TestContentTruncationRecovery:
         ]
 
         print("Action: Processing messages through content truncation recovery...")
-        from kiro.truncation_recovery import generate_truncation_user_message, should_inject_recovery
+        from kiro.truncation_recovery import generate_truncation_user_message
         from kiro.truncation_state import get_content_truncation
 
         modified_messages = []
@@ -1773,7 +1770,7 @@ class TestMessagesFailoverLoop:
         Purpose: Ensure failover loop returns immediately on success.
         """
         print("Setup: Mock successful response on first account...")
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import AsyncMock
 
         from kiro.account_manager import Account, AccountStats
 
