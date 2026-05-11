@@ -64,7 +64,7 @@ async def test_emits_record_with_expected_shape() -> None:
     assert rec["output_tokens"] == 7
     assert rec["cache_read_input_tokens"] == 10
     assert rec["cache_creation_input_tokens"] == 5
-    assert rec["upstream_ms_first_token"] == 120
+    assert rec["upstream_ms_total"] == 120
     assert rec["gateway_cache"] == "miss"
     assert rec["stream"] is False
     assert rec["status"] == 200
@@ -86,7 +86,7 @@ async def test_cache_hit_emits_with_none_upstream_ms() -> None:
         status=200,
     )
     rec = writer.write.call_args.args[1]
-    assert rec["upstream_ms_first_token"] is None
+    assert rec["upstream_ms_total"] is None
     assert rec["gateway_cache"] == "hit"
 
 
