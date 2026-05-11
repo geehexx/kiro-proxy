@@ -72,7 +72,7 @@ class NetworkErrorInfo:
     """
     category: ErrorCategory
     user_message: str
-    troubleshooting_steps: List[str]
+    troubleshooting_steps: list[str]
     technical_details: str
     is_retryable: bool
     suggested_http_code: int
@@ -357,7 +357,7 @@ def format_error_for_user(
     error_info: NetworkErrorInfo,
     format_type: str = "openai",
     include_troubleshooting: bool = True
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Formats NetworkErrorInfo for API response.
 

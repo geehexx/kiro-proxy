@@ -143,7 +143,7 @@ class ModelAccountList:
 
     Note: next_index removed - now using global _current_account_index
     """
-    accounts: List[str] = field(default_factory=list)
+    accounts: list[str] = field(default_factory=list)
 
 
 class AccountManager:
@@ -175,11 +175,11 @@ class AccountManager:
         """
         self._credentials_file = credentials_file
         self._state_file = state_file
-        self._accounts: Dict[str, Account] = {}
-        self._model_to_accounts: Dict[str, ModelAccountList] = {}
+        self._accounts: dict[str, Account] = {}
+        self._model_to_accounts: dict[str, ModelAccountList] = {}
         self._lock = asyncio.Lock()
         self._dirty = False
-        self._credentials_config: List[Dict] = []
+        self._credentials_config: list[dict] = []
         self._current_account_index: int = 0  # GLOBAL sticky index for all models
 
     async def load_credentials(self) -> None:
@@ -808,7 +808,7 @@ class AccountManager:
                 return account
         raise RuntimeError("No initialized accounts available")
 
-    def get_all_available_models(self) -> List[str]:
+    def get_all_available_models(self) -> list[str]:
         """
         Collect unique models from all initialized accounts.
 

@@ -31,7 +31,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 
-def sanitize_validation_errors(errors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def sanitize_validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     Converts validation errors to JSON-serializable format.
 

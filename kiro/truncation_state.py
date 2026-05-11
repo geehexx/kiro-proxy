@@ -48,7 +48,7 @@ class ToolTruncationInfo:
     """
     tool_call_id: str
     tool_name: str
-    truncation_info: Dict
+    truncation_info: dict
     timestamp: float
 
 
@@ -72,12 +72,12 @@ class ContentTruncationInfo:
 # 1. Retrieved via get_* functions (one-time retrieval deletes entry)
 # 2. Gateway restart (in-memory cache is cleared)
 # No TTL - if user takes a break for hours, truncation info should still be available
-_tool_truncation_cache: Dict[str, ToolTruncationInfo] = {}
-_content_truncation_cache: Dict[str, ContentTruncationInfo] = {}
+_tool_truncation_cache: dict[str, ToolTruncationInfo] = {}
+_content_truncation_cache: dict[str, ContentTruncationInfo] = {}
 _cache_lock = Lock()
 
 
-def save_tool_truncation(tool_call_id: str, tool_name: str, truncation_info: Dict) -> None:
+def save_tool_truncation(tool_call_id: str, tool_name: str, truncation_info: dict) -> None:
     """
     Save truncation info for a specific tool call.
 
@@ -191,7 +191,7 @@ def get_content_truncation(content: str) -> Optional[ContentTruncationInfo]:
 
 
 
-def get_cache_stats() -> Dict[str, int]:
+def get_cache_stats() -> dict[str, int]:
     """
     Get current cache statistics.
 

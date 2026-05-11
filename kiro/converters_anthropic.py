@@ -112,7 +112,7 @@ def extract_system_prompt(system: Any) -> str:
     return str(system)
 
 
-def extract_tool_results_from_anthropic_content(content: Any) -> List[Dict[str, Any]]:
+def extract_tool_results_from_anthropic_content(content: Any) -> list[dict[str, Any]]:
     """
     Extracts tool results from Anthropic message content.
 
@@ -161,7 +161,7 @@ def extract_tool_results_from_anthropic_content(content: Any) -> List[Dict[str, 
     return tool_results
 
 
-def extract_images_from_tool_results(content: Any) -> List[Dict[str, Any]]:
+def extract_images_from_tool_results(content: Any) -> list[dict[str, Any]]:
     """
     Extracts images from tool_result content blocks.
 
@@ -174,7 +174,7 @@ def extract_images_from_tool_results(content: Any) -> List[Dict[str, Any]]:
     Returns:
         List of images in unified format: [{"media_type": "image/jpeg", "data": "base64..."}]
     """
-    images: List[Dict[str, Any]] = []
+    images: list[dict[str, Any]] = []
 
     if not isinstance(content, list):
         return images
@@ -201,7 +201,7 @@ def extract_images_from_tool_results(content: Any) -> List[Dict[str, Any]]:
     return images
 
 
-def extract_tool_uses_from_anthropic_content(content: Any) -> List[Dict[str, Any]]:
+def extract_tool_uses_from_anthropic_content(content: Any) -> list[dict[str, Any]]:
     """
     Extracts tool uses from Anthropic assistant message content.
 
@@ -253,8 +253,8 @@ def extract_tool_uses_from_anthropic_content(content: Any) -> List[Dict[str, Any
 
 
 def convert_anthropic_messages(
-    messages: List[AnthropicMessage],
-) -> List[UnifiedMessage]:
+    messages: list[AnthropicMessage],
+) -> list[UnifiedMessage]:
     """
     Converts Anthropic messages to unified format.
 
@@ -334,8 +334,8 @@ def convert_anthropic_messages(
 
 
 def convert_anthropic_tools(
-    tools: Optional[List[AnthropicTool]],
-) -> Optional[List[UnifiedTool]]:
+    tools: Optional[list[AnthropicTool]],
+) -> Optional[list[UnifiedTool]]:
     """
     Converts Anthropic tools to unified format.
 

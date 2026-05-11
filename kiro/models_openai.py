@@ -27,7 +27,7 @@ import time
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
-from typing_extensions import Annotated
+from typing import Annotated
 
 # ==================================================================================================
 # Models for /v1/models endpoint
@@ -60,7 +60,7 @@ class ModelList(BaseModel):
     Response of GET /v1/models endpoint.
     """
     object: str = "list"
-    data: List[OpenAIModel]
+    data: list[OpenAIModel]
 
 
 # ==================================================================================================
@@ -82,9 +82,9 @@ class ChatMessage(BaseModel):
         tool_call_id: Tool call ID (for tool)
     """
     role: str
-    content: Optional[Union[str, List[Any], Any]] = None
+    content: Optional[str | list[Any] | Any] = None
     name: Optional[str] = None
-    tool_calls: Optional[List[Any]] = None
+    tool_calls: Optional[list[Any]] = None
     tool_call_id: Optional[str] = None
 
     model_config = {"extra": "allow"}
@@ -101,7 +101,7 @@ class ToolFunction(BaseModel):
     """
     name: str
     description: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
+    parameters: Optional[dict[str, Any]] = None
 
 
 class Tool(BaseModel):
@@ -126,7 +126,7 @@ class Tool(BaseModel):
     # Flat format fields (Cursor-style)
     name: Optional[str] = None
     description: Optional[str] = None
-    input_schema: Optional[Dict[str, Any]] = None
+    input_schema: Optional[dict[str, Any]] = None
 
     model_config = {"extra": "allow"}
 
@@ -157,7 +157,7 @@ class ChatCompletionRequest(BaseModel):
         tool_choice: Tool selection strategy
     """
     model: str
-    messages: Annotated[List[ChatMessage], Field(min_length=1)]
+    messages: Annotated[list[ChatMessage], Field(min_length=1)]
     stream: bool = False
 
     # Generation parameters
@@ -166,7 +166,7 @@ class ChatCompletionRequest(BaseModel):
     n: Optional[int] = 1
     max_tokens: Optional[int] = None
     max_completion_tokens: Optional[int] = None
-    stop: Optional[Union[str, List[str]]] = None
+    stop: Optional[str | list[str]] = None
     presence_penalty: Optional[float] = None
     frequency_penalty: Optional[float] = None
 
@@ -175,12 +175,12 @@ class ChatCompletionRequest(BaseModel):
     reasoning_effort: Optional[Literal["none", "minimal", "low", "medium", "high", "xhigh"]] = None
 
     # Tools (function calling)
-    tools: Optional[List[Tool]] = None
-    tool_choice: Optional[Union[str, Dict]] = None
+    tools: Optional[list[Tool]] = None
+    tool_choice: Optional[str | dict] = None
 
     # Compatibility fields (ignored)
-    stream_options: Optional[Dict[str, Any]] = None
-    logit_bias: Optional[Dict[str, float]] = None
+    stream_options: Optional[dict[str, Any]] = None
+    logit_bias: Optional[dict[str, float]] = None
     logprobs: Optional[bool] = None
     top_logprobs: Optional[int] = None
     user: Optional[str] = None
@@ -204,7 +204,7 @@ class ChatCompletionChoice(BaseModel):
         finish_reason: Completion reason (stop, tool_calls, length)
     """
     index: int = 0
-    message: Dict[str, Any]
+    message: dict[str, Any]
     finish_reason: Optional[str] = None
 
 
@@ -240,7 +240,7 @@ class ChatCompletionResponse(BaseModel):
     object: str = "chat.completion"
     created: int = Field(default_factory=lambda: int(time.time()))
     model: str
-    choices: List[ChatCompletionChoice]
+    choices: list[ChatCompletionChoice]
     usage: ChatCompletionUsage
 
 
@@ -255,7 +255,7 @@ class ChatCompletionChunkDelta(BaseModel):
     """
     role: Optional[str] = None
     content: Optional[str] = None
-    tool_calls: Optional[List[Dict[str, Any]]] = None
+    tool_calls: Optional[list[dict[str, Any]]] = None
 
 
 class ChatCompletionChunkChoice(BaseModel):
@@ -288,5 +288,5 @@ class ChatCompletionChunk(BaseModel):
     object: str = "chat.completion.chunk"
     created: int = Field(default_factory=lambda: int(time.time()))
     model: str
-    choices: List[ChatCompletionChunkChoice]
+    choices: list[ChatCompletionChunkChoice]
     usage: Optional[ChatCompletionUsage] = None
