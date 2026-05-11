@@ -100,6 +100,10 @@ def classify_error(status_code: int, reason: Optional[str]) -> ErrorType:
     if status_code == 429:
         return ErrorType.RECOVERABLE
 
+    # RECOVERABLE: Conflict / request already in progress — retry after delay
+    if status_code == 409:
+        return ErrorType.RECOVERABLE
+
     # 400 errors - depends on reason
     if status_code == 400:
 
