@@ -169,8 +169,6 @@ async def parse_kiro_stream(
             debug_logger.log_raw_chunk(first_byte_chunk)
 
         async for event in _process_chunk(parser, first_byte_chunk, thinking_parser):
-            if event.type == "content" or event.type == "thinking":
-                pass  # first token received; variable unused but branch kept for clarity
             yield event
 
         # Continue reading remaining chunks

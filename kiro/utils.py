@@ -124,13 +124,10 @@ def generate_conversation_id(messages: List[Dict[str, Any]] = None) -> str:
         # Fallback to random UUID for backward compatibility
         return str(uuid.uuid4())
 
-    # Use first 3 messages + last message for stability
-    # This ensures the ID stays the same as conversation grows,
-    # but changes if the conversation history is different
-    if len(messages) <= 3:
-        key_messages = messages
-    else:
-        key_messages = messages[:3] + [messages[-1]]
+    # Use only the first 3 messages for stability — including messages[-1]
+    # would change the ID on every turn as the conversation grows, breaking
+    # truncation-recovery correlation across requests.
+    key_messages = messages[:3]
 
     # Extract role and first 100 chars of content for hashing
     # This makes the hash stable even if content has minor formatting differences
