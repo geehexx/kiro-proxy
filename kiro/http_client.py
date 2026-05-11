@@ -258,6 +258,15 @@ class KiroHttpClient:
                         await asyncio.sleep(delay)
                     continue
 
+                # 409 - conflict / request already in progress, retry with backoff
+                if response.status_code == 409:
+                    last_response = response
+                    if attempt < max_retries - 1:
+                        delay = BASE_RETRY_DELAY * (2 ** attempt)
+                        logger.warning(f"Received 409, waiting {delay}s (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(delay)
+                    continue
+
                 # 5xx - server error, wait and retry
                 if 500 <= response.status_code < 600:
                     last_response = response  # Retain to return after retry exhaustion
