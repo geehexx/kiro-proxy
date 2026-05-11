@@ -178,7 +178,7 @@ class ResponseCache:
                     return False
             return True
 
-    def invalidate_session(self, session_id: str) -> int:
+    def invalidate_session(self, _session_id: str) -> int:
         """Evict all entries for a session_id.
 
         Currently clears the whole cache because session_id is baked into

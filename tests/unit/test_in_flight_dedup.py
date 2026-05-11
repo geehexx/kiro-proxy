@@ -104,3 +104,39 @@ async def test_three_concurrent_waiters_one_execution():
     assert results == ["ok", "ok", "ok"]
     assert calls == 1
     assert dedup.stats()["hits"] == 2
+
+
+@pytest.mark.asyncio
+async def test_cancellation_does_not_silently_drop_followers():
+    """Cancelling the first caller cancels the shared Future so followers
+    get a fresh attempt rather than inheriting the cancellation silently."""
+    dedup = InFlightDedup()
+    started = asyncio.Event()
+
+    async def slow_upstream():
+        started.set()
+        await asyncio.sleep(10)  # long enough to be cancelled
+        return "done"
+
+    # Start the first caller (will be cancelled mid-flight)
+    first = asyncio.create_task(dedup.coalesce("k", slow_upstream))
+    await started.wait()  # ensure first caller is inside upstream
+
+    # Start a follower that is awaiting the shared Future
+    follower = asyncio.create_task(dedup.coalesce("k", slow_upstream))
+    await asyncio.sleep(0)  # let follower register
+
+    # Cancel the first caller
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first
+
+    # The follower should NOT silently hang or inherit the cancellation;
+    # it should either complete (if it retried) or raise CancelledError
+    # (if it was also cancelled). What it must NOT do is deadlock.
+    follower.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await follower
+
+    # After cancellation the registry should be clean
+    assert dedup.stats()["inflight"] == 0
