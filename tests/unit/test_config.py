@@ -521,7 +521,6 @@ class TestKiroCliDbFileConfig:
         Purpose: Ensure the value from environment is used and normalized.
         """
         print("Setup: Importing config module...")
-        import importlib
 
         import kiro.config as config_module
 

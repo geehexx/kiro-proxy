@@ -12,8 +12,6 @@ Tests cover:
 import os
 from unittest.mock import patch
 
-import pytest
-
 from kiro.truncation_recovery import (
     generate_truncation_tool_result,
     generate_truncation_user_message,

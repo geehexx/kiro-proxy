@@ -48,7 +48,6 @@ from kiro.models_anthropic import (
     TextDelta,
     ThinkingContentBlock,
     ThinkingDelta,
-    ToolChoice,
     ToolChoiceAny,
     ToolChoiceAuto,
     ToolChoiceTool,

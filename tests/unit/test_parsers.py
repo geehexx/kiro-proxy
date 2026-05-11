@@ -4,7 +4,6 @@ Unit tests for AwsEventStreamParser and auxiliary parsing functions.
 Tests the parsing logic for AWS SSE stream from Kiro API.
 """
 
-import pytest
 
 from kiro.parsers import AwsEventStreamParser, deduplicate_tool_calls, find_matching_brace, parse_bracket_tool_calls
 
