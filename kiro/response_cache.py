@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Response cache for kiro-gateway.
@@ -76,9 +75,9 @@ def make_key(
 ) -> str:
     """Derive a deterministic SHA256 cache key.
 
-    Excludes the trailing user turn so iterative conversations hit the same
-    prefix. If the last message is not a user turn (tool_result flow), the
-    full message list is included.
+    All messages are included in the key (full-request caching).
+    Prefix-only keying is valid only for upstream KV-cache activation
+    (Anthropic cache_control, which AWS Q does not support).
     """
     # All messages are included in the key (full-request caching).
     # Excluding the trailing turn is tempting for "prefix reuse" but is

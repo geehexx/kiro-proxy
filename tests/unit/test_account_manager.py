@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Tests for kiro/account_manager.py - Unified Account System.

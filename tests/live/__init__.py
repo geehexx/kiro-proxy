@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 """Live smoke tests — exercise a running kiro-gateway end-to-end.
 
 Only run when the user explicitly asks for it:

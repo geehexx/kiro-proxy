@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Unit tests for truncation_state.py - In-memory cache for truncation recovery.

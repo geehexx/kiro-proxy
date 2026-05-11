@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Property tests for cache correctness — prove we cannot serve a wrong

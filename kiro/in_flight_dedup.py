@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 In-flight request deduplication (request coalescing).

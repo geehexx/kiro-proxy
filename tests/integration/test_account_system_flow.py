@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Integration tests for Account System failover flow.

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 """
 Common fixtures and utilities for testing Kiro Gateway.
