@@ -176,6 +176,20 @@ async def messages(
         )
         session_id = derive_session_id(api_key_for_scope, client_session_id)
 
+    # Per-session concurrency limiter — default OFF via
+    # GATEWAY_SESSION_LIMITER_ENABLED. When enabled, caps concurrent upstream
+    # calls per caller so one chatty session can't starve other sessions.
+    # Acquired AFTER in-flight dedup (so dedup collapses dupes first) and
+    # only when session_id is known (i.e., cache_eligible path today).
+    from kiro.config import GATEWAY_SESSION_LIMITER_ENABLED
+    session_limiter = getattr(request.app.state, "session_limiter", None)
+    limiter_active = (
+        GATEWAY_SESSION_LIMITER_ENABLED
+        and session_limiter is not None
+        and session_id is not None
+        and not request_data.stream
+    )
+
     # Note: prepare_new_request() and log_request_body() are now called by DebugLoggerMiddleware
     # This ensures debug logging works even for requests that fail Pydantic validation (422 errors)
 
@@ -567,15 +581,27 @@ async def messages(
 
                     else:
                         # Non-streaming mode
-                        anthropic_response = await collect_anthropic_response(
-                            response,
-                            request_data.model,
-                            model_cache,
-                            auth_manager,
-                            request_messages=messages_for_tokenizer,
-                            request_tools=tools_for_tokenizer,
-                            request_system=system_for_tokenizer,
-                        )
+                        if limiter_active:
+                            async with session_limiter.acquire(session_id):
+                                anthropic_response = await collect_anthropic_response(
+                                    response,
+                                    request_data.model,
+                                    model_cache,
+                                    auth_manager,
+                                    request_messages=messages_for_tokenizer,
+                                    request_tools=tools_for_tokenizer,
+                                    request_system=system_for_tokenizer,
+                                )
+                        else:
+                            anthropic_response = await collect_anthropic_response(
+                                response,
+                                request_data.model,
+                                model_cache,
+                                auth_manager,
+                                request_messages=messages_for_tokenizer,
+                                request_tools=tools_for_tokenizer,
+                                request_system=system_for_tokenizer,
+                            )
 
                         await http_client.close()
                         # Body collected cleanly — safe to record success
@@ -952,15 +978,27 @@ async def messages(
 
         else:
             # Non-streaming mode - collect entire response
-            anthropic_response = await collect_anthropic_response(
-                response,
-                request_data.model,
-                model_cache,
-                auth_manager,
-                request_messages=messages_for_tokenizer,
-                request_tools=tools_for_tokenizer,
-                request_system=system_for_tokenizer,
-            )
+            if limiter_active:
+                async with session_limiter.acquire(session_id):
+                    anthropic_response = await collect_anthropic_response(
+                        response,
+                        request_data.model,
+                        model_cache,
+                        auth_manager,
+                        request_messages=messages_for_tokenizer,
+                        request_tools=tools_for_tokenizer,
+                        request_system=system_for_tokenizer,
+                    )
+            else:
+                anthropic_response = await collect_anthropic_response(
+                    response,
+                    request_data.model,
+                    model_cache,
+                    auth_manager,
+                    request_messages=messages_for_tokenizer,
+                    request_tools=tools_for_tokenizer,
+                    request_system=system_for_tokenizer,
+                )
 
             await http_client.close()
 

@@ -576,6 +576,13 @@ ACCOUNT_CACHE_TTL: int = int(os.getenv("ACCOUNT_CACHE_TTL", "43200"))
 # legitimately needs more parallel tool calls.
 GATEWAY_SESSION_CONCURRENCY: int = int(os.getenv("GATEWAY_SESSION_CONCURRENCY", "8"))
 
+# Per-session limiter enabled flag. Default OFF so the wiring can ship
+# without changing live behaviour; flip to true after soak-testing
+# under realistic traffic.
+GATEWAY_SESSION_LIMITER_ENABLED: bool = _parse_bool_env(
+    "GATEWAY_SESSION_LIMITER_ENABLED", default=False
+)
+
 # ==================================================================================================
 # State Persistence Settings
 # ==================================================================================================
