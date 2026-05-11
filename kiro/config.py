@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 # Kiro Gateway
 # https://github.com/jwadow/kiro-gateway
@@ -28,52 +27,76 @@ import os
 import re
 from pathlib import Path
 from typing import Dict, List, Optional
+
 from dotenv import load_dotenv
 
+
 # Load environment variables
+def _parse_bool_env(var_name: str, default: bool) -> bool:
+    """Parse a boolean environment variable accepting common truthy/falsy strings.
+
+    Accepts: "true", "1", "yes", "on" (case-insensitive) as True.
+    Accepts: "false", "0", "no", "off" (case-insensitive) as False.
+    Falls back to ``default`` when the variable is unset or empty.
+
+    Args:
+        var_name: Environment variable name.
+        default: Value to return when the variable is absent or empty.
+
+    Returns:
+        Parsed boolean value.
+    """
+    val = os.getenv(var_name, "").strip().lower()
+    if val in ("true", "1", "yes", "on"):
+        return True
+    if val in ("false", "0", "no", "off"):
+        return False
+    return default
+
+
 load_dotenv()
 
 
 def _get_raw_env_value(var_name: str, env_file: str = ".env") -> Optional[str]:
     """
     Read variable value from .env file without processing escape sequences.
-    
+
     This is necessary for correct handling of Windows paths where backslashes
     (e.g., D:\\Projects\\file.json) may be incorrectly interpreted
     as escape sequences (\\a -> bell, \\n -> newline, etc.).
-    
+
     Args:
         var_name: Environment variable name
         env_file: Path to .env file (default ".env")
-    
+
     Returns:
         Raw variable value or None if not found
     """
     env_path = Path(env_file)
     if not env_path.exists():
         return None
-    
+
     try:
         # Read file as-is, without interpretation
         content = env_path.read_text(encoding="utf-8")
-        
+
         # Search for variable considering different formats:
         # VAR="value" or VAR='value' or VAR=value
         # Pattern captures value with or without quotes
         pattern = rf'^{re.escape(var_name)}=(["\']?)(.+?)\1\s*$'
-        
+
         for line in content.splitlines():
             line = line.strip()
             if line.startswith("#") or not line:
                 continue
-            
+
             match = re.match(pattern, line)
             if match:
                 # Return value as-is, without processing escape sequences
                 return match.group(2)
     except Exception:
         pass
-    
+
     return None
 
 # ==================================================================================================
@@ -216,11 +239,11 @@ BASE_RETRY_DELAY: float = 1.0
 #
 # Why "hidden"? These models work but are not advertised by Kiro's /ListAvailableModels.
 # We expose them to our users because they're useful.
-HIDDEN_MODELS: Dict[str, str] = {
+HIDDEN_MODELS: dict[str, str] = {
     # Claude 3.7 Sonnet - legacy flagship model, still works!
     # Hidden in Kiro API but functional. Great for users who prefer it.
     "claude-3.7-sonnet": "CLAUDE_3_7_SONNET_20250219_V1_0",
-    
+
     # Add other hidden/experimental models here as discovered.
     # Example: "claude-secret-model": "INTERNAL_SECRET_MODEL_ID",
 }
@@ -250,7 +273,7 @@ HIDDEN_MODELS: Dict[str, str] = {
 #   }
 #
 # Default: {"auto-kiro": "auto"} to avoid Cursor IDE conflict
-MODEL_ALIASES: Dict[str, str] = {
+MODEL_ALIASES: dict[str, str] = {
     "auto-kiro": "auto",  # Default alias to avoid Cursor's "auto" model conflict
 }
 
@@ -264,7 +287,7 @@ MODEL_ALIASES: Dict[str, str] = {
 #   HIDDEN_FROM_LIST = ["auto", "claude-old-model"]
 #
 # Default: ["auto"] to show only "auto-kiro" alias
-HIDDEN_FROM_LIST: List[str] = ["auto"]
+HIDDEN_FROM_LIST: list[str] = ["auto"]
 
 # ==================================================================================================
 # Fallback Models Configuration (DNS Failure Recovery)
@@ -277,7 +300,7 @@ HIDDEN_FROM_LIST: List[str] = ["auto"]
 # - Some models may not be available on your Kiro plan (e.g., Opus on free tier)
 # - New models released after this version won't appear here
 # - Update gateway regularly to get the latest model list
-FALLBACK_MODELS: List[Dict[str, str]] = [
+FALLBACK_MODELS: list[dict[str, str]] = [
     {"modelId": "auto"},
     {"modelId": "claude-sonnet-4"},
     {"modelId": "claude-haiku-4.5"},
@@ -384,7 +407,7 @@ def _warn_timeout_configuration():
     """
     Print warning if timeout configuration is suboptimal.
     Called at application startup.
-    
+
     FIRST_TOKEN_TIMEOUT should be less than STREAMING_READ_TIMEOUT:
     - FIRST_TOKEN_TIMEOUT: time to wait for model to START responding
     - STREAMING_READ_TIMEOUT: time to wait BETWEEN chunks during streaming
@@ -393,18 +416,18 @@ def _warn_timeout_configuration():
         import sys
         YELLOW = "\033[93m"
         RESET = "\033[0m"
-        
+
         warning_text = f"""
 {YELLOW}⚠️  WARNING: Suboptimal timeout configuration detected.
-    
+
     FIRST_TOKEN_TIMEOUT ({FIRST_TOKEN_TIMEOUT}s) >= STREAMING_READ_TIMEOUT ({STREAMING_READ_TIMEOUT}s)
-    
+
     These timeouts serve different purposes:
       - FIRST_TOKEN_TIMEOUT: time to wait for model to START responding (default: 15s)
       - STREAMING_READ_TIMEOUT: time to wait BETWEEN chunks during streaming (default: 300s)
-    
+
     Recommendation: FIRST_TOKEN_TIMEOUT should be LESS than STREAMING_READ_TIMEOUT.
-    
+
     Example configuration:
       FIRST_TOKEN_TIMEOUT=15
       STREAMING_READ_TIMEOUT=300{RESET}
@@ -465,7 +488,7 @@ else:
 # List of opening tags to detect thinking blocks.
 # The parser will look for any of these tags at the start of the response.
 # Order matters - first match wins.
-FAKE_REASONING_OPEN_TAGS: List[str] = ["<thinking>", "<think>", "<reasoning>", "<thought>"]
+FAKE_REASONING_OPEN_TAGS: list[str] = ["<thinking>", "<think>", "<reasoning>", "<thought>"]
 
 # Maximum size of initial buffer for tag detection (characters).
 # If no thinking tag is found within this limit, content is treated as regular response.
@@ -541,6 +564,26 @@ ACCOUNT_PROBABILISTIC_RETRY_CHANCE: float = float(os.getenv("ACCOUNT_PROBABILIST
 ACCOUNT_CACHE_TTL: int = int(os.getenv("ACCOUNT_CACHE_TTL", "43200"))
 
 # ==================================================================================================
+# Per-Session Concurrency Limit
+# ==================================================================================================
+
+# Maximum concurrent upstream calls per caller session. Prevents one chatty
+# session from starving the shared httpx pool for other sessions. Acquired
+# AFTER the in-flight dedup check so dedup still collapses identical
+# concurrent requests before the semaphore is contested.
+# Default 8 matches the httpx AsyncClient pool_limits.max_connections
+# ÷ expected concurrent sessions. Raise to 16 if a single session
+# legitimately needs more parallel tool calls.
+GATEWAY_SESSION_CONCURRENCY: int = int(os.getenv("GATEWAY_SESSION_CONCURRENCY", "8"))
+
+# Per-session limiter enabled flag. Default OFF so the wiring can ship
+# without changing live behaviour; flip to true after soak-testing
+# under realistic traffic.
+GATEWAY_SESSION_LIMITER_ENABLED: bool = _parse_bool_env(
+    "GATEWAY_SESSION_LIMITER_ENABLED", default=False
+)
+
+# ==================================================================================================
 # State Persistence Settings
 # ==================================================================================================
 
@@ -553,7 +596,10 @@ STATE_SAVE_INTERVAL_SECONDS: int = int(os.getenv("STATE_SAVE_INTERVAL_SECONDS", 
 
 APP_VERSION: str = "2.4-dev.10"
 APP_TITLE: str = "Kiro Gateway"
-APP_DESCRIPTION: str = "Proxy gateway for Kiro API (Amazon Q Developer / AWS CodeWhisperer). OpenAI and Anthropic compatible. Made by @jwadow"
+APP_DESCRIPTION: str = (
+    "Proxy gateway for Kiro API (Amazon Q Developer / AWS CodeWhisperer). "
+    "OpenAI and Anthropic compatible. Made by @jwadow"
+)
 
 
 def get_kiro_refresh_url(region: str) -> str:
@@ -575,3 +621,16 @@ def get_kiro_q_host(region: str) -> str:
     """Return Q API host for the specified region."""
     return KIRO_Q_HOST_TEMPLATE.format(region=region)
 
+
+
+# ==================================================================================================
+# Response Cache (in-memory LRU, session-scoped)
+# ==================================================================================================
+# Disabled by default; enable via RESPONSE_CACHE_ENABLED=true.
+
+RESPONSE_CACHE_ENABLED: bool = _parse_bool_env("RESPONSE_CACHE_ENABLED", default=False)
+RESPONSE_CACHE_MAX_ENTRIES: int = int(os.getenv("RESPONSE_CACHE_MAX_ENTRIES", "1000"))
+RESPONSE_CACHE_MAX_BYTES: int = int(os.getenv("RESPONSE_CACHE_MAX_BYTES", str(500 * 1024 * 1024)))
+RESPONSE_CACHE_TTL_SECONDS: int = int(os.getenv("RESPONSE_CACHE_TTL_SECONDS", "3600"))
+RESPONSE_CACHE_MAX_ENTRY_BYTES: int = int(os.getenv("RESPONSE_CACHE_MAX_ENTRY_BYTES", str(5 * 1024 * 1024)))
+RESPONSE_CACHE_LOG_HITS: bool = _parse_bool_env("RESPONSE_CACHE_LOG_HITS", default=True)

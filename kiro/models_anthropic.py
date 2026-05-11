@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 # Kiro Gateway
 # https://github.com/jwadow/kiro-gateway
@@ -28,8 +27,8 @@ Reference: https://docs.anthropic.com/en/api/messages
 
 import time
 from typing import Any, Dict, List, Literal, Optional, Union
-from pydantic import BaseModel, Field, model_validator
 
+from pydantic import BaseModel, Field, model_validator
 
 # ==================================================================================================
 # Content Block Models
@@ -75,7 +74,7 @@ class ToolUseContentBlock(BaseModel):
     type: Literal["tool_use"] = "tool_use"
     id: str
     name: str
-    input: Dict[str, Any]
+    input: dict[str, Any]
 
 
 class ToolReferenceContentBlock(BaseModel):
@@ -103,7 +102,7 @@ class ToolResultContentBlock(BaseModel):
     type: Literal["tool_result"] = "tool_result"
     tool_use_id: str
     content: Optional[
-        Union[str, List[Union["TextContentBlock", "ImageContentBlock", "ToolReferenceContentBlock"]]]
+        str | list[Union["TextContentBlock", "ImageContentBlock", "ToolReferenceContentBlock"]]
     ] = None
     is_error: Optional[bool] = None
 
@@ -159,7 +158,7 @@ class ImageContentBlock(BaseModel):
     """
 
     type: Literal["image"] = "image"
-    source: Union[Base64ImageSource, URLImageSource]
+    source: Base64ImageSource | URLImageSource
 
 
 # Union type for all content blocks (including images and thinking)
@@ -188,7 +187,7 @@ class AnthropicMessage(BaseModel):
     """
 
     role: Literal["user", "assistant"]
-    content: Union[str, List[ContentBlock]]
+    content: str | list[ContentBlock]
 
     model_config = {"extra": "allow"}
 
@@ -201,11 +200,11 @@ class AnthropicMessage(BaseModel):
 class AnthropicTool(BaseModel):
     """
     Tool definition in Anthropic format.
-    
+
     Supports both user-defined tools and server-side tools (Anthropic):
     - User-defined tools: require input_schema
     - Server-side tools: use type field (e.g., "web_search_20250305")
-    
+
     Attributes:
         type: Tool type for server-side tools (e.g., "web_search_20250305")
         name: Tool name (must match pattern ^[a-zA-Z0-9_-]{1,64}$)
@@ -216,28 +215,28 @@ class AnthropicTool(BaseModel):
         blocked_domains: Blocked domains for web_search (optional)
         user_location: User location for web_search (optional)
     """
-    
+
     # Server-side tool fields (Anthropic spec)
     type: Optional[str] = None
-    
+
     # Common fields
     name: str
     description: Optional[str] = None
-    input_schema: Optional[Dict[str, Any]] = None  # Now optional for server-side tools
-    
+    input_schema: Optional[dict[str, Any]] = None  # Now optional for server-side tools
+
     # Server-side tool parameters (Anthropic spec - accepted but not enforced)
     max_uses: Optional[int] = None
-    allowed_domains: Optional[List[str]] = None
-    blocked_domains: Optional[List[str]] = None
-    user_location: Optional[Dict[str, Any]] = None
-    
+    allowed_domains: Optional[list[str]] = None
+    blocked_domains: Optional[list[str]] = None
+    user_location: Optional[dict[str, Any]] = None
+
     model_config = {"extra": "allow"}  # Forward compatibility
-    
+
     @model_validator(mode="after")
     def validate_tool_consistency(self):
         """Validate that user-defined tools have input_schema."""
         is_server_side = self.type is not None
-        
+
         if not is_server_side:
             # User-defined tool: input_schema is required
             if self.input_schema is None:
@@ -285,13 +284,13 @@ class SystemContentBlock(BaseModel):
 
     type: Literal["text"] = "text"
     text: str
-    cache_control: Optional[Dict[str, Any]] = None
+    cache_control: Optional[dict[str, Any]] = None
 
     model_config = {"extra": "allow"}
 
 
 # System can be a string or list of content blocks (for prompt caching)
-SystemPrompt = Union[str, List[SystemContentBlock], List[Dict[str, Any]]]
+SystemPrompt = Union[str, list[SystemContentBlock], list[dict[str, Any]]]
 
 
 class AnthropicMessagesRequest(BaseModel):
@@ -314,7 +313,7 @@ class AnthropicMessagesRequest(BaseModel):
     """
 
     model: str
-    messages: List[AnthropicMessage] = Field(min_length=1)
+    messages: list[AnthropicMessage] = Field(min_length=1)
     max_tokens: int
 
     # Optional parameters - system can be string or list of content blocks
@@ -322,11 +321,11 @@ class AnthropicMessagesRequest(BaseModel):
     stream: bool = False
 
     # Extended thinking (official Anthropic parameter)
-    thinking: Optional[Dict[str, Any]] = None
+    thinking: Optional[dict[str, Any]] = None
 
     # Tools
-    tools: Optional[List[AnthropicTool]] = None
-    tool_choice: Optional[Union[ToolChoice, Dict[str, Any]]] = None
+    tools: Optional[list[AnthropicTool]] = None
+    tool_choice: Optional[ToolChoice | dict[str, Any]] = None
 
     # Sampling parameters
     temperature: Optional[float] = Field(default=None, ge=0, le=1)
@@ -334,8 +333,8 @@ class AnthropicMessagesRequest(BaseModel):
     top_k: Optional[int] = Field(default=None, ge=0)
 
     # Other parameters
-    stop_sequences: Optional[List[str]] = None
-    metadata: Optional[Dict[str, Any]] = None
+    stop_sequences: Optional[list[str]] = None
+    metadata: Optional[dict[str, Any]] = None
 
     model_config = {"extra": "allow"}
 
@@ -343,24 +342,24 @@ class AnthropicMessagesRequest(BaseModel):
 class AnthropicCountTokensRequest(BaseModel):
     """
     Request to Anthropic Count Tokens API (/v1/messages/count_tokens).
-    
+
     Similar to AnthropicMessagesRequest but without generation parameters.
     Used to estimate token count before making actual request.
-    
+
     Attributes:
         model: Model ID (e.g., "claude-sonnet-4-5")
         messages: List of conversation messages
         system: System prompt (optional, string or list of content blocks)
         tools: List of available tools
     """
-    
+
     model: str
-    messages: List[AnthropicMessage] = Field(min_length=1)
-    
+    messages: list[AnthropicMessage] = Field(min_length=1)
+
     # Optional parameters - only those that affect token count
     system: Optional[SystemPrompt] = None
-    tools: Optional[List[AnthropicTool]] = None
-    
+    tools: Optional[list[AnthropicTool]] = None
+
     model_config = {"extra": "allow"}
 
 
@@ -369,21 +368,62 @@ class AnthropicCountTokensRequest(BaseModel):
 # ==================================================================================================
 
 
+class AnthropicCacheCreation(BaseModel):
+    """
+    Breakdown of cache-creation tokens by TTL bucket (Anthropic schema).
+
+    Attributes:
+        ephemeral_5m_input_tokens: Tokens used to create the 5-minute cache entry
+        ephemeral_1h_input_tokens: Tokens used to create the 1-hour cache entry
+    """
+
+    ephemeral_5m_input_tokens: Optional[int] = None
+    ephemeral_1h_input_tokens: Optional[int] = None
+
+    model_config = {"extra": "allow"}
+
+
+class AnthropicServerToolUse(BaseModel):
+    """
+    Server-side tool-use counters surfaced in Anthropic ``usage`` payloads.
+
+    Attributes:
+        web_search_requests: Count of web-search tool invocations made by the server
+        web_fetch_requests: Count of web-fetch tool invocations made by the server
+    """
+
+    web_search_requests: Optional[int] = None
+    web_fetch_requests: Optional[int] = None
+
+    model_config = {"extra": "allow"}
+
+
 class AnthropicUsage(BaseModel):
     """
     Token usage information in Anthropic format.
 
+    Mirrors the ``usage`` object in the public Anthropic Messages API as of
+    2026-05. Fields are optional/forwarded only when the upstream Kiro
+    response includes them — we do not synthesise cache or server-tool
+    counters we cannot observe.
+
     Attributes:
         input_tokens: Number of input tokens
         output_tokens: Number of output tokens
-        cache_read_input_tokens: Tokens read from prompt cache (only forwarded when explicitly returned by upstream Kiro API)
-        cache_creation_input_tokens: Tokens used to create prompt cache (only forwarded when explicitly returned by upstream Kiro API)
+        cache_read_input_tokens: Tokens read from prompt cache (forwarded when upstream returns it)
+        cache_creation_input_tokens: Tokens used to create prompt cache (forwarded when upstream returns it)
+        cache_creation: Per-TTL breakdown of cache-creation tokens (forwarded when upstream returns it)
+        server_tool_use: Server-side tool-use counters (forwarded when upstream returns it)
+        service_tier: Service tier used for this request (forwarded when upstream returns it)
     """
 
     input_tokens: int
     output_tokens: int
     cache_read_input_tokens: Optional[int] = None
     cache_creation_input_tokens: Optional[int] = None
+    cache_creation: Optional[AnthropicCacheCreation] = None
+    server_tool_use: Optional[AnthropicServerToolUse] = None
+    service_tier: Optional[str] = None
 
     model_config = {"extra": "allow"}
 
@@ -406,7 +446,7 @@ class AnthropicMessagesResponse(BaseModel):
     id: str
     type: Literal["message"] = "message"
     role: Literal["assistant"] = "assistant"
-    content: List[Union[ThinkingContentBlock, TextContentBlock, ToolUseContentBlock]]
+    content: list[ThinkingContentBlock | TextContentBlock | ToolUseContentBlock]
     model: str
     stop_reason: Optional[
         Literal["end_turn", "max_tokens", "stop_sequence", "tool_use"]
@@ -428,7 +468,7 @@ class MessageStartEvent(BaseModel):
     """
 
     type: Literal["message_start"] = "message_start"
-    message: Dict[str, Any]
+    message: dict[str, Any]
 
 
 class ContentBlockStartEvent(BaseModel):
@@ -442,7 +482,7 @@ class ContentBlockStartEvent(BaseModel):
 
     type: Literal["content_block_start"] = "content_block_start"
     index: int
-    content_block: Dict[str, Any]
+    content_block: dict[str, Any]
 
 
 class TextDelta(BaseModel):
@@ -477,7 +517,7 @@ class ContentBlockDeltaEvent(BaseModel):
 
     type: Literal["content_block_delta"] = "content_block_delta"
     index: int
-    delta: Union[TextDelta, ThinkingDelta, InputJsonDelta, Dict[str, Any]]
+    delta: TextDelta | ThinkingDelta | InputJsonDelta | dict[str, Any]
 
 
 class ContentBlockStopEvent(BaseModel):
@@ -505,7 +545,7 @@ class MessageDeltaEvent(BaseModel):
     """
 
     type: Literal["message_delta"] = "message_delta"
-    delta: Dict[str, Any]
+    delta: dict[str, Any]
     usage: MessageDeltaUsage
 
 
@@ -531,7 +571,7 @@ class ErrorEvent(BaseModel):
     """
 
     type: Literal["error"] = "error"
-    error: Dict[str, Any]
+    error: dict[str, Any]
 
 
 # Union of all streaming events

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 
 # Kiro Gateway
 # https://github.com/jwadow/kiro-gateway
@@ -43,7 +42,7 @@ class PayloadTrimStats:
     trimmed: bool
 
 
-def check_payload_size(payload: Dict[str, Any]) -> int:
+def check_payload_size(payload: dict[str, Any]) -> int:
     """Return the serialized byte size of the payload as UTF-8 JSON."""
     return len(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
 
@@ -118,7 +117,7 @@ def _repair_orphaned_tool_results(history: list) -> None:
                 user_msg["content"] = current_content + marker
 
 
-def trim_payload_to_limit(payload: Dict[str, Any], max_bytes: int) -> PayloadTrimStats:
+def trim_payload_to_limit(payload: dict[str, Any], max_bytes: int) -> PayloadTrimStats:
     """
     Trim oldest history entries so the serialized payload fits under max_bytes.
 
