@@ -37,10 +37,10 @@ import httpx
 from fastapi import HTTPException
 from loguru import logger
 
-from kiro.config import MAX_RETRIES, BASE_RETRY_DELAY, FIRST_TOKEN_MAX_RETRIES, STREAMING_READ_TIMEOUT
 from kiro.auth import KiroAuthManager
+from kiro.config import BASE_RETRY_DELAY, FIRST_TOKEN_MAX_RETRIES, MAX_RETRIES, STREAMING_READ_TIMEOUT
+from kiro.network_errors import NetworkErrorInfo, classify_network_error, get_short_error_message
 from kiro.utils import get_kiro_headers
-from kiro.network_errors import classify_network_error, get_short_error_message, NetworkErrorInfo
 
 
 class KiroHttpClient:
@@ -204,7 +204,6 @@ class KiroHttpClient:
         max_retries = FIRST_TOKEN_MAX_RETRIES if stream else MAX_RETRIES
 
         client = await self._get_client(stream=stream)
-        last_error = None
         last_error_info: Optional[NetworkErrorInfo] = None
         last_response: Optional[httpx.Response] = None  # Retained to return the last 429/5xx after exhaustion
 
@@ -257,7 +256,10 @@ class KiroHttpClient:
                     last_response = response  # Retain to return after retry exhaustion
                     if attempt < max_retries - 1:
                         delay = BASE_RETRY_DELAY * (2 ** attempt)
-                        logger.warning(f"Received {response.status_code}, waiting {delay}s (attempt {attempt + 1}/{max_retries})")
+                        logger.warning(
+                            f"Received {response.status_code}, waiting {delay}s "
+                            f"(attempt {attempt + 1}/{max_retries})"
+                        )
                         await asyncio.sleep(delay)
                     continue
 
@@ -265,7 +267,6 @@ class KiroHttpClient:
                 return response
 
             except httpx.TimeoutException as e:
-                last_error = e
 
                 # Classify timeout error for user-friendly messaging
                 error_info = classify_network_error(e)
@@ -284,7 +285,6 @@ class KiroHttpClient:
                         break  # Don't retry non-retryable errors
 
             except httpx.RequestError as e:
-                last_error = e
 
                 # Classify the error for user-friendly messaging
                 error_info = classify_network_error(e)
