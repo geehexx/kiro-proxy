@@ -305,14 +305,17 @@ async def messages(
 
         hit = try_cache_lookup(response_cache, cache_key)
         if hit is not None:
+            hit_body = entry_to_response_body(hit)
             logger.info(
                 f"HTTP 200 - POST /v1/messages (non-streaming, cache hit) "
-                f"key={cache_key[:8]}"
+                f"key={cache_key[:8]} "
+                f"msg_id={hit_body.get('id', 'unknown')} "
+                f"response_model={hit_body.get('model', 'unknown')}"
             )
             if debug_logger:
                 debug_logger.discard_buffers()
             return JSONResponse(
-                content=entry_to_response_body(hit),
+                content=hit_body,
                 headers={"x-kiro-cache": "hit"},
             )
 
@@ -577,7 +580,11 @@ async def messages(
                         await http_client.close()
                         # Body collected cleanly — safe to record success
                         await account_manager.report_success(account.id, request_data.model)
-                        logger.info("HTTP 200 - POST /v1/messages (non-streaming) - completed")
+                        logger.info(
+                            "HTTP 200 - POST /v1/messages (non-streaming) - completed "
+                            f"msg_id={anthropic_response.get('id', 'unknown')} "
+                            f"response_model={anthropic_response.get('model', 'unknown')}"
+                        )
 
                         if debug_logger:
                             debug_logger.discard_buffers()
@@ -957,7 +964,11 @@ async def messages(
 
             await http_client.close()
 
-            logger.info("HTTP 200 - POST /v1/messages (non-streaming) - completed")
+            logger.info(
+                "HTTP 200 - POST /v1/messages (non-streaming) - completed "
+                f"msg_id={anthropic_response.get('id', 'unknown')} "
+                f"response_model={anthropic_response.get('model', 'unknown')}"
+            )
 
             if debug_logger:
                 debug_logger.discard_buffers()
