@@ -4,15 +4,7 @@ Integration tests for complete end-to-end flow.
 Checks interaction of all system components.
 """
 
-import json
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
-
-import httpx
-import pytest
-from fastapi.testclient import TestClient
-
-from kiro.config import PROXY_API_KEY
+from unittest.mock import AsyncMock, patch
 
 
 class TestFullChatCompletionFlow:

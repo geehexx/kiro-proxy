@@ -11,9 +11,7 @@ Tests:
 - Fallback when tiktoken is unavailable
 """
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from kiro.tokenizer import (
     CLAUDE_CORRECTION_FACTOR,

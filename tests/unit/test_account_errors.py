@@ -7,7 +7,6 @@ Tests the classify_error() function that determines whether an error is:
 - RECOVERABLE: Error with the account → try next account
 """
 
-import pytest
 
 from kiro.account_errors import ErrorType, classify_error
 

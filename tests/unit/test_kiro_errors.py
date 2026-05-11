@@ -4,7 +4,6 @@ Unit tests for Kiro API error enhancement system.
 Tests enhance_kiro_error() function and KiroErrorInfo dataclass.
 """
 
-import pytest
 
 from kiro.kiro_errors import KiroErrorInfo, enhance_kiro_error
 

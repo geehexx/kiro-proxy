@@ -10,9 +10,8 @@ import asyncio
 import json
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List
-from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from typing import Any
+from unittest.mock import AsyncMock, Mock, patch
 
 import httpx
 import pytest
