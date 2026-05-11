@@ -88,7 +88,7 @@ async def _emit_gateway_baseline(
             "output_tokens": usage.get("output_tokens"),
             "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
             "cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
-            "upstream_ms_first_token": upstream_ms,
+            "upstream_ms_total": upstream_ms,
             "gateway_cache": gateway_cache,
             "stream": False,
             "status": status,
@@ -537,7 +537,7 @@ async def messages(
                 # Make request to Kiro API
                 _upstream_start = time.monotonic()
                 response = await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
-                _upstream_ms_first_token = int((time.monotonic() - _upstream_start) * 1000)
+                _upstream_ms_total = int((time.monotonic() - _upstream_start) * 1000)
 
                 if response.status_code == 200:
                     if request_data.stream:
@@ -652,7 +652,7 @@ async def messages(
                             request_model=request_data.model,
                             session_id_gw=session_id,
                             cache_key=cache_key,
-                            upstream_ms=_upstream_ms_first_token,
+                            upstream_ms=_upstream_ms_total,
                             gateway_cache="miss" if cache_eligible else "bypass",
                             status=200,
                         )
@@ -858,7 +858,7 @@ async def messages(
         # so that we can return proper HTTP error codes if Kiro fails
         _upstream_start = time.monotonic()
         response = await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
-        _upstream_ms_first_token = int((time.monotonic() - _upstream_start) * 1000)
+        _upstream_ms_total = int((time.monotonic() - _upstream_start) * 1000)
 
         if response.status_code != 200:
             try:
@@ -1006,7 +1006,7 @@ async def messages(
                 request_model=request_data.model,
                 session_id_gw=session_id,
                 cache_key=cache_key,
-                upstream_ms=_upstream_ms_first_token,
+                upstream_ms=_upstream_ms_total,
                 gateway_cache="miss" if cache_eligible else "bypass",
                 status=200,
             )
