@@ -35,7 +35,7 @@ from loguru import logger
 
 from kiro.auth import AuthType, KiroAuthManager
 from kiro.cache import ModelInfoCache
-from kiro.config import PROXY_API_KEY, WEB_SEARCH_ENABLED
+from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, WEB_SEARCH_ENABLED
 from kiro.converters_anthropic import anthropic_to_kiro
 from kiro.http_client import KiroHttpClient
 from kiro.mcp_tools import handle_native_web_search
@@ -393,11 +393,45 @@ async def messages(
             )
 
     # ==============================================================================
+    # Sub-agent web_search Strip (SDK 422 re-serialisation bug prevention)
+    # ==============================================================================
+
+    # When x-claude-subagent header is present and the feature flag is on,
+    # remove any web_search tool entries from the request before forwarding.
+    # This prevents the SDK 422 re-serialisation bug that fires on turn 2 of
+    # sub-agent sessions when server_tool_use / web_search_tool_result pairs
+    # are present (sdk_422_server_tool_bug, 2026-05-10).
+    #
+    # Both tool shapes are stripped:
+    #   - Path A (server-side): type starts with "web_search" (e.g. "web_search_20250305")
+    #   - Path B (MCP emulation): name == "web_search" with no type
+    is_subagent_request = (
+        GATEWAY_SUBAGENT_STRIP_WEB_SEARCH
+        and request.headers.get("x-claude-subagent", "").lower() in ("true", "1", "yes")
+    )
+    if is_subagent_request and request_data.tools:
+        before = len(request_data.tools)
+        request_data.tools = [
+            t for t in request_data.tools
+            if not (
+                (getattr(t, "type", None) or "").startswith("web_search")
+                or getattr(t, "name", "") == "web_search"
+            )
+        ]
+        stripped = before - len(request_data.tools)
+        if stripped:
+            logger.info(
+                f"Stripped {stripped} web_search tool(s) from sub-agent request "
+                f"(x-claude-subagent header present, sdk_422_server_tool_bug prevention)"
+            )
+
+    # ==============================================================================
     # WebSearch Support - Path B: Auto-Injection (MCP Tool Emulation)
     # ==============================================================================
 
     # Auto-inject web_search tool if enabled (Path B - MCP emulation)
-    if WEB_SEARCH_ENABLED:
+    # Skip injection for sub-agent requests — they cannot use web_search anyway.
+    if WEB_SEARCH_ENABLED and not is_subagent_request:
         if request_data.tools is None:
             request_data.tools = []
 
