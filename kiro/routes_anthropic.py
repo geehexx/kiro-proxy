@@ -65,12 +65,17 @@ async def _emit_gateway_baseline(
     upstream_ms: Optional[int],
     gateway_cache: str,
     status: int,
+    stream: bool = False,
 ) -> None:
     """Append one record to baselines-gateway-requests.jsonl.
 
     Runs AFTER the response body is fully collected so `usage` is populated.
     Failures are swallowed — telemetry must never break the hot path.
     Plan reference: plans/2026-05-11-token-telemetry.md §Step 1.
+
+    For streaming responses, pass ``response_body={}`` + ``stream=True``;
+    ``message_id`` and ``usage`` fields will be null. Reconcile joins
+    on ``message_id`` emitted by the CC transcript tailer for streamed turns.
     """
     writer = getattr(request.app.state, "baselines_writer", None)
     if writer is None:
@@ -90,7 +95,7 @@ async def _emit_gateway_baseline(
             "cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
             "upstream_ms_total": upstream_ms,
             "gateway_cache": gateway_cache,
-            "stream": False,
+            "stream": stream,
             "status": status,
         }
         await writer.write("gateway-requests", record)
@@ -586,6 +591,21 @@ async def messages(
                                     await account_manager.report_success(account.id, request_data.model)
                                     logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
 
+                                # Emit streaming baseline (message_id + usage
+                                # unavailable here — reconcile joins via the CC
+                                # transcript tailer). plans/2026-05-11-token-telemetry.md §Step 1.
+                                await _emit_gateway_baseline(
+                                    request,
+                                    response_body={},
+                                    request_model=request_data.model,
+                                    session_id_gw=session_id,
+                                    cache_key=cache_key,
+                                    upstream_ms=_upstream_ms_total,
+                                    gateway_cache="bypass",
+                                    status=200 if not streaming_error else 500,
+                                    stream=True,
+                                )
+
                                 if debug_logger:
                                     if streaming_error:
                                         debug_logger.flush_on_error(500, str(streaming_error))
@@ -939,6 +959,21 @@ async def messages(
                         logger.info("HTTP 200 - POST /v1/messages (streaming) - client disconnected")
                     else:
                         logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
+
+                    # Emit streaming baseline (legacy dispatch path). Token
+                    # counts unavailable from the stream; reconcile joins via
+                    # the CC transcript tailer on `message_id`.
+                    await _emit_gateway_baseline(
+                        request,
+                        response_body={},
+                        request_model=request_data.model,
+                        session_id_gw=session_id,
+                        cache_key=cache_key,
+                        upstream_ms=_upstream_ms_total,
+                        gateway_cache="bypass",
+                        status=200 if not streaming_error else 500,
+                        stream=True,
+                    )
 
                     if debug_logger:
                         if streaming_error:
