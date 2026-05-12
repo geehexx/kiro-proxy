@@ -27,28 +27,23 @@ import json
 import time
 from typing import Optional
 
-import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 from loguru import logger
 
-from kiro.auth import AuthType, KiroAuthManager
-from kiro.cache import ModelInfoCache
+from kiro.auth import AuthType
 from kiro.config import PROXY_API_KEY, WEB_SEARCH_ENABLED
 from kiro.converters_anthropic import anthropic_to_kiro
 from kiro.http_client import KiroHttpClient
 from kiro.mcp_tools import handle_native_web_search
 from kiro.models_anthropic import (
     AnthropicCountTokensRequest,
-    AnthropicErrorDetail,
-    AnthropicErrorResponse,
     AnthropicMessagesRequest,
-    AnthropicMessagesResponse,
 )
 from kiro.streaming_anthropic import (
     collect_anthropic_response,
-    stream_kiro_to_anthropic,
+    stream_kiro_to_anthropic,  # noqa: F401 — patched by tests via patch('kiro.routes_anthropic.stream_kiro_to_anthropic', ...)
     stream_with_first_token_retry_anthropic,
 )
 from kiro.tokenizer import estimate_request_tokens
@@ -66,6 +61,9 @@ async def _emit_gateway_baseline(
     gateway_cache: str,
     status: int,
     stream: bool = False,
+    error_reason: Optional[str] = None,
+    retry_count: Optional[int] = None,
+    retry_after_applied_ms: Optional[int] = None,
 ) -> None:
     """Append one record to baselines-gateway-requests.jsonl.
 
@@ -76,6 +74,13 @@ async def _emit_gateway_baseline(
     For streaming responses, pass ``response_body={}`` + ``stream=True``;
     ``message_id`` and ``usage`` fields will be null. Reconcile joins
     on ``message_id`` emitted by the CC transcript tailer for streamed turns.
+
+    Args:
+        error_reason: Kiro API error reason code on 429/5xx (e.g.
+            ``"INSUFFICIENT_MODEL_CAPACITY"``), or None on success.
+        retry_count: Number of retries performed before this response, or None.
+        retry_after_applied_ms: Milliseconds of Retry-After delay applied on
+            the last capacity-exhaustion retry, or None if not applicable.
     """
     writer = getattr(request.app.state, "baselines_writer", None)
     if writer is None:
@@ -97,6 +102,10 @@ async def _emit_gateway_baseline(
             "gateway_cache": gateway_cache,
             "stream": stream,
             "status": status,
+            # §2 telemetry fields — None on success; populated on 429/5xx
+            "error_reason": error_reason,
+            "retry_count": retry_count,
+            "retry_after_applied_ms": retry_after_applied_ms,
         }
         await writer.write("gateway-requests", record)
     except Exception as exc:
@@ -341,7 +350,8 @@ async def messages(
     if tool_results_modified > 0 or content_notices_added > 0:
         request_data.messages = modified_messages
         logger.info(
-            f"Truncation recovery: modified {tool_results_modified} tool_result(s), added {content_notices_added} content notice(s)"
+            f"Truncation recovery: modified {tool_results_modified} tool_result(s), "
+            f"added {content_notices_added} content notice(s)"
         )
 
     # ==============================================================================
@@ -409,7 +419,10 @@ async def messages(
 
             web_search_tool = AnthropicTool(
                 name="web_search",
-                description="Search the web for current information. Use when you need up-to-date data from the internet.",
+                description=(
+                    "Search the web for current information. "
+                    "Use when you need up-to-date data from the internet."
+                ),
                 input_schema={
                     "type": "object",
                     "properties": {"query": {"type": "string", "description": "Search query"}},
@@ -572,7 +585,10 @@ async def messages(
                             except Exception as e:
                                 streaming_error = e
                                 try:
-                                    error_event = f"event: error\ndata: {json.dumps({'type': 'error', 'error': {'type': 'api_error', 'message': str(e)}})}\n\n"
+                                    _err_payload = json.dumps(
+                                        {"type": "error", "error": {"type": "api_error", "message": str(e)}}
+                                    )
+                                    error_event = f"event: error\ndata: {_err_payload}\n\n"
                                     yield error_event
                                 except Exception:
                                     pass
@@ -891,6 +907,8 @@ async def messages(
 
             # Try to parse JSON response from Kiro to extract error message
             error_message = error_text
+            _error_reason: Optional[str] = None
+            _retry_after_hint_ms: Optional[int] = None
             try:
                 error_json = json.loads(error_text)
                 # Enhance Kiro API errors with user-friendly messages
@@ -898,6 +916,7 @@ async def messages(
 
                 error_info = enhance_kiro_error(error_json)
                 error_message = error_info.user_message
+                _error_reason = error_info.reason if error_info.reason != "UNKNOWN" else None
                 # Log original error for debugging
                 logger.debug(f"Original Kiro error: {error_info.original_message} (reason: {error_info.reason})")
             except (json.JSONDecodeError, KeyError):
@@ -910,18 +929,60 @@ async def messages(
             if debug_logger:
                 debug_logger.flush_on_error(response.status_code, error_message)
 
+            # Build response headers — add Retry-After for capacity-exhaustion 429s
+            # so upstream clients (and the http_client retry loop) can honour it.
+            response_headers: dict = {}
+            if response.status_code == 429 and _error_reason == "INSUFFICIENT_MODEL_CAPACITY":
+                try:
+                    from kiro.kiro_errors import enhance_kiro_error as _eke
+                    _err_info = _eke(json.loads(error_text))
+                    if _err_info.retry_after_hint is not None:
+                        _retry_after_hint_ms = int(_err_info.retry_after_hint * 1000)
+                        response_headers["Retry-After"] = str(int(_err_info.retry_after_hint))
+                except Exception:
+                    pass
+
+            # Emit baseline record for error responses (§2 telemetry fields).
+            await _emit_gateway_baseline(
+                request,
+                response_body={},
+                request_model=request_data.model,
+                session_id_gw=session_id,
+                cache_key=cache_key,
+                upstream_ms=_upstream_ms_total,
+                gateway_cache="bypass",
+                status=response.status_code,
+                error_reason=_error_reason,
+                retry_after_applied_ms=_retry_after_hint_ms,
+            )
+
             # Return error in Anthropic format
             return JSONResponse(
                 status_code=response.status_code,
                 content={"type": "error", "error": {"type": "api_error", "message": error_message}},
+                headers=response_headers if response_headers else None,
             )
 
         if request_data.stream:
             # Streaming mode with first token retry
+            # Resolve global Opus semaphore (§3 — feature-flagged OFF by default).
+            # When GATEWAY_GLOBAL_OPUS_CONCURRENCY > 0 and the model is claude-opus-*,
+            # the semaphore is acquired for the lifetime of the stream so that at most
+            # N Opus streams run concurrently.  Default: semaphore is None → no-op.
+            _opus_semaphore = None
+            if request_data.model.startswith("claude-opus"):
+                _opus_semaphore = getattr(request.app.state, "global_opus_semaphore", None)
+
             async def stream_wrapper():
                 streaming_error = None
                 client_disconnected = False
+                _sem_acquired = False
                 try:
+                    # Acquire Opus concurrency slot if the cap is active.
+                    if _opus_semaphore is not None:
+                        await _opus_semaphore.acquire()
+                        _sem_acquired = True
+
                     # Create retry request function for retries
                     async def make_retry_request():
                         return await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
@@ -945,11 +1006,17 @@ async def messages(
                     streaming_error = e
                     # Send error event to client, then gracefully end the stream
                     try:
-                        error_event = f"event: error\ndata: {json.dumps({'type': 'error', 'error': {'type': 'api_error', 'message': str(e)}})}\n\n"
+                        _err_payload = json.dumps(
+                            {"type": "error", "error": {"type": "api_error", "message": str(e)}}
+                        )
+                        error_event = f"event: error\ndata: {_err_payload}\n\n"
                         yield error_event
                     except Exception:
                         pass
                 finally:
+                    # Release Opus concurrency slot before closing the HTTP client.
+                    if _sem_acquired and _opus_semaphore is not None:
+                        _opus_semaphore.release()
                     await http_client.close()
                     if streaming_error:
                         error_type = type(streaming_error).__name__

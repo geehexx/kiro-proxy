@@ -30,6 +30,7 @@ with connection pooling for better resource management.
 """
 
 import asyncio
+import json
 import random
 from typing import Optional
 
@@ -38,7 +39,14 @@ from fastapi import HTTPException
 from loguru import logger
 
 from kiro.auth import KiroAuthManager
-from kiro.config import BASE_RETRY_DELAY, FIRST_TOKEN_MAX_RETRIES, MAX_RETRIES, STREAMING_READ_TIMEOUT
+from kiro.config import (
+    BASE_RETRY_DELAY,
+    CAPACITY_BACKOFF_BASE,
+    CAPACITY_MAX_RETRIES,
+    FIRST_TOKEN_MAX_RETRIES,
+    MAX_RETRIES,
+    STREAMING_READ_TIMEOUT,
+)
 from kiro.network_errors import NetworkErrorInfo, classify_network_error, get_short_error_message
 from kiro.utils import get_kiro_headers
 
@@ -250,15 +258,45 @@ class KiroHttpClient:
                     if attempt < max_retries - 1:
                         if stream:
                             await response.aclose()
-                        # Respect Retry-After header if present; fall back to exponential backoff.
-                        retry_after = response.headers.get("retry-after") or response.headers.get("Retry-After")
+
+                        # Detect capacity-exhaustion 429s by parsing the response body.
+                        # INSUFFICIENT_MODEL_CAPACITY warrants a longer backoff than a
+                        # standard rate-limit because capacity is a sustained condition.
+                        is_capacity_error = False
                         try:
-                            base_delay = float(retry_after) if retry_after else BASE_RETRY_DELAY * (2 ** attempt)
-                        except (ValueError, TypeError):
-                            base_delay = BASE_RETRY_DELAY * (2 ** attempt)
-                        # Add ±25% jitter to prevent thundering herd on concurrent 429s.
-                        delay = base_delay * (1.0 + random.uniform(-0.25, 0.25))
-                        logger.warning(f"Received 429, waiting {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
+                            body_bytes = await response.aread()
+                            body_json = json.loads(body_bytes)
+                            if body_json.get("reason") == "INSUFFICIENT_MODEL_CAPACITY":
+                                is_capacity_error = True
+                        except Exception:
+                            pass  # Body unreadable — fall back to standard backoff
+
+                        if is_capacity_error and CAPACITY_BACKOFF_BASE > 0:
+                            # Capacity-aware backoff: longer base delay, capped retries.
+                            if attempt >= CAPACITY_MAX_RETRIES:
+                                # Exceeded capacity retry budget — stop retrying.
+                                logger.warning(
+                                    f"Capacity 429 retry budget exhausted "
+                                    f"(attempt {attempt + 1}/{max_retries})"
+                                )
+                                continue
+                            base_delay = CAPACITY_BACKOFF_BASE * (2 ** attempt)
+                            delay = base_delay * (1.0 + random.uniform(-0.25, 0.25))
+                            logger.warning(
+                                f"Received 429 (INSUFFICIENT_MODEL_CAPACITY), "
+                                f"capacity backoff {delay:.1f}s "
+                                f"(attempt {attempt + 1}/{max_retries})"
+                            )
+                        else:
+                            # Standard rate-limit backoff: respect Retry-After header.
+                            retry_after = response.headers.get("retry-after") or response.headers.get("Retry-After")
+                            try:
+                                base_delay = float(retry_after) if retry_after else BASE_RETRY_DELAY * (2 ** attempt)
+                            except (ValueError, TypeError):
+                                base_delay = BASE_RETRY_DELAY * (2 ** attempt)
+                            # Add ±25% jitter to prevent thundering herd on concurrent 429s.
+                            delay = base_delay * (1.0 + random.uniform(-0.25, 0.25))
+                            logger.warning(f"Received 429, waiting {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
                         await asyncio.sleep(delay)
                     continue
 
