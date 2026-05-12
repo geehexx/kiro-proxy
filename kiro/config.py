@@ -26,7 +26,7 @@ Loads environment variables and provides typed access to them.
 import os
 import re
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -582,6 +582,40 @@ GATEWAY_SESSION_CONCURRENCY: int = int(os.getenv("GATEWAY_SESSION_CONCURRENCY", 
 GATEWAY_SESSION_LIMITER_ENABLED: bool = _parse_bool_env(
     "GATEWAY_SESSION_LIMITER_ENABLED", default=False
 )
+
+# ==================================================================================================
+# Capacity-Aware Backoff Settings (§1 — 429 INSUFFICIENT_MODEL_CAPACITY)
+# ==================================================================================================
+
+# Base delay (seconds) for capacity-exhaustion 429s.
+# When Kiro returns 429 with reason=INSUFFICIENT_MODEL_CAPACITY the gateway
+# uses a longer backoff than the standard rate-limit path:
+#   delay = CAPACITY_BACKOFF_BASE * 2^attempt  (+ ±25% jitter)
+# Default: 15.0 s  (attempt 0 → ~15 s, attempt 1 → ~30 s)
+# Set to 0 to disable the longer backoff and fall back to BASE_RETRY_DELAY.
+CAPACITY_BACKOFF_BASE: float = float(os.getenv("CAPACITY_BACKOFF_BASE", "15.0"))
+
+# Maximum number of retry attempts for capacity-exhaustion 429s.
+# Kept deliberately low (2) because capacity exhaustion is a sustained
+# condition; hammering the endpoint wastes quota.
+# Default: 2  (i.e. up to 3 total attempts: original + 2 retries)
+CAPACITY_MAX_RETRIES: int = int(os.getenv("CAPACITY_MAX_RETRIES", "2"))
+
+# ==================================================================================================
+# Global Opus Concurrency Cap (§3 — feature-flagged OFF by default)
+# ==================================================================================================
+
+# Maximum number of concurrent in-flight requests for claude-opus-* models.
+# When > 0, a process-wide asyncio.Semaphore is created at startup and
+# acquired before each Opus streaming call.  Requests beyond the cap wait
+# rather than being rejected, so callers see latency not errors.
+#
+# Default: 0 (disabled — no semaphore, no behaviour change).
+# Recommended starting value for soak-testing: 2.
+#
+# IMPORTANT: This is a feature flag.  Leave at 0 until explicitly enabled
+# after load-testing confirms the cap is appropriate for your traffic.
+GATEWAY_GLOBAL_OPUS_CONCURRENCY: int = int(os.getenv("GATEWAY_GLOBAL_OPUS_CONCURRENCY", "0"))
 
 # ==================================================================================================
 # State Persistence Settings
