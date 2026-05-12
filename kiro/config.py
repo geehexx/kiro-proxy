@@ -634,3 +634,26 @@ RESPONSE_CACHE_MAX_BYTES: int = int(os.getenv("RESPONSE_CACHE_MAX_BYTES", str(50
 RESPONSE_CACHE_TTL_SECONDS: int = int(os.getenv("RESPONSE_CACHE_TTL_SECONDS", "3600"))
 RESPONSE_CACHE_MAX_ENTRY_BYTES: int = int(os.getenv("RESPONSE_CACHE_MAX_ENTRY_BYTES", str(5 * 1024 * 1024)))
 RESPONSE_CACHE_LOG_HITS: bool = _parse_bool_env("RESPONSE_CACHE_LOG_HITS", default=True)
+
+
+# ==================================================================================================
+# Sub-agent web_search Strip (SDK 422 re-serialisation bug prevention)
+# ==================================================================================================
+
+# Strip web_search server-side tools from requests that originate from sub-agents.
+#
+# Background: When Claude Code dispatches a sub-agent, the SDK re-serialises
+# server_tool_use / web_search_tool_result pairs on turn 2, triggering a 422
+# from the upstream API (sdk_422_server_tool_bug). Stripping web_search before
+# forwarding prevents the bug from manifesting.
+#
+# Header checked: x-claude-subagent (expected to be sent by Claude Code when
+# dispatching sub-agents). NOTE: As of 2026-05-12 it is unverified whether
+# Claude Code actually sends this header in production. If the header is absent,
+# this feature is a no-op regardless of this setting.
+#
+# Default: true (enabled) — safe because sub-agents cannot use web_search
+# anyway (the SDK 422 bug makes it non-functional for them).
+GATEWAY_SUBAGENT_STRIP_WEB_SEARCH: bool = _parse_bool_env(
+    "GATEWAY_SUBAGENT_STRIP_WEB_SEARCH", default=True
+)
