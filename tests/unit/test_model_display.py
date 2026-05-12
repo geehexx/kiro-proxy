@@ -106,6 +106,26 @@ class TestDescribeModel:
     def test_unknown_returns_none(self) -> None:
         assert describe_model("nebula-9000") is None
 
+    def test_opus_4_7_mentions_1m_context(self) -> None:
+        """Opus 4.7 is the 1M-context tier; its description must differentiate from 4.6."""
+        desc = describe_model("claude-opus-4.7") or ""
+        assert "1M" in desc, f"expected 1M context mention, got: {desc!r}"
+
+    def test_opus_4_6_mentions_200k_context(self) -> None:
+        """Opus 4.6 is 200K context; should NOT claim 1M."""
+        desc = describe_model("claude-opus-4.6") or ""
+        assert "200K" in desc, f"expected 200K context mention, got: {desc!r}"
+        assert "1M" not in desc, f"4.6 is not the 1M tier, got: {desc!r}"
+
+    def test_per_version_differentiation(self) -> None:
+        """Opus 4.7 and 4.6 must produce different descriptions (regression on prior audit)."""
+        assert describe_model("claude-opus-4.7") != describe_model("claude-opus-4.6")
+
+    def test_dashed_form_resolves_to_per_version(self) -> None:
+        """Dashed aliases should hit the same per-version description as the canonical form."""
+        assert describe_model("claude-opus-4-7") == describe_model("claude-opus-4.7")
+        assert describe_model("claude-sonnet-4-6") == describe_model("claude-sonnet-4.6")
+
 
 class TestPropertyInvariants:
     """Hypothesis properties — the shape invariants we care about."""
