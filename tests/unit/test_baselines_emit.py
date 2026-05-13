@@ -146,19 +146,62 @@ async def test_null_cache_key_passed_through() -> None:
 
 
 @pytest.mark.asyncio
-async def test_missing_usage_emits_none_tokens() -> None:
+async def test_re2_applied_false_by_default() -> None:
     writer = AsyncMock()
     request = _make_request_with_writer(writer)
     await _emit_gateway_baseline(
         request,
-        response_body={"id": "msg_no_usage"},  # no usage key
-        request_model="m",
-        session_id_gw="s",
+        response_body={"id": "msg_re2_off", "usage": {}},
+        request_model="claude-sonnet-4-6",
+        session_id_gw="sess-re2",
         cache_key=None,
-        upstream_ms=1,
+        upstream_ms=50,
         gateway_cache="miss",
         status=200,
     )
     rec = writer.write.call_args.args[1]
-    assert rec["input_tokens"] is None
-    assert rec["output_tokens"] is None
+    assert rec["re2_applied"] is False
+
+
+@pytest.mark.asyncio
+async def test_re2_applied_true_when_set() -> None:
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    await _emit_gateway_baseline(
+        request,
+        response_body={"id": "msg_re2_on", "usage": {"input_tokens": 100, "output_tokens": 20}},
+        request_model="claude-sonnet-4-6",
+        session_id_gw="sess-re2",
+        cache_key="abcdef1234567890",
+        upstream_ms=75,
+        gateway_cache="miss",
+        status=200,
+        re2_applied=True,
+    )
+    rec = writer.write.call_args.args[1]
+    assert rec["re2_applied"] is True
+    assert rec["input_tokens"] == 100
+    assert rec["output_tokens"] == 20
+
+
+@pytest.mark.asyncio
+async def test_re2_applied_propagated_on_error() -> None:
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    await _emit_gateway_baseline(
+        request,
+        response_body={},
+        request_model="claude-opus-4-7",
+        session_id_gw="sess-err",
+        cache_key=None,
+        upstream_ms=200,
+        gateway_cache="bypass",
+        status=429,
+        error_reason="INSUFFICIENT_MODEL_CAPACITY",
+        re2_applied=True,
+    )
+    rec = writer.write.call_args.args[1]
+    assert rec["re2_applied"] is True
+    assert rec["status"] == 429
+    assert rec["error_reason"] == "INSUFFICIENT_MODEL_CAPACITY"
+

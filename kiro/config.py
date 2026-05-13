@@ -275,6 +275,16 @@ HIDDEN_MODELS: dict[str, str] = {
 # Default: {"auto-kiro": "auto"} to avoid Cursor IDE conflict
 MODEL_ALIASES: dict[str, str] = {
     "auto-kiro": "auto",  # Default alias to avoid Cursor's "auto" model conflict
+    # Shorthand aliases for Claude Code's [1m] context-size notation.
+    # Claude Code sends e.g. "sonnet[1m]" — bracket stripping in normalize_model_name
+    # handles the full "claude-sonnet-4.6[1m]" form, but these shorthands lack the
+    # "claude-" prefix so they need explicit aliases.
+    "sonnet[1m]": "claude-sonnet-4.6",
+    "opus[1m]": "claude-opus-4.7",
+    "haiku[1m]": "claude-haiku-4.5",
+    "sonnet": "claude-sonnet-4.6",
+    "opus": "claude-opus-4.7",
+    "haiku": "claude-haiku-4.5",
 }
 
 # Models to hide from /v1/models endpoint.
