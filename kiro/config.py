@@ -748,3 +748,7 @@ RE2_INJECTION: str = os.getenv(
     "RE2_INJECTION",
     "\n\nRead the question again carefully before answering."
 )
+# Minimum number of messages required for re2 to apply.
+# Requests with fewer messages are typically tool-result polling or tiny sub-agent
+# calls where re2 adds overhead without reasoning benefit.
+RE2_MIN_MESSAGES: int = int(os.getenv("RE2_MIN_MESSAGES", "2"))
