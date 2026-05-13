@@ -772,3 +772,15 @@ LOGFIRE_SERVICE_NAME: str = os.getenv("LOGFIRE_SERVICE_NAME", "kiro-gateway")
 KIRO_PLAN_MONTHLY_COST_USD: float = float(os.getenv("KIRO_PLAN_MONTHLY_COST_USD", "200.0"))
 KIRO_PLAN_MONTHLY_INVOCATIONS: int = int(os.getenv("KIRO_PLAN_MONTHLY_INVOCATIONS", "10000"))
 KIRO_PLAN_OVERAGE_COST_USD: float = float(os.getenv("KIRO_PLAN_OVERAGE_COST_USD", "0.04"))
+
+# ==================================================================================================
+# Debug Capture — Upstream Error Persistence
+# ==================================================================================================
+# When enabled, persists non-2xx upstream response bodies to disk for post-incident analysis.
+# Zero behaviour change when disabled. All writes wrapped in broad try/except.
+DEBUG_CAPTURE_UPSTREAM_ERRORS: bool = _parse_bool_env("DEBUG_CAPTURE_UPSTREAM_ERRORS", default=False)
+DEBUG_CAPTURE_MAX_FILES: int = int(os.getenv("DEBUG_CAPTURE_MAX_FILES", "200"))
+DEBUG_CAPTURE_DIR: str = os.getenv(
+    "DEBUG_CAPTURE_DIR",
+    str(Path.home() / ".claude" / "kiro-gateway-errors"),
+)
