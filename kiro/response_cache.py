@@ -7,6 +7,7 @@ the trailing user turn + model + max_tokens + tool signature). Session-scoped
 via session_id to prevent cross-session context leaks.
 
 In-memory LRU, bounded by entry count and total bytes.
+Persisted to disk on shutdown and loaded on startup so cache survives restarts.
 
 Why this exists: Anthropic cache_control beta is dropped by this gateway
 (converters_anthropic.py lines 87 and 105), and AWS Q upstream does not
@@ -18,13 +19,21 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import pickle
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
+from pathlib import Path
 from threading import RLock
-from typing import Any
+from typing import Any, Optional
 
 MAX_ENTRY_BYTES_HARDCAP = 10 * 1024 * 1024
+
+# Pickle format version — bump when CacheEntry fields change to force cache invalidation
+_PICKLE_VERSION = 1
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -186,6 +195,96 @@ class ResponseCache:
                 if oldest_key == key:
                     return False
             return True
+
+    def save(self, path: Path) -> bool:
+        """Persist cache to disk using pickle.
+
+        Saves entries, config, and version tag. Returns True on success.
+        Failures are logged but never raised — cache persistence must not
+        break the hot path.
+        """
+        try:
+            with self._lock:
+                payload = {
+                    "version": _PICKLE_VERSION,
+                    "saved_at": time.time(),
+                    "config": {
+                        "max_entries": self._max_entries,
+                        "max_bytes": self._max_bytes,
+                        "ttl": self._ttl,
+                        "max_entry_bytes": self._max_entry_bytes,
+                    },
+                    "entries": list(self._entries.items()),
+                    "total_bytes": self._total_bytes,
+                    "hits": self.hits,
+                    "misses": self.misses,
+                    "evictions": self.evictions,
+                }
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(".tmp")
+            with open(tmp, "wb") as f:
+                pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+            tmp.replace(path)
+            _logger.info(f"Cache saved: {len(payload['entries'])} entries → {path}")
+            return True
+        except Exception as e:
+            _logger.warning(f"Cache save failed (non-fatal): {e}")
+            return False
+
+    @classmethod
+    def load(
+        cls,
+        path: Path,
+        *,
+        max_entries: int = 1000,
+        max_bytes: int = 500 * 1024 * 1024,
+        ttl_seconds: int = 3600,
+        max_entry_bytes: int = 5 * 1024 * 1024,
+    ) -> "ResponseCache":
+        """Load a previously saved cache from disk.
+
+        Returns a fresh empty cache on any error (corruption, version mismatch,
+        missing file). Never raises.
+        """
+        cache = cls(
+            max_entries=max_entries,
+            max_bytes=max_bytes,
+            ttl_seconds=ttl_seconds,
+            max_entry_bytes=max_entry_bytes,
+        )
+        if not path.exists():
+            return cache
+        try:
+            with open(path, "rb") as f:
+                payload = pickle.load(f)
+            if payload.get("version") != _PICKLE_VERSION:
+                _logger.info(f"Cache version mismatch — starting fresh (got {payload.get('version')}, want {_PICKLE_VERSION})")
+                return cache
+            now = time.time()
+            loaded = 0
+            expired = 0
+            for key, entry in payload.get("entries", []):
+                if now - entry.created_at > ttl_seconds:
+                    expired += 1
+                    continue
+                if entry.size_bytes > max_entry_bytes:
+                    continue
+                cache._entries[key] = entry
+                cache._total_bytes += entry.size_bytes
+                loaded += 1
+            cache.hits = payload.get("hits", 0)
+            cache.misses = payload.get("misses", 0)
+            cache.evictions = payload.get("evictions", 0)
+            _logger.info(f"Cache loaded: {loaded} entries ({expired} expired) from {path}")
+        except Exception as e:
+            _logger.warning(f"Cache load failed — starting fresh: {e}")
+            cache = cls(
+                max_entries=max_entries,
+                max_bytes=max_bytes,
+                ttl_seconds=ttl_seconds,
+                max_entry_bytes=max_entry_bytes,
+            )
+        return cache
 
     def invalidate_session(self, _session_id: str) -> int:
         """Evict all entries for a session_id.

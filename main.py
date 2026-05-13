@@ -345,30 +345,46 @@ async def lifespan(app: FastAPI):
     app.state.http_client = httpx.AsyncClient(limits=limits, timeout=timeout, follow_redirects=True)
     logger.info("Shared HTTP client created with connection pooling")
 
-    # Response cache singleton (in-memory LRU, disabled by default via env)
+    # Response cache singleton (in-memory LRU with disk persistence)
     from kiro.config import (
         RESPONSE_CACHE_ENABLED,
         RESPONSE_CACHE_MAX_BYTES,
         RESPONSE_CACHE_MAX_ENTRIES,
         RESPONSE_CACHE_MAX_ENTRY_BYTES,
+        RESPONSE_CACHE_PERSIST_INTERVAL,
+        RESPONSE_CACHE_PERSIST_PATH,
         RESPONSE_CACHE_TTL_SECONDS,
     )
     from kiro.response_cache import ResponseCache
 
     if RESPONSE_CACHE_ENABLED:
-        app.state.response_cache = ResponseCache(
-            max_entries=RESPONSE_CACHE_MAX_ENTRIES,
-            max_bytes=RESPONSE_CACHE_MAX_BYTES,
-            ttl_seconds=RESPONSE_CACHE_TTL_SECONDS,
-            max_entry_bytes=RESPONSE_CACHE_MAX_ENTRY_BYTES,
-        )
+        _cache_path = Path(RESPONSE_CACHE_PERSIST_PATH) if RESPONSE_CACHE_PERSIST_PATH else None
+        if _cache_path:
+            app.state.response_cache = ResponseCache.load(
+                _cache_path,
+                max_entries=RESPONSE_CACHE_MAX_ENTRIES,
+                max_bytes=RESPONSE_CACHE_MAX_BYTES,
+                ttl_seconds=RESPONSE_CACHE_TTL_SECONDS,
+                max_entry_bytes=RESPONSE_CACHE_MAX_ENTRY_BYTES,
+            )
+        else:
+            app.state.response_cache = ResponseCache(
+                max_entries=RESPONSE_CACHE_MAX_ENTRIES,
+                max_bytes=RESPONSE_CACHE_MAX_BYTES,
+                ttl_seconds=RESPONSE_CACHE_TTL_SECONDS,
+                max_entry_bytes=RESPONSE_CACHE_MAX_ENTRY_BYTES,
+            )
+        stats = app.state.response_cache.stats()
         logger.info(
-            "Response cache enabled: entries={} max_bytes={} ttl={}s".format(
-                RESPONSE_CACHE_MAX_ENTRIES, RESPONSE_CACHE_MAX_BYTES, RESPONSE_CACHE_TTL_SECONDS
+            "Response cache enabled: entries={}/{} max_bytes={} ttl={}s persist={}".format(
+                stats["entries"], RESPONSE_CACHE_MAX_ENTRIES,
+                RESPONSE_CACHE_MAX_BYTES, RESPONSE_CACHE_TTL_SECONDS,
+                _cache_path or "disabled",
             )
         )
     else:
         app.state.response_cache = None
+        _cache_path = None
         logger.info("Response cache disabled (set RESPONSE_CACHE_ENABLED=true to enable)")
 
     # In-flight dedup singleton — coalesces concurrent identical non-streaming
@@ -547,6 +563,19 @@ async def lifespan(app: FastAPI):
     # Start background task for periodic state saving
     save_task = asyncio.create_task(app.state.account_manager.save_state_periodically())
 
+    # Start background task for periodic cache persistence
+    async def _flush_cache_periodically() -> None:
+        if _cache_path is None or app.state.response_cache is None:
+            return
+        interval = RESPONSE_CACHE_PERSIST_INTERVAL
+        if interval <= 0:
+            return
+        while True:
+            await asyncio.sleep(interval)
+            app.state.response_cache.save(_cache_path)
+
+    cache_flush_task = asyncio.create_task(_flush_cache_periodically())
+
     logger.info("Account system initialized successfully")
 
     yield
@@ -554,7 +583,19 @@ async def lifespan(app: FastAPI):
     # Graceful shutdown
     logger.info("Shutting down application...")
 
-    # Cancel background task
+    # Cancel background tasks
+    cache_flush_task.cancel()
+    try:
+        await cache_flush_task
+    except asyncio.CancelledError:
+        pass
+
+    # Save cache to disk on shutdown
+    if _cache_path is not None and app.state.response_cache is not None:
+        app.state.response_cache.save(_cache_path)
+        logger.info("Response cache saved to disk")
+
+    # Cancel account save task
     save_task.cancel()
     try:
         await save_task
