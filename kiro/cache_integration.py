@@ -109,3 +109,33 @@ def store_cache(
 def entry_to_response_body(entry: CacheEntry) -> dict[str, Any]:
     """Deserialise a cache entry back into the JSON dict the route returns."""
     return json.loads(entry.body.decode("utf-8"))
+
+
+def store_stream_cache(
+    cache: Optional[ResponseCache],
+    key: str,
+    chunks: list[bytes],
+) -> bool:
+    """Concatenate SSE chunk bytes and persist in the cache.
+
+    Returns False when the cache is disabled, the body is empty, or the
+    concatenated size exceeds the per-entry budget.
+    """
+    if cache is None:
+        return False
+    body = b"".join(chunks)
+    if not body:
+        return False
+    return cache.put(key, body)
+
+
+def try_stream_cache_lookup(
+    cache: Optional[ResponseCache], key: str
+) -> Optional[bytes]:
+    """Return raw SSE bytes for a cached streaming response, or None."""
+    if cache is None:
+        return None
+    entry = cache.get(key)
+    if entry is None:
+        return None
+    return entry.body

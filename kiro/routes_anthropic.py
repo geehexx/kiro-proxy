@@ -33,7 +33,7 @@ from fastapi.security import APIKeyHeader
 from loguru import logger
 
 from kiro.auth import AuthType
-from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, WEB_SEARCH_ENABLED
+from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, STREAM_CACHE_ENABLED, WEB_SEARCH_ENABLED
 from kiro.converters_anthropic import anthropic_to_kiro
 from kiro.http_client import KiroHttpClient
 from kiro.mcp_tools import handle_native_web_search
@@ -206,9 +206,8 @@ async def messages(
         logger.debug(f"Anthropic-Version header: {anthropic_version}")
 
     # ==============================================================================
-    # Response cache setup (non-streaming only)
+    # Response cache setup (non-streaming + streaming)
     # ==============================================================================
-    # Streaming cache (capture + replay chunks) is a separate follow-up.
     # The cache is a singleton on app.state; if disabled it is None.
     # NOTE: Key computation is deferred until after truncation recovery so the
     # key reflects the actual messages sent upstream, not the pre-mutation form.
@@ -217,14 +216,21 @@ async def messages(
         derive_session_id,
         entry_to_response_body,
         store_cache,
+        store_stream_cache,
         try_cache_lookup,
+        try_stream_cache_lookup,
     )
 
     response_cache = getattr(request.app.state, "response_cache", None)
     cache_key: Optional[str] = None
     cache_eligible = response_cache is not None and not request_data.stream
+    stream_cache_eligible = (
+        response_cache is not None
+        and request_data.stream
+        and STREAM_CACHE_ENABLED
+    )
     session_id: Optional[str] = None
-    if cache_eligible:
+    if cache_eligible or stream_cache_eligible:
         client_session_id = request.headers.get("x-kiro-session-id")
         api_key_for_scope = (
             request.headers.get("x-api-key")
@@ -358,7 +364,7 @@ async def messages(
     # Response cache lookup — runs AFTER truncation recovery so the key
     # reflects the actual messages that will be sent upstream.
     # ==============================================================================
-    if cache_eligible and session_id is not None:
+    if (cache_eligible or stream_cache_eligible) and session_id is not None:
         messages_for_cache = [msg.model_dump() for msg in request_data.messages]
         tools_for_cache = [tool.model_dump() for tool in request_data.tools] if request_data.tools else None
         if isinstance(request_data.system, list):
@@ -376,31 +382,67 @@ async def messages(
             thinking=request_data.thinking,
         )
 
-        hit = try_cache_lookup(response_cache, cache_key)
-        if hit is not None:
-            hit_body = entry_to_response_body(hit)
-            logger.info(
-                f"HTTP 200 - POST /v1/messages (non-streaming, cache hit) "
-                f"key={cache_key[:8]} "
-                f"msg_id={hit_body.get('id', 'unknown')} "
-                f"response_model={hit_body.get('model', 'unknown')}"
-            )
-            if debug_logger:
-                debug_logger.discard_buffers()
-            await _emit_gateway_baseline(
-                request,
-                response_body=hit_body,
-                request_model=request_data.model,
-                session_id_gw=session_id,
-                cache_key=cache_key,
-                upstream_ms=None,
-                gateway_cache="hit",
-                status=200,
-            )
-            return JSONResponse(
-                content=hit_body,
-                headers={"x-kiro-cache": "hit"},
-            )
+        if cache_eligible:
+            hit = try_cache_lookup(response_cache, cache_key)
+            if hit is not None:
+                hit_body = entry_to_response_body(hit)
+                logger.info(
+                    f"HTTP 200 - POST /v1/messages (non-streaming, cache hit) "
+                    f"key={cache_key[:8]} "
+                    f"msg_id={hit_body.get('id', 'unknown')} "
+                    f"response_model={hit_body.get('model', 'unknown')}"
+                )
+                if debug_logger:
+                    debug_logger.discard_buffers()
+                await _emit_gateway_baseline(
+                    request,
+                    response_body=hit_body,
+                    request_model=request_data.model,
+                    session_id_gw=session_id,
+                    cache_key=cache_key,
+                    upstream_ms=None,
+                    gateway_cache="hit",
+                    status=200,
+                )
+                return JSONResponse(
+                    content=hit_body,
+                    headers={"x-kiro-cache": "hit"},
+                )
+
+        if stream_cache_eligible:
+            stream_hit = try_stream_cache_lookup(response_cache, cache_key)
+            if stream_hit is not None:
+                logger.info(
+                    f"HTTP 200 - POST /v1/messages (streaming, cache hit) "
+                    f"key={cache_key[:8]}"
+                )
+                if debug_logger:
+                    debug_logger.discard_buffers()
+                await _emit_gateway_baseline(
+                    request,
+                    response_body={},
+                    request_model=request_data.model,
+                    session_id_gw=session_id,
+                    cache_key=cache_key,
+                    upstream_ms=None,
+                    gateway_cache="hit",
+                    status=200,
+                    stream=True,
+                )
+                cached_bytes = stream_hit
+
+                async def replay_stream():
+                    yield cached_bytes
+
+                return StreamingResponse(
+                    replay_stream(),
+                    media_type="text/event-stream",
+                    headers={
+                        "Cache-Control": "no-cache",
+                        "Connection": "keep-alive",
+                        "x-kiro-cache": "hit",
+                    },
+                )
 
     # ==============================================================================
     # Sub-agent web_search Strip (SDK 422 re-serialisation bug prevention)
@@ -599,6 +641,8 @@ async def messages(
                             client_disconnected = False
                             # Capture usage from message_delta event for baseline
                             _stream_usage: dict = {}
+                            # Buffer chunks for streaming cache (only when stream_cache_eligible)
+                            _stream_chunks: list[bytes] = []
                             try:
 
                                 async def make_retry_request():
@@ -626,6 +670,9 @@ async def messages(
                                                         _stream_usage = usage
                                         except Exception:
                                             pass
+                                    # Buffer for streaming cache
+                                    if stream_cache_eligible and cache_key:
+                                        _stream_chunks.append(chunk.encode("utf-8") if isinstance(chunk, str) else chunk)
                                     yield chunk
                             except GeneratorExit:
                                 client_disconnected = True
@@ -654,6 +701,14 @@ async def messages(
                                     # Body finished cleanly — safe to record success
                                     await account_manager.report_success(account.id, request_data.model)
                                     logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
+                                    # Store in streaming cache on clean completion
+                                    if stream_cache_eligible and cache_key and _stream_chunks:
+                                        stored = store_stream_cache(response_cache, cache_key, _stream_chunks)
+                                        if stored:
+                                            logger.debug(
+                                                f"stream-cache stored key={cache_key[:8]} "
+                                                f"entries={response_cache.stats()['entries']}"
+                                            )
 
                                 # Emit streaming baseline with token data extracted from message_delta
                                 await _emit_gateway_baseline(
@@ -663,7 +718,7 @@ async def messages(
                                     session_id_gw=session_id,
                                     cache_key=cache_key,
                                     upstream_ms=_upstream_ms_total,
-                                    gateway_cache="bypass",
+                                    gateway_cache="bypass" if not stream_cache_eligible else "miss",
                                     status=200 if not streaming_error else 500,
                                     stream=True,
                                 )
@@ -1023,6 +1078,8 @@ async def messages(
                 streaming_error = None
                 client_disconnected = False
                 _sem_acquired = False
+                # Buffer for streaming cache
+                _stream_chunks: list[bytes] = []
                 try:
                     # Acquire Opus concurrency slot if the cap is active.
                     if _opus_semaphore is not None:
@@ -1044,6 +1101,9 @@ async def messages(
                         request_tools=tools_for_tokenizer,
                         request_system=system_for_tokenizer,
                     ):
+                        # Buffer for streaming cache
+                        if stream_cache_eligible and cache_key:
+                            _stream_chunks.append(chunk.encode("utf-8") if isinstance(chunk, str) else chunk)
                         yield chunk
                 except GeneratorExit:
                     client_disconnected = True
@@ -1072,6 +1132,14 @@ async def messages(
                         logger.info("HTTP 200 - POST /v1/messages (streaming) - client disconnected")
                     else:
                         logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
+                        # Store in streaming cache on clean completion
+                        if stream_cache_eligible and cache_key and _stream_chunks:
+                            stored = store_stream_cache(response_cache, cache_key, _stream_chunks)
+                            if stored:
+                                logger.debug(
+                                    f"stream-cache stored key={cache_key[:8]} "
+                                    f"entries={response_cache.stats()['entries']}"
+                                )
 
                     # Emit streaming baseline (legacy dispatch path). Token
                     # counts unavailable from the stream; reconcile joins via
@@ -1083,7 +1151,7 @@ async def messages(
                         session_id_gw=session_id,
                         cache_key=cache_key,
                         upstream_ms=_upstream_ms_total,
-                        gateway_cache="bypass",
+                        gateway_cache="bypass" if not stream_cache_eligible else "miss",
                         status=200 if not streaming_error else 500,
                         stream=True,
                     )

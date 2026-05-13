@@ -669,6 +669,11 @@ RESPONSE_CACHE_TTL_SECONDS: int = int(os.getenv("RESPONSE_CACHE_TTL_SECONDS", "3
 RESPONSE_CACHE_MAX_ENTRY_BYTES: int = int(os.getenv("RESPONSE_CACHE_MAX_ENTRY_BYTES", str(5 * 1024 * 1024)))
 RESPONSE_CACHE_LOG_HITS: bool = _parse_bool_env("RESPONSE_CACHE_LOG_HITS", default=True)
 
+# Streaming response cache — buffers SSE chunks and replays on identical requests.
+# Requires RESPONSE_CACHE_ENABLED=true to have any effect (shares the same cache store).
+# Default: false — enable after verifying memory headroom (each cached stream ≤ max_entry_bytes).
+STREAM_CACHE_ENABLED: bool = _parse_bool_env("STREAM_CACHE_ENABLED", default=False)
+
 
 # ==================================================================================================
 # Sub-agent web_search Strip (SDK 422 re-serialisation bug prevention)
