@@ -53,8 +53,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from kiro.account_manager import AccountManager
-from kiro.auth import KiroAuthManager
-from kiro.cache import ModelInfoCache
 from kiro.config import (
     ACCOUNT_SYSTEM,
     ACCOUNTS_CONFIG_FILE,
@@ -64,17 +62,12 @@ from kiro.config import (
     APP_VERSION,
     DEFAULT_SERVER_HOST,
     DEFAULT_SERVER_PORT,
-    FALLBACK_MODELS,
-    HIDDEN_FROM_LIST,
-    HIDDEN_MODELS,
     KIRO_CLI_DB_FILE,
     KIRO_CREDS_FILE,
     LOG_LEVEL,
-    MODEL_ALIASES,
-    PROFILE_ARN,
-    PROXY_API_KEY,
+    PROFILE_ARN,  # noqa: F401 — patched by tests via monkeypatch.setattr("main.PROFILE_ARN", ...)
     REFRESH_TOKEN,
-    REGION,
+    REGION,  # noqa: F401 — patched by tests via monkeypatch.setattr("main.REGION", ...)
     SERVER_HOST,
     SERVER_PORT,
     STREAMING_READ_TIMEOUT,
@@ -83,7 +76,6 @@ from kiro.config import (
 )
 from kiro.debug_middleware import DebugLoggerMiddleware
 from kiro.exceptions import validation_exception_handler
-from kiro.model_resolver import ModelResolver
 from kiro.routes_anthropic import router as anthropic_router
 from kiro.routes_openai import router as openai_router
 
@@ -93,7 +85,11 @@ logger.add(
     sys.stderr,
     level=LOG_LEVEL,
     colorize=True,
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    format=(
+        "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | "
+        "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+        "<level>{message}</level>"
+    ),
 )
 
 
@@ -401,6 +397,26 @@ async def lifespan(app: FastAPI):
 
     app.state.baselines_writer = BaselinesWriter()
     logger.info("Baselines writer initialized")
+
+    # Global Opus concurrency semaphore (§3 — feature-flagged OFF by default).
+    # When GATEWAY_GLOBAL_OPUS_CONCURRENCY > 0, a process-wide asyncio.Semaphore
+    # is created here and stored on app.state.  Routes acquire it before each
+    # claude-opus-* streaming call.  Default 0 = no semaphore = no behaviour change.
+    from kiro.config import GATEWAY_GLOBAL_OPUS_CONCURRENCY
+
+    if GATEWAY_GLOBAL_OPUS_CONCURRENCY > 0:
+        import asyncio as _asyncio
+        app.state.global_opus_semaphore = _asyncio.Semaphore(GATEWAY_GLOBAL_OPUS_CONCURRENCY)
+        logger.info(
+            f"Global Opus concurrency semaphore initialized "
+            f"(cap={GATEWAY_GLOBAL_OPUS_CONCURRENCY})"
+        )
+    else:
+        app.state.global_opus_semaphore = None
+        logger.info(
+            "Global Opus concurrency cap disabled "
+            "(set GATEWAY_GLOBAL_OPUS_CONCURRENCY>0 to enable)"
+        )
 
     # ==============================================================================
     # Legacy Fallback: .env → credentials.json

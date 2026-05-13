@@ -34,11 +34,8 @@ Example:
     "Model context limit reached. Conversation size exceeds model capacity."
 """
 
-from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Dict
-
-from loguru import logger
+from dataclasses import dataclass, field
+from typing import Any, Optional
 
 
 @dataclass
@@ -53,10 +50,14 @@ class KiroErrorInfo:
         reason: Error reason code from Kiro API (as string, e.g. "CONTENT_LENGTH_EXCEEDS_THRESHOLD")
         user_message: Enhanced, user-friendly message for end users
         original_message: Original message from Kiro API (for logging)
+        retry_after_hint: Suggested retry delay in seconds, or None if not applicable.
+            Set for capacity-exhaustion errors (INSUFFICIENT_MODEL_CAPACITY) to
+            signal the caller that a longer backoff is warranted.
     """
     reason: str
     user_message: str
     original_message: str
+    retry_after_hint: Optional[float] = field(default=None)
 
 
 def enhance_kiro_error(error_json: dict[str, Any]) -> KiroErrorInfo:
@@ -100,9 +101,20 @@ def enhance_kiro_error(error_json: dict[str, Any]) -> KiroErrorInfo:
         reason = "UNKNOWN"
 
     # Map known reasons to user-friendly messages
+    retry_after_hint: Optional[float] = None
+
     if reason == "CONTENT_LENGTH_EXCEEDS_THRESHOLD":
         # Context limit exceeded - conversation is too long
         user_message = "Model context limit reached. Conversation size exceeds model capacity."
+
+    elif reason == "INSUFFICIENT_MODEL_CAPACITY":
+        # Transient capacity exhaustion — the model tier is overloaded.
+        # Signal callers to back off longer than a standard rate-limit retry.
+        user_message = (
+            "Model capacity temporarily exhausted. "
+            "The requested model is overloaded; please retry in a moment."
+        )
+        retry_after_hint = 30.0
 
     elif reason == "MONTHLY_REQUEST_COUNT":
         # Monthly request limit exceeded - account quota exhausted
@@ -132,5 +144,6 @@ def enhance_kiro_error(error_json: dict[str, Any]) -> KiroErrorInfo:
     return KiroErrorInfo(
         reason=reason,
         user_message=user_message,
-        original_message=original_message
+        original_message=original_message,
+        retry_after_hint=retry_after_hint,
     )
