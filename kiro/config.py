@@ -300,12 +300,18 @@ HIDDEN_FROM_LIST: list[str] = ["auto"]
 # - Some models may not be available on your Kiro plan (e.g., Opus on free tier)
 # - New models released after this version won't appear here
 # - Update gateway regularly to get the latest model list
-FALLBACK_MODELS: list[dict[str, str]] = [
+FALLBACK_MODELS: list[dict] = [
     {"modelId": "auto"},
-    {"modelId": "claude-sonnet-4"},
-    {"modelId": "claude-haiku-4.5"},
-    {"modelId": "claude-sonnet-4.5"},
-    {"modelId": "claude-opus-4.5"},
+    {"modelId": "claude-sonnet-4", "tokenLimits": {"maxInputTokens": 200000}},
+    {"modelId": "claude-haiku-4.5", "tokenLimits": {"maxInputTokens": 200000}},
+    {"modelId": "claude-sonnet-4.5", "tokenLimits": {"maxInputTokens": 200000}},
+    {"modelId": "claude-opus-4.5", "tokenLimits": {"maxInputTokens": 200000}},
+    {"modelId": "claude-sonnet-4-6", "tokenLimits": {"maxInputTokens": 1000000}},
+    {"modelId": "claude-sonnet-4.6", "tokenLimits": {"maxInputTokens": 1000000}},
+    {"modelId": "claude-opus-4-7", "tokenLimits": {"maxInputTokens": 1000000}},
+    {"modelId": "claude-opus-4.7", "tokenLimits": {"maxInputTokens": 1000000}},
+    {"modelId": "claude-haiku-4-5", "tokenLimits": {"maxInputTokens": 200000}},
+    {"modelId": "claude-haiku-4-5-20251001", "tokenLimits": {"maxInputTokens": 200000}},
 ]
 
 # ==================================================================================================
