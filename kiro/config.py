@@ -704,3 +704,15 @@ STREAM_CACHE_ENABLED: bool = _parse_bool_env("STREAM_CACHE_ENABLED", default=Fal
 GATEWAY_SUBAGENT_STRIP_WEB_SEARCH: bool = _parse_bool_env(
     "GATEWAY_SUBAGENT_STRIP_WEB_SEARCH", default=True
 )
+
+# ==================================================================================================
+# Re2 (ReRead) Injection — OptiLLM technique
+# ==================================================================================================
+# Injects "Read the question again:" into the last user message to improve reasoning accuracy.
+# Zero cost (no extra API calls). Opt-in via X-Kiro-Re2: true header.
+# Based on: https://github.com/algorithmicsuperintelligence/optillm
+RE2_ENABLED: bool = _parse_bool_env("RE2_ENABLED", default=False)
+RE2_INJECTION: str = os.getenv(
+    "RE2_INJECTION",
+    "\n\nRead the question again carefully before answering."
+)
