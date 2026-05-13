@@ -33,7 +33,7 @@ from fastapi.security import APIKeyHeader
 from loguru import logger
 
 from kiro.auth import AuthType
-from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, STREAM_CACHE_ENABLED, WEB_SEARCH_ENABLED
+from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, RE2_ENABLED, RE2_INJECTION, STREAM_CACHE_ENABLED, WEB_SEARCH_ENABLED
 from kiro.converters_anthropic import anthropic_to_kiro
 from kiro.http_client import KiroHttpClient
 from kiro.mcp_tools import handle_native_web_search
@@ -359,6 +359,40 @@ async def messages(
             f"Truncation recovery: modified {tool_results_modified} tool_result(s), "
             f"added {content_notices_added} content notice(s)"
         )
+
+
+    # ==============================================================================
+    # Re2 (ReRead) injection — OptiLLM technique for improved reasoning accuracy.
+    # Appends "Read the question again carefully" to the last user message.
+    # Opt-in via X-Kiro-Re2: true header or RE2_ENABLED=true env var.
+    # Zero cost — no extra API calls. Based on: github.com/codelion/optillm
+    # ==============================================================================
+    _re2_active = RE2_ENABLED or request.headers.get("x-kiro-re2", "").lower() == "true"
+    if _re2_active and request_data.messages:
+        # Find last user message and append re2 injection
+        for _i in range(len(request_data.messages) - 1, -1, -1):
+            _msg = request_data.messages[_i]
+            if _msg.role == "user":
+                if isinstance(_msg.content, str):
+                    request_data.messages[_i] = _msg.model_copy(
+                        update={"content": _msg.content + RE2_INJECTION}
+                    )
+                elif isinstance(_msg.content, list):
+                    # Find last text block and append
+                    _new_content = list(_msg.content)
+                    for _j in range(len(_new_content) - 1, -1, -1):
+                        _block = _new_content[_j]
+                        _btype = _block.get("type") if isinstance(_block, dict) else getattr(_block, "type", None)
+                        if _btype == "text":
+                            _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
+                            if isinstance(_block, dict):
+                                _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
+                            else:
+                                _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
+                            break
+                    request_data.messages[_i] = _msg.model_copy(update={"content": _new_content})
+                logger.debug("Re2 injection applied to last user message")
+                break
 
     # ==============================================================================
     # Response cache lookup — runs AFTER truncation recovery so the key
