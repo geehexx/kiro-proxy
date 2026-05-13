@@ -597,6 +597,8 @@ async def messages(
                         async def stream_wrapper():
                             streaming_error = None
                             client_disconnected = False
+                            # Capture usage from message_delta event for baseline
+                            _stream_usage: dict = {}
                             try:
 
                                 async def make_retry_request():
@@ -612,6 +614,18 @@ async def messages(
                                     request_tools=tools_for_tokenizer,
                                     request_system=system_for_tokenizer,
                                 ):
+                                    # Extract usage from message_delta SSE event
+                                    if not _stream_usage and chunk.startswith("data:"):
+                                        try:
+                                            data_str = chunk.split("data:", 1)[1].strip()
+                                            if data_str and data_str != "[DONE]":
+                                                evt = json.loads(data_str)
+                                                if evt.get("type") == "message_delta":
+                                                    usage = evt.get("usage", {})
+                                                    if usage.get("input_tokens") or usage.get("output_tokens"):
+                                                        _stream_usage = usage
+                                        except Exception:
+                                            pass
                                     yield chunk
                             except GeneratorExit:
                                 client_disconnected = True
@@ -641,12 +655,10 @@ async def messages(
                                     await account_manager.report_success(account.id, request_data.model)
                                     logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
 
-                                # Emit streaming baseline (message_id + usage
-                                # unavailable here — reconcile joins via the CC
-                                # transcript tailer). plans/2026-05-11-token-telemetry.md §Step 1.
+                                # Emit streaming baseline with token data extracted from message_delta
                                 await _emit_gateway_baseline(
                                     request,
-                                    response_body={},
+                                    response_body={"usage": _stream_usage} if _stream_usage else {},
                                     request_model=request_data.model,
                                     session_id_gw=session_id,
                                     cache_key=cache_key,
