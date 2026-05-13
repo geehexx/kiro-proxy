@@ -1,33 +1,26 @@
 """
 Logfire / OpenTelemetry telemetry for kiro-gateway.
 
-Provides:
-- Gateway request spans with full metadata
-- Cache hit/miss/bypass counters
-- re2 injection tracking
-- Upstream latency histograms
-- Kiro plan cost estimation (invocations → $ overage)
-- Model routing events
-
-Usage:
-    from kiro.telemetry import setup_logfire, record_request, record_cache_event
-
-    # In main.py lifespan:
-    setup_logfire()
-
-    # In routes_anthropic.py after each request:
-    record_request(model=..., stream=..., cache=..., re2=..., upstream_ms=..., status=...)
+Design principles:
+- Hierarchy: user_request → gateway.request → (cache.hit | upstream.call)
+- Truncation: prompts/responses capped at 500 chars to control Logfire data volume
+- Model names: always use normalized form (claude-sonnet-4.6, not raw client names)
+- No test noise: min_level=INFO, no debug spans
+- Cost tracking: Kiro Power plan ($0.02/invocation flat, $0.04 overage)
+- OTel semantic conventions: gen_ai.* namespace for LLM attributes
 """
 
 from __future__ import annotations
 
 import os
-import time
-from typing import Optional
+from contextlib import contextmanager
+from typing import Any, Generator, Optional
 
 from loguru import logger
 
-# Lazy import logfire so the gateway still starts if logfire is not installed
+_MAX_PROMPT_CHARS = 500   # truncate prompts/responses in spans
+_MAX_ATTR_CHARS = 200     # truncate other string attributes
+
 try:
     import logfire as _logfire
     _LOGFIRE_AVAILABLE = True
@@ -35,36 +28,30 @@ except ImportError:
     _logfire = None  # type: ignore[assignment]
     _LOGFIRE_AVAILABLE = False
 
-
-# ---------------------------------------------------------------------------
-# Kiro plan cost constants (from config — imported lazily to avoid circular)
-# ---------------------------------------------------------------------------
 _MONTHLY_COST_USD = float(os.getenv("KIRO_PLAN_MONTHLY_COST_USD", "200.0"))
 _MONTHLY_INVOCATIONS = int(os.getenv("KIRO_PLAN_MONTHLY_INVOCATIONS", "10000"))
 _OVERAGE_COST_USD = float(os.getenv("KIRO_PLAN_OVERAGE_COST_USD", "0.04"))
-
-# Per-invocation cost within the flat plan (amortised)
 _COST_PER_INVOCATION_FLAT = _MONTHLY_COST_USD / _MONTHLY_INVOCATIONS  # $0.02
-
-
-def _invocation_cost_usd(is_overage: bool = False) -> float:
-    """Return the $ cost of one gateway invocation."""
-    return _OVERAGE_COST_USD if is_overage else _COST_PER_INVOCATION_FLAT
-
-
-# ---------------------------------------------------------------------------
-# Setup
-# ---------------------------------------------------------------------------
 
 _configured = False
 
 
-def setup_logfire() -> bool:
-    """Configure logfire for the gateway process.
+def _trunc(s: Any, max_chars: int = _MAX_ATTR_CHARS) -> str:
+    """Truncate a value to max_chars for Logfire attribute storage."""
+    if s is None:
+        return ""
+    text = str(s)
+    if len(text) <= max_chars:
+        return text
+    return text[:max_chars] + f"…[+{len(text)-max_chars}]"
 
-    Returns True if logfire was successfully configured, False otherwise.
-    Failures are non-fatal — the gateway runs without telemetry.
-    """
+
+def _cost_usd(is_overage: bool = False) -> float:
+    return _OVERAGE_COST_USD if is_overage else _COST_PER_INVOCATION_FLAT
+
+
+def setup_logfire() -> bool:
+    """Configure logfire. Returns True on success. Non-fatal on failure."""
     global _configured
     if _configured:
         return True
@@ -84,8 +71,13 @@ def setup_logfire() -> bool:
             service_version=os.getenv("APP_VERSION", "2.4-dev"),
             environment=os.getenv("LOGFIRE_ENVIRONMENT", "production"),
             send_to_logfire=True,
-            # Suppress noisy internal spans
             console=False,
+            # Only INFO+ — suppress debug spans and test noise
+            min_level="info",
+            # Scrub common secret patterns from attributes
+            scrubbing=_logfire.ScrubbingOptions(
+                extra_patterns=["token", "api.key", "auth", "bearer", "secret"]
+            ) if hasattr(_logfire, "ScrubbingOptions") else None,
         )
         _configured = True
         logger.info("Logfire telemetry configured (project: kiro-gateway)")
@@ -96,11 +88,15 @@ def setup_logfire() -> bool:
 
 
 def instrument_fastapi(app: object) -> None:
-    """Instrument a FastAPI app with logfire auto-instrumentation."""
+    """Instrument FastAPI + httpx. Excludes health/metrics endpoints."""
     if not _configured or not _LOGFIRE_AVAILABLE:
         return
     try:
-        _logfire.instrument_fastapi(app, capture_headers=False)  # type: ignore[arg-type]
+        _logfire.instrument_fastapi(
+            app,  # type: ignore[arg-type]
+            capture_headers=False,
+            excluded_urls="/health,/metrics,/v1/models",
+        )
         _logfire.instrument_httpx()
         logger.info("Logfire FastAPI + httpx instrumentation active")
     except Exception as e:
@@ -108,7 +104,146 @@ def instrument_fastapi(app: object) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Per-request telemetry
+# Span context managers — use these to create the hierarchy
+# ---------------------------------------------------------------------------
+
+@contextmanager
+def user_request_span(
+    *,
+    model: str,
+    stream: bool,
+    message_count: int,
+    session_id: Optional[str] = None,
+    last_user_message_preview: Optional[str] = None,
+) -> Generator[None, None, None]:
+    """Top-level span for a user request. Wraps the entire gateway handling.
+
+    Hierarchy: user_request → gateway.request → cache.hit | upstream.call
+
+    Usage:
+        with user_request_span(model=..., stream=..., ...):
+            # all child spans nest under this
+    """
+    if not _configured or not _LOGFIRE_AVAILABLE:
+        yield
+        return
+    try:
+        attrs: dict[str, Any] = {
+            "gen_ai.system": "kiro-gateway",
+            "gen_ai.request.model": model,
+            "gen_ai.operation.name": "chat",
+            "kiro.request.stream": stream,
+            "kiro.request.message_count": message_count,
+        }
+        if session_id:
+            attrs["kiro.session.id"] = session_id[:16]
+        if last_user_message_preview:
+            attrs["kiro.request.prompt_preview"] = _trunc(last_user_message_preview, _MAX_PROMPT_CHARS)
+
+        with _logfire.span("user_request", **attrs):
+            yield
+    except Exception:
+        yield
+
+
+@contextmanager
+def gateway_request_span(
+    *,
+    model: str,
+    stream: bool,
+    re2_applied: bool,
+    cache_result: str,
+    upstream_ms: Optional[int] = None,
+    status: int = 200,
+    input_tokens: Optional[int] = None,
+    output_tokens: Optional[int] = None,
+    error_reason: Optional[str] = None,
+    retry_count: int = 0,
+    is_overage: bool = False,
+) -> Generator[None, None, None]:
+    """Span for gateway processing of one request. Nests under user_request_span."""
+    if not _configured or not _LOGFIRE_AVAILABLE:
+        yield
+        return
+    try:
+        cost = _cost_usd(is_overage)
+        attrs: dict[str, Any] = {
+            "gen_ai.request.model": model,
+            "gen_ai.usage.input_tokens": input_tokens or 0,
+            "gen_ai.usage.output_tokens": output_tokens or 0,
+            "kiro.gateway.cache": cache_result,
+            "kiro.gateway.re2_applied": re2_applied,
+            "kiro.gateway.stream": stream,
+            "kiro.gateway.status": status,
+            "kiro.gateway.upstream_ms": upstream_ms or 0,
+            "kiro.gateway.retry_count": retry_count,
+            "kiro.cost.invocation_usd": cost,
+            "kiro.cost.plan": "kiro-power",
+        }
+        if error_reason:
+            attrs["kiro.gateway.error_reason"] = _trunc(error_reason)
+        if is_overage:
+            attrs["kiro.cost.is_overage"] = True
+
+        span_name = f"gateway {'stream' if stream else 'sync'} [{cache_result}]"
+        with _logfire.span(span_name, **attrs):
+            yield
+    except Exception:
+        yield
+
+
+# ---------------------------------------------------------------------------
+# Lightweight event emitters (no span overhead)
+# ---------------------------------------------------------------------------
+
+def emit_cache_event(
+    *,
+    event: str,
+    model: str,
+    cache_key_prefix: Optional[str] = None,
+) -> None:
+    """Emit cache.hit / cache.miss / cache.bypass as a log event."""
+    if not _configured or not _LOGFIRE_AVAILABLE:
+        return
+    try:
+        _logfire.info(
+            f"cache.{event}",
+            **{
+                "kiro.cache.event": event,
+                "kiro.cache.model": model,
+                "kiro.cache.key": cache_key_prefix or "",
+            }
+        )
+    except Exception:
+        pass
+
+
+def emit_upstream_call(
+    *,
+    model: str,
+    upstream_ms: int,
+    status: int,
+    error_reason: Optional[str] = None,
+) -> None:
+    """Emit upstream API call timing as a log event."""
+    if not _configured or not _LOGFIRE_AVAILABLE:
+        return
+    try:
+        attrs: dict[str, Any] = {
+            "kiro.upstream.model": model,
+            "kiro.upstream.latency_ms": upstream_ms,
+            "kiro.upstream.status": status,
+        }
+        if error_reason:
+            attrs["kiro.upstream.error"] = _trunc(error_reason)
+        level = "warning" if status >= 400 else "info"
+        getattr(_logfire, level)(f"upstream.call [{status}]", **attrs)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Legacy flat emitter — used by _emit_gateway_baseline until routes are refactored
 # ---------------------------------------------------------------------------
 
 def record_request(
@@ -126,103 +261,47 @@ def record_request(
     session_id: Optional[str] = None,
     is_overage: bool = False,
 ) -> None:
-    """Emit a logfire span for one gateway request.
+    """Flat span emitter. Used by _emit_gateway_baseline.
 
-    All fields map to OpenTelemetry semantic conventions where possible.
-    Custom attributes use the `kiro.` namespace.
+    Prefer gateway_request_span() for new code — it creates proper hierarchy.
     """
     if not _configured or not _LOGFIRE_AVAILABLE:
         return
     try:
-        cost_usd = _invocation_cost_usd(is_overage)
-        attrs = {
-            # OTel LLM semantic conventions (draft)
+        cost = _cost_usd(is_overage)
+        attrs: dict[str, Any] = {
             "gen_ai.system": "aws_bedrock",
             "gen_ai.request.model": model,
-            "gen_ai.response.model": model,
-            "gen_ai.operation.name": "chat",
-            # Token counts
             "gen_ai.usage.input_tokens": input_tokens or 0,
             "gen_ai.usage.output_tokens": output_tokens or 0,
-            # Gateway-specific
-            "kiro.gateway.cache": gateway_cache,          # hit / miss / bypass
+            "kiro.gateway.cache": gateway_cache,
             "kiro.gateway.re2_applied": re2_applied,
             "kiro.gateway.stream": stream,
             "kiro.gateway.status": status,
             "kiro.gateway.upstream_ms": upstream_ms or 0,
             "kiro.gateway.retry_count": retry_count or 0,
-            "kiro.gateway.is_overage": is_overage,
-            # Cost tracking
-            "kiro.cost.invocation_usd": cost_usd,
+            "kiro.cost.invocation_usd": cost,
             "kiro.cost.plan": "kiro-power",
         }
         if error_reason:
-            attrs["kiro.gateway.error_reason"] = error_reason
+            attrs["kiro.gateway.error_reason"] = _trunc(error_reason)
         if session_id:
             attrs["kiro.session.id"] = session_id[:16]
 
-        span_name = f"gateway.request {'(stream)' if stream else '(sync)'}"
+        span_name = f"gateway.request [{'stream' if stream else 'sync'}] [{gateway_cache}]"
         with _logfire.span(span_name, **attrs):
             pass
     except Exception as e:
         logger.debug(f"Logfire record_request failed (non-fatal): {e}")
 
 
-def record_cache_event(
-    *,
-    event: str,  # "hit" | "miss" | "bypass" | "store" | "evict"
-    model: str,
-    cache_key_prefix: Optional[str] = None,
-    size_bytes: Optional[int] = None,
-) -> None:
-    """Emit a logfire event for cache operations."""
-    if not _configured or not _LOGFIRE_AVAILABLE:
-        return
-    try:
-        _logfire.info(
-            f"cache.{event}",
-            **{
-                "kiro.cache.event": event,
-                "kiro.cache.model": model,
-                "kiro.cache.key_prefix": cache_key_prefix or "",
-                "kiro.cache.size_bytes": size_bytes or 0,
-            }
-        )
-    except Exception:
-        pass
-
-
-def record_re2_decision(
-    *,
-    applied: bool,
-    reason: str,
-    model: str,
-    message_count: int,
-) -> None:
-    """Emit a logfire event for re2 injection decisions."""
-    if not _configured or not _LOGFIRE_AVAILABLE:
-        return
-    try:
-        _logfire.info(
-            "re2.decision",
-            **{
-                "kiro.re2.applied": applied,
-                "kiro.re2.reason": reason,
-                "kiro.re2.model": model,
-                "kiro.re2.message_count": message_count,
-            }
-        )
-    except Exception:
-        pass
-
-
 def record_model_resolution(
     *,
     raw_model: str,
     resolved_model: str,
-    resolution_source: str,  # "alias" | "normalize" | "passthrough"
+    resolution_source: str,
 ) -> None:
-    """Emit a logfire event for model name resolution."""
+    """Log model name resolution when raw != resolved."""
     if not _configured or not _LOGFIRE_AVAILABLE:
         return
     try:
@@ -232,7 +311,7 @@ def record_model_resolution(
                 **{
                     "kiro.model.raw": raw_model,
                     "kiro.model.resolved": resolved_model,
-                    "kiro.model.resolution_source": resolution_source,
+                    "kiro.model.source": resolution_source,
                 }
             )
     except Exception:
