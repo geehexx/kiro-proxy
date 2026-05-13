@@ -207,6 +207,18 @@ async def messages(
     if anthropic_version:
         logger.debug(f"Anthropic-Version header: {anthropic_version}")
 
+    # Normalize model name early so all downstream code (baselines, cache keys,
+    # logs) uses the canonical form. Aliases (sonnet[1m] → claude-sonnet-4.6)
+    # and bracket suffixes ([1m]) are resolved here via the model resolver.
+    from kiro.model_resolver import normalize_model_name
+    from kiro.config import MODEL_ALIASES
+    _raw_model = request_data.model
+    _resolved = MODEL_ALIASES.get(_raw_model, _raw_model)
+    _normalized = normalize_model_name(_resolved)
+    if _normalized != _raw_model:
+        logger.debug(f"Model normalized: {_raw_model!r} → {_normalized!r}")
+        request_data = request_data.model_copy(update={"model": _normalized})
+
     # ==============================================================================
     # Response cache setup (non-streaming + streaming)
     # ==============================================================================
@@ -363,42 +375,15 @@ async def messages(
         )
 
 
-    # ==============================================================================
-    # Re2 (ReRead) injection — OptiLLM technique for improved reasoning accuracy.
-    # Appends "Read the question again carefully" to the last user message.
-    # Opt-in via X-Kiro-Re2: true header or RE2_ENABLED=true env var.
-    # Zero cost — no extra API calls. Based on: github.com/codelion/optillm
-    # ==============================================================================
+    # Compute re2 flag early so cache-hit paths can record it correctly.
+    # The actual injection happens below, after cache lookup.
     _re2_active = RE2_ENABLED or request.headers.get("x-kiro-re2", "").lower() == "true"
-    if _re2_active and request_data.messages:
-        # Find last user message and append re2 injection
-        for _i in range(len(request_data.messages) - 1, -1, -1):
-            _msg = request_data.messages[_i]
-            if _msg.role == "user":
-                if isinstance(_msg.content, str):
-                    request_data.messages[_i] = _msg.model_copy(
-                        update={"content": _msg.content + RE2_INJECTION}
-                    )
-                elif isinstance(_msg.content, list):
-                    # Find last text block and append
-                    _new_content = list(_msg.content)
-                    for _j in range(len(_new_content) - 1, -1, -1):
-                        _block = _new_content[_j]
-                        _btype = _block.get("type") if isinstance(_block, dict) else getattr(_block, "type", None)
-                        if _btype == "text":
-                            _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
-                            if isinstance(_block, dict):
-                                _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
-                            else:
-                                _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
-                            break
-                    request_data.messages[_i] = _msg.model_copy(update={"content": _new_content})
-                logger.debug("Re2 injection applied to last user message")
-                break
 
     # ==============================================================================
-    # Response cache lookup — runs AFTER truncation recovery so the key
-    # reflects the actual messages that will be sent upstream.
+    # Response cache lookup — runs AFTER truncation recovery but BEFORE re2
+    # injection. Cache key must reflect the canonical conversation, not the
+    # re2-mutated form, so that re2-on and re2-off requests for the same
+    # conversation share the same cache bucket.
     # ==============================================================================
     if (cache_eligible or stream_cache_eligible) and session_id is not None:
         messages_for_cache = [msg.model_dump() for msg in request_data.messages]
@@ -572,6 +557,39 @@ async def messages(
 
                 logger.info("Detected native Anthropic web_search (Path A), routing to MCP API")
                 return await handle_native_web_search(request, request_data, auth_manager, api_format="anthropic")
+
+    # ==============================================================================
+    # Re2 (ReRead) injection — OptiLLM technique for improved reasoning accuracy.
+    # Appends "Read the question again carefully" to the last user message.
+    # Runs AFTER cache lookup so the cache key reflects the canonical conversation
+    # (re2-on and re2-off requests for the same conversation share one cache bucket).
+    # _re2_active was computed above (before cache lookup) so cache-hit paths can
+    # record it. Opt-in via X-Kiro-Re2: true header or RE2_ENABLED=true env var.
+    # Zero cost — no extra API calls. Based on: github.com/codelion/optillm
+    # ==============================================================================
+    if _re2_active and request_data.messages:
+        for _i in range(len(request_data.messages) - 1, -1, -1):
+            _msg = request_data.messages[_i]
+            if _msg.role == "user":
+                if isinstance(_msg.content, str):
+                    request_data.messages[_i] = _msg.model_copy(
+                        update={"content": _msg.content + RE2_INJECTION}
+                    )
+                elif isinstance(_msg.content, list):
+                    _new_content = list(_msg.content)
+                    for _j in range(len(_new_content) - 1, -1, -1):
+                        _block = _new_content[_j]
+                        _btype = _block.get("type") if isinstance(_block, dict) else getattr(_block, "type", None)
+                        if _btype == "text":
+                            _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
+                            if isinstance(_block, dict):
+                                _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
+                            else:
+                                _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
+                            break
+                    request_data.messages[_i] = _msg.model_copy(update={"content": _new_content})
+                logger.debug("Re2 injection applied to last user message")
+                break
 
     # ==============================================================================
     # Account System: Account System Failover or Legacy Mode

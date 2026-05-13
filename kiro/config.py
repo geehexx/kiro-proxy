@@ -696,6 +696,14 @@ RESPONSE_CACHE_TTL_SECONDS: int = int(os.getenv("RESPONSE_CACHE_TTL_SECONDS", "3
 RESPONSE_CACHE_MAX_ENTRY_BYTES: int = int(os.getenv("RESPONSE_CACHE_MAX_ENTRY_BYTES", str(5 * 1024 * 1024)))
 RESPONSE_CACHE_LOG_HITS: bool = _parse_bool_env("RESPONSE_CACHE_LOG_HITS", default=True)
 
+# Disk persistence for response cache — survives gateway restarts.
+# Path to pickle file; parent directory is created automatically.
+# Set to empty string to disable persistence (pure in-memory).
+_default_cache_persist = str(Path.home() / ".claude" / "state" / "gateway-response-cache.pkl")
+RESPONSE_CACHE_PERSIST_PATH: str = os.getenv("RESPONSE_CACHE_PERSIST_PATH", _default_cache_persist)
+# How often (seconds) to flush the cache to disk while running (0 = only on shutdown).
+RESPONSE_CACHE_PERSIST_INTERVAL: int = int(os.getenv("RESPONSE_CACHE_PERSIST_INTERVAL", "300"))
+
 # Streaming response cache — buffers SSE chunks and replays on identical requests.
 # Requires RESPONSE_CACHE_ENABLED=true to have any effect (shares the same cache store).
 # Default: false — enable after verifying memory headroom (each cached stream ≤ max_entry_bytes).
