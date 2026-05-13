@@ -308,6 +308,8 @@ FALLBACK_MODELS: list[dict] = [
     {"modelId": "claude-opus-4.5", "tokenLimits": {"maxInputTokens": 200000}},
     {"modelId": "claude-sonnet-4-6", "tokenLimits": {"maxInputTokens": 1000000}},
     {"modelId": "claude-sonnet-4.6", "tokenLimits": {"maxInputTokens": 1000000}},
+    {"modelId": "claude-opus-4-6", "tokenLimits": {"maxInputTokens": 1000000}},
+    {"modelId": "claude-opus-4.6", "tokenLimits": {"maxInputTokens": 1000000}},
     {"modelId": "claude-opus-4-7", "tokenLimits": {"maxInputTokens": 1000000}},
     {"modelId": "claude-opus-4.7", "tokenLimits": {"maxInputTokens": 1000000}},
     {"modelId": "claude-haiku-4-5", "tokenLimits": {"maxInputTokens": 200000}},
