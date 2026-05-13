@@ -374,6 +374,10 @@ async def messages(
             f"added {content_notices_added} content notice(s)"
         )
 
+    # Resolve model name once for use in baselines (normalized form, e.g. claude-sonnet-4.6).
+    from kiro.model_resolver import normalize_model_name as _normalize_model
+    from kiro.config import MODEL_ALIASES as _MODEL_ALIASES
+    _resolved_model = _normalize_model(_MODEL_ALIASES.get(request_data.model, request_data.model))
 
     # Compute re2 flag early so cache-hit paths can record it correctly.
     # The actual injection happens below, after cache lookup.
@@ -418,7 +422,7 @@ async def messages(
                 await _emit_gateway_baseline(
                     request,
                     response_body=hit_body,
-                    request_model=request_data.model,
+                    request_model=_resolved_model,
                     session_id_gw=session_id,
                     cache_key=cache_key,
                     upstream_ms=None,
@@ -443,7 +447,7 @@ async def messages(
                 await _emit_gateway_baseline(
                     request,
                     response_body={},
-                    request_model=request_data.model,
+                    request_model=_resolved_model,
                     session_id_gw=session_id,
                     cache_key=cache_key,
                     upstream_ms=None,
@@ -770,7 +774,7 @@ async def messages(
                                 await _emit_gateway_baseline(
                                     request,
                                     response_body={"usage": _stream_usage} if _stream_usage else {},
-                                    request_model=request_data.model,
+                                    request_model=_resolved_model,
                                     session_id_gw=session_id,
                                     cache_key=cache_key,
                                     upstream_ms=_upstream_ms_total,
@@ -843,7 +847,7 @@ async def messages(
                         await _emit_gateway_baseline(
                             request,
                             response_body=anthropic_response,
-                            request_model=request_data.model,
+                            request_model=_resolved_model,
                             session_id_gw=session_id,
                             cache_key=cache_key,
                             upstream_ms=_upstream_ms_total,
@@ -1105,7 +1109,7 @@ async def messages(
             await _emit_gateway_baseline(
                 request,
                 response_body={},
-                request_model=request_data.model,
+                request_model=_resolved_model,
                 session_id_gw=session_id,
                 cache_key=cache_key,
                 upstream_ms=_upstream_ms_total,
@@ -1206,7 +1210,7 @@ async def messages(
                     await _emit_gateway_baseline(
                         request,
                         response_body={},
-                        request_model=request_data.model,
+                        request_model=_resolved_model,
                         session_id_gw=session_id,
                         cache_key=cache_key,
                         upstream_ms=_upstream_ms_total,
@@ -1279,7 +1283,7 @@ async def messages(
             await _emit_gateway_baseline(
                 request,
                 response_body=anthropic_response,
-                request_model=request_data.model,
+                request_model=_resolved_model,
                 session_id_gw=session_id,
                 cache_key=cache_key,
                 upstream_ms=_upstream_ms_total,
