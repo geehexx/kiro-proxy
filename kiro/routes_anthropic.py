@@ -66,28 +66,19 @@ async def _emit_gateway_baseline(
     retry_after_applied_ms: Optional[int] = None,
     re2_applied: bool = False,
 ) -> None:
-    """Append one record to baselines-gateway-requests.jsonl.
+    """Append one record to baselines-gateway-requests.jsonl and emit logfire span.
 
     Runs AFTER the response body is fully collected so `usage` is populated.
     Failures are swallowed — telemetry must never break the hot path.
     Plan reference: plans/2026-05-11-token-telemetry.md §Step 1.
-
-    For streaming responses, pass ``response_body={}`` + ``stream=True``;
-    ``message_id`` and ``usage`` fields will be null. Reconcile joins
-    on ``message_id`` emitted by the CC transcript tailer for streamed turns.
-
-    Args:
-        error_reason: Kiro API error reason code on 429/5xx (e.g.
-            ``"INSUFFICIENT_MODEL_CAPACITY"``), or None on success.
-        retry_count: Number of retries performed before this response, or None.
-        retry_after_applied_ms: Milliseconds of Retry-After delay applied on
-            the last capacity-exhaustion retry, or None if not applicable.
     """
     writer = getattr(request.app.state, "baselines_writer", None)
     if writer is None:
         return
     try:
         usage = response_body.get("usage") or {}
+        input_tokens = usage.get("input_tokens")
+        output_tokens = usage.get("output_tokens")
         record = {
             "ts": time.time(),
             "source": "gateway-requests",
@@ -95,21 +86,39 @@ async def _emit_gateway_baseline(
             "session_id_gw": session_id_gw,
             "cache_key": cache_key[:16] if cache_key else None,
             "model": request_model,
-            "input_tokens": usage.get("input_tokens"),
-            "output_tokens": usage.get("output_tokens"),
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
             "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
             "cache_creation_input_tokens": usage.get("cache_creation_input_tokens"),
             "upstream_ms_total": upstream_ms,
             "gateway_cache": gateway_cache,
             "stream": stream,
             "status": status,
-            # §2 telemetry fields — None on success; populated on 429/5xx
             "error_reason": error_reason,
             "retry_count": retry_count,
             "retry_after_applied_ms": retry_after_applied_ms,
             "re2_applied": re2_applied,
         }
         await writer.write("gateway-requests", record)
+
+        # Emit logfire span (non-blocking, failures swallowed)
+        try:
+            from kiro.telemetry import record_request
+            record_request(
+                model=request_model,
+                stream=stream,
+                gateway_cache=gateway_cache,
+                re2_applied=re2_applied,
+                upstream_ms=upstream_ms,
+                status=status,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                error_reason=error_reason,
+                retry_count=retry_count,
+                session_id=session_id_gw,
+            )
+        except Exception:
+            pass
     except Exception as exc:
         logger.warning(f"baseline emit failed: {exc}")
 

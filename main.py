@@ -320,11 +320,12 @@ async def lifespan(app: FastAPI):
     - Shared HTTP client with connection pooling
     - KiroAuthManager for token management
     - ModelInfoCache for model caching
-
-    The shared HTTP client is used by all requests to reduce memory usage
-    and enable connection reuse. This is especially important for handling
-    concurrent requests efficiently (fixes issue #24).
     """
+    # Configure logfire telemetry before anything else
+    from kiro.telemetry import setup_logfire, instrument_fastapi
+    setup_logfire()
+    instrument_fastapi(app)
+
     logger.info("Starting application... Creating state managers.")
 
     # Create shared HTTP client with connection pooling

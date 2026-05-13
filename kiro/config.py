@@ -752,3 +752,23 @@ RE2_INJECTION: str = os.getenv(
 # Requests with fewer messages are typically tool-result polling or tiny sub-agent
 # calls where re2 adds overhead without reasoning benefit.
 RE2_MIN_MESSAGES: int = int(os.getenv("RE2_MIN_MESSAGES", "2"))
+
+# ==================================================================================================
+# Logfire / OpenTelemetry Observability
+# ==================================================================================================
+
+# Logfire write token — set via LOGFIRE_TOKEN env var
+# Get from: https://logfire.pydantic.dev/geehexx/claude-config
+LOGFIRE_TOKEN: str = os.getenv("LOGFIRE_TOKEN", "")
+
+# Enable logfire instrumentation (requires LOGFIRE_TOKEN)
+LOGFIRE_ENABLED: bool = _parse_bool_env("LOGFIRE_ENABLED", default=True) and bool(LOGFIRE_TOKEN)
+
+# Service name for logfire spans
+LOGFIRE_SERVICE_NAME: str = os.getenv("LOGFIRE_SERVICE_NAME", "kiro-gateway")
+
+# Kiro Power plan pricing for cost tracking
+# $200/mo flat + $0.04/invocation overage after 10,000 invocations
+KIRO_PLAN_MONTHLY_COST_USD: float = float(os.getenv("KIRO_PLAN_MONTHLY_COST_USD", "200.0"))
+KIRO_PLAN_MONTHLY_INVOCATIONS: int = int(os.getenv("KIRO_PLAN_MONTHLY_INVOCATIONS", "10000"))
+KIRO_PLAN_OVERAGE_COST_USD: float = float(os.getenv("KIRO_PLAN_OVERAGE_COST_USD", "0.04"))
