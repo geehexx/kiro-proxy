@@ -231,8 +231,10 @@ class KiroHttpClient:
                     request_kwargs["params"] = params
 
                 if stream:
-                    # Prevent CLOSE_WAIT connection leak (issue #38)
-                    headers["Connection"] = "close"
+                    # HTTP/2 handles connection lifecycle via stream multiplexing.
+                    # Connection: close was a workaround for CLOSE_WAIT leaks (issue #38)
+                    # with HTTP/1.1 — not needed with HTTP/2 and actively harmful
+                    # (forces TLS re-handshake on every streaming request, ~900ms overhead).
                     req = client.build_request(method, url, **request_kwargs)
                     logger.debug("Sending request to Kiro API...")
                     response = await client.send(req, stream=True)
