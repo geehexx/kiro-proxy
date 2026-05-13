@@ -381,7 +381,28 @@ async def messages(
 
     # Compute re2 flag early so cache-hit paths can record it correctly.
     # The actual injection happens below, after cache lookup.
-    _re2_active = RE2_ENABLED or request.headers.get("x-kiro-re2", "").lower() == "true"
+    # re2 is only useful for genuine reasoning turns — skip for haiku (fast tool calls),
+    # tool_result-only last messages, and sub-agent requests.
+    def _re2_eligible() -> bool:
+        if 'haiku' in request_data.model.lower():
+            return False
+        if request.headers.get("x-claude-subagent", "").lower() in ("true", "1", "yes"):
+            return False
+        # Skip if last user message has no text block (only tool_result blocks)
+        for _m in reversed(request_data.messages):
+            if _m.role == "user":
+                _c = _m.content
+                if isinstance(_c, list):
+                    has_text = any(
+                        (b.get("type") if isinstance(b, dict) else getattr(b, "type", None)) == "text"
+                        for b in _c
+                    )
+                    if not has_text:
+                        return False
+                break
+        return True
+
+    _re2_active = (RE2_ENABLED or request.headers.get("x-kiro-re2", "").lower() == "true") and _re2_eligible()
 
     # ==============================================================================
     # Response cache lookup — runs AFTER truncation recovery but BEFORE re2
