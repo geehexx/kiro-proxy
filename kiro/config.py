@@ -727,9 +727,14 @@ GATEWAY_SUBAGENT_STRIP_WEB_SEARCH: bool = _parse_bool_env(
 # ==================================================================================================
 # Re2 (ReRead) Injection — OptiLLM technique
 # ==================================================================================================
-# Injects "Read the question again:" into the last user message to improve reasoning accuracy.
-# Zero cost (no extra API calls). Opt-in via X-Kiro-Re2: true header.
-# Based on: https://github.com/algorithmicsuperintelligence/optillm
+# Appends a re-reading instruction to the last user message to improve reasoning accuracy.
+# Zero cost (no extra API calls). Opt-in via X-Kiro-Re2: true header or RE2_ENABLED=true.
+# Based on: https://arxiv.org/abs/2309.06275 (EMNLP 2024) and github.com/codelion/optillm
+#
+# The canonical optillm implementation duplicates the full question:
+#   "{question}\nRead the question again: {question}"
+# We use a lighter variant (instruction only) to avoid doubling large user messages at proxy
+# level — Claude Code turns can be thousands of tokens. Override via RE2_INJECTION env var.
 RE2_ENABLED: bool = _parse_bool_env("RE2_ENABLED", default=False)
 RE2_INJECTION: str = os.getenv(
     "RE2_INJECTION",
