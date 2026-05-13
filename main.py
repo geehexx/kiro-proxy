@@ -328,13 +328,13 @@ async def lifespan(app: FastAPI):
 
     logger.info("Starting application... Creating state managers.")
 
-    # Create shared HTTP client with connection pooling
-    # This reduces memory usage and enables connection reuse across requests
-    # Limits: max 100 total connections, max 20 keep-alive connections
+    # Create shared HTTP client with connection pooling + HTTP/2
+    # HTTP/2 multiplexing reduces TLS handshake overhead (single connection, multiple streams)
+    # keepalive_expiry=120s keeps connections warm between requests (AWS Q idle timeout ~90s)
     limits = httpx.Limits(
         max_connections=100,
         max_keepalive_connections=20,
-        keepalive_expiry=30.0,  # Close idle connections after 30 seconds
+        keepalive_expiry=120.0,  # Keep connections warm (was 30s — too short for AWS Q)
     )
     # Timeout configuration for streaming (long read timeout for model "thinking")
     timeout = httpx.Timeout(
@@ -343,8 +343,13 @@ async def lifespan(app: FastAPI):
         write=30.0,
         pool=30.0,
     )
-    app.state.http_client = httpx.AsyncClient(limits=limits, timeout=timeout, follow_redirects=True)
-    logger.info("Shared HTTP client created with connection pooling")
+    app.state.http_client = httpx.AsyncClient(
+        limits=limits,
+        timeout=timeout,
+        follow_redirects=True,
+        http2=True,  # HTTP/2 multiplexing — reduces per-request TLS overhead
+    )
+    logger.info("Shared HTTP client created with connection pooling (HTTP/2 enabled)")
 
     # Response cache singleton (in-memory LRU with disk persistence)
     from kiro.config import (

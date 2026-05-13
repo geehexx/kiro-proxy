@@ -11,3 +11,4 @@ pytest
 pytest-asyncio
 hypothesis
 logfire[fastapi,httpx]
+h2
