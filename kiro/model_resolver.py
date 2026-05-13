@@ -64,6 +64,7 @@ def normalize_model_name(name: str) -> str:
     Normalize client model name to Kiro format.
 
     Transformations applied:
+    0. claude-sonnet-4.6[1m] → claude-sonnet-4.6 (strip bracket suffixes like [1m])
     1. claude-haiku-4-5 → claude-haiku-4.5 (dash to dot for minor version)
     2. claude-haiku-4-5-20251001 → claude-haiku-4.5 (strip date suffix)
     3. claude-haiku-4-5-latest → claude-haiku-4.5 (strip 'latest' suffix)
@@ -99,7 +100,16 @@ def normalize_model_name(name: str) -> str:
         'claude-sonnet-4.5'
         >>> normalize_model_name("auto")
         'auto'
+        >>> normalize_model_name("claude-sonnet-4.6[1m]")
+        'claude-sonnet-4.6'
+        >>> normalize_model_name("claude-opus-4.7[1m]")
+        'claude-opus-4.7'
     """
+    if not name:
+        return name
+
+    # Strip bracket suffixes like [1m], [200k], [thinking] before other processing
+    name = re.sub(r'\[.*?\]', '', name).strip()
     if not name:
         return name
 
