@@ -776,8 +776,8 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
 async def get_organizations(request: Request):
     """Mock Claude.ai organizations endpoint for Claude Code CLI subscription check."""
     return JSONResponse([{
-        "id": "org-verifai-kiro",
-        "name": "VerifAI",
+        "id": "org-kiro-gateway",
+        "name": "Kiro Gateway",
         "capabilities": {
             "claude": {
                 "models": ["claude-opus-4.7", "claude-opus-4.6", "claude-sonnet-4.6", "claude-haiku-4.5"]
