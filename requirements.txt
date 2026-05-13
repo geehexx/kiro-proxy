@@ -9,4 +9,5 @@ tiktoken
 # Testing dependencies
 pytest
 pytest-asyncio
-hypothesislogfire
+hypothesis
+logfire[fastapi,httpx]
