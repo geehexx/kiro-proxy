@@ -165,6 +165,23 @@ def describe_model(model_id: str) -> Optional[str]:
         One-line description string, or ``None`` when no curated description exists.
     """
     canonical = canonical_model_id(model_id).lower()
+
+    # Per-version Claude descriptions, more specific than family defaults.
+    _PER_VERSION: dict[str, str] = {
+        "claude-opus-4.7": "Highest reasoning; 1M context; long-running agents and complex coding.",
+        "claude-opus-4.6": "Highest reasoning; 200K context; previous Opus generation.",
+        "claude-opus-4.5": "Highest reasoning; 200K context; legacy Opus.",
+        "claude-sonnet-4.6": "Balanced speed and intelligence; near-Opus coding; production default.",
+        "claude-sonnet-4.5": "Balanced speed and intelligence; previous Sonnet generation.",
+        "claude-sonnet-4": "Balanced speed and intelligence; legacy Sonnet 4.",
+        "claude-haiku-4.5": "Fastest model with near-frontier intelligence; cheap tool-heavy tasks.",
+        "claude-3.7-sonnet": "Legacy Sonnet generation (Claude 3.7); use only for compat.",
+        "claude-3.5-haiku": "Legacy Haiku generation (Claude 3.5); use only for compat.",
+    }
+    if canonical in _PER_VERSION:
+        return _PER_VERSION[canonical]
+
+    # Family-level fallback for versions we haven't curated individually.
     if canonical.startswith("claude-opus"):
         return "Highest reasoning depth; long-running agents and coding."
     if canonical.startswith("claude-sonnet"):
