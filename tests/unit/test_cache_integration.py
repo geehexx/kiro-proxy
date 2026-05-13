@@ -17,7 +17,9 @@ from kiro.cache_integration import (
     derive_session_id,
     entry_to_response_body,
     store_cache,
+    store_stream_cache,
     try_cache_lookup,
+    try_stream_cache_lookup,
 )
 from kiro.response_cache import ResponseCache
 
@@ -221,3 +223,64 @@ class TestInvariants:
         entry = try_cache_lookup(cache, key)
         assert entry is not None
         assert entry_to_response_body(entry) == body
+
+
+# ---------------------------------------------------------------------------
+# Streaming cache helpers
+# ---------------------------------------------------------------------------
+
+
+class TestStreamCache:
+    def test_lookup_miss_when_disabled(self) -> None:
+        assert try_stream_cache_lookup(None, "any-key") is None
+
+    def test_store_noop_when_disabled(self) -> None:
+        assert store_stream_cache(None, "any-key", [b"chunk"]) is False
+
+    def test_store_noop_on_empty_chunks(self) -> None:
+        cache = ResponseCache(max_entries=10, max_bytes=1024 * 1024, ttl_seconds=60)
+        assert store_stream_cache(cache, "k1", []) is False
+
+    def test_round_trip(self) -> None:
+        cache = ResponseCache(max_entries=10, max_bytes=1024 * 1024, ttl_seconds=60)
+        chunks = [b"event: message_start\ndata: {}\n\n", b"event: message_stop\ndata: {}\n\n"]
+        assert store_stream_cache(cache, "k1", chunks) is True
+        result = try_stream_cache_lookup(cache, "k1")
+        assert result == b"".join(chunks)
+
+    def test_miss_returns_none(self) -> None:
+        cache = ResponseCache(max_entries=10, max_bytes=1024 * 1024, ttl_seconds=60)
+        assert try_stream_cache_lookup(cache, "does-not-exist") is None
+
+    def test_oversize_rejected(self) -> None:
+        cache = ResponseCache(
+            max_entries=10,
+            max_bytes=1024 * 1024,
+            ttl_seconds=60,
+            max_entry_bytes=1024,
+        )
+        big_chunks = [b"x" * 2048]
+        assert store_stream_cache(cache, "k2", big_chunks) is False
+
+    def test_idempotent_store(self) -> None:
+        """Storing the same key twice replaces the entry (idempotency invariant)."""
+        cache = ResponseCache(max_entries=10, max_bytes=1024 * 1024, ttl_seconds=60)
+        chunks_v1 = [b"version-1"]
+        chunks_v2 = [b"version-2"]
+        store_stream_cache(cache, "k1", chunks_v1)
+        store_stream_cache(cache, "k1", chunks_v2)
+        result = try_stream_cache_lookup(cache, "k1")
+        assert result == b"version-2"
+
+    def test_stream_and_non_stream_share_same_key_space(self) -> None:
+        """A streaming store must not collide with a non-streaming store on the same key."""
+        cache = ResponseCache(max_entries=10, max_bytes=1024 * 1024, ttl_seconds=60)
+        body = {"id": "msg_01", "type": "message"}
+        chunks = [b"event: message_start\ndata: {}\n\n"]
+        store_cache(cache, "k1", body)
+        store_stream_cache(cache, "k2", chunks)
+        # Each key is independent
+        assert try_cache_lookup(cache, "k1") is not None
+        assert try_stream_cache_lookup(cache, "k2") is not None
+        assert try_stream_cache_lookup(cache, "k1") is not None  # raw bytes of JSON body
+        assert try_cache_lookup(cache, "k2") is not None  # raw bytes of SSE chunks
