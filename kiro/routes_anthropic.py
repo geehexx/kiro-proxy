@@ -33,7 +33,7 @@ from fastapi.security import APIKeyHeader
 from loguru import logger
 
 from kiro.auth import AuthType
-from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, RE2_ENABLED, RE2_INJECTION, STREAM_CACHE_ENABLED, WEB_SEARCH_ENABLED
+from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, RE2_ENABLED, RE2_INJECTION, RE2_MIN_MESSAGES, STREAM_CACHE_ENABLED, WEB_SEARCH_ENABLED
 from kiro.converters_anthropic import anthropic_to_kiro
 from kiro.http_client import KiroHttpClient
 from kiro.mcp_tools import handle_native_web_search
@@ -570,30 +570,52 @@ async def messages(
     # _re2_active was computed above (before cache lookup) so cache-hit paths can
     # record it. Opt-in via X-Kiro-Re2: true header or RE2_ENABLED=true env var.
     # Zero cost — no extra API calls. Based on: github.com/codelion/optillm
+    #
+    # Eligibility rules (re2 is skipped when):
+    # - Fewer than RE2_MIN_MESSAGES messages (default 2) — single-message polling/tool calls
+    # - Last user message contains ONLY tool_result blocks (no text to re-read)
     # ==============================================================================
-    if _re2_active and request_data.messages:
+    if _re2_active and len(request_data.messages) >= RE2_MIN_MESSAGES:
+        # Check if last user message has any text content (skip pure tool_result messages)
+        _last_user_has_text = False
         for _i in range(len(request_data.messages) - 1, -1, -1):
             _msg = request_data.messages[_i]
             if _msg.role == "user":
                 if isinstance(_msg.content, str):
-                    request_data.messages[_i] = _msg.model_copy(
-                        update={"content": _msg.content + RE2_INJECTION}
-                    )
+                    _last_user_has_text = bool(_msg.content.strip())
                 elif isinstance(_msg.content, list):
-                    _new_content = list(_msg.content)
-                    for _j in range(len(_new_content) - 1, -1, -1):
-                        _block = _new_content[_j]
-                        _btype = _block.get("type") if isinstance(_block, dict) else getattr(_block, "type", None)
-                        if _btype == "text":
-                            _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
-                            if isinstance(_block, dict):
-                                _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
-                            else:
-                                _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
-                            break
-                    request_data.messages[_i] = _msg.model_copy(update={"content": _new_content})
-                logger.debug("Re2 injection applied to last user message")
+                    _last_user_has_text = any(
+                        (b.get("type") if isinstance(b, dict) else getattr(b, "type", None)) == "text"
+                        for b in _msg.content
+                    )
                 break
+
+        if _last_user_has_text:
+            for _i in range(len(request_data.messages) - 1, -1, -1):
+                _msg = request_data.messages[_i]
+                if _msg.role == "user":
+                    if isinstance(_msg.content, str):
+                        request_data.messages[_i] = _msg.model_copy(
+                            update={"content": _msg.content + RE2_INJECTION}
+                        )
+                    elif isinstance(_msg.content, list):
+                        _new_content = list(_msg.content)
+                        for _j in range(len(_new_content) - 1, -1, -1):
+                            _block = _new_content[_j]
+                            _btype = _block.get("type") if isinstance(_block, dict) else getattr(_block, "type", None)
+                            if _btype == "text":
+                                _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
+                                if isinstance(_block, dict):
+                                    _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
+                                else:
+                                    _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
+                                break
+                        request_data.messages[_i] = _msg.model_copy(update={"content": _new_content})
+                    logger.debug("Re2 injection applied to last user message")
+                    break
+        else:
+            _re2_active = False
+            logger.debug("Re2 skipped: last user message has no text content (tool_result only)")
 
     # ==============================================================================
     # Account System: Account System Failover or Legacy Mode
