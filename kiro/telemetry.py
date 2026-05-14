@@ -59,6 +59,11 @@ def setup_logfire() -> bool:
         logger.info("logfire not installed — telemetry disabled")
         return False
 
+    # Skip telemetry in test environments to avoid polluting Logfire with test spans.
+    if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("CI"):
+        logger.info("test/CI environment detected — Logfire telemetry disabled")
+        return False
+
     token = os.getenv("LOGFIRE_TOKEN", "")
     if not token:
         logger.info("LOGFIRE_TOKEN not set — telemetry disabled")
@@ -260,6 +265,8 @@ def record_request(
     retry_count: Optional[int] = None,
     session_id: Optional[str] = None,
     is_overage: bool = False,
+    complexity_label: Optional[str] = None,
+    dedup_hit: bool = False,
 ) -> None:
     """Flat span emitter. Used by _emit_gateway_baseline.
 
@@ -298,7 +305,12 @@ def record_request(
         if error_reason:
             attrs["kiro.gateway.error_reason"] = _trunc(error_reason)
         if session_id:
-            attrs["kiro.session.id"] = session_id[:16]
+            # Use conversation.id to avoid Logfire PII scrubbing on "session" substring
+            attrs["kiro.conversation.id"] = session_id[:16]
+        if complexity_label:
+            attrs["kiro.gateway.complexity_label"] = complexity_label
+        if dedup_hit:
+            attrs["kiro.gateway.dedup_hit"] = True
 
         span_name = f"gateway.request [{'stream' if stream else 'sync'}] [{gateway_cache}]"
         with _logfire.span(span_name, **attrs):
