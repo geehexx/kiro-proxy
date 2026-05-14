@@ -193,7 +193,11 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
         HTTPException: On validation or API errors
     """
     logger.info(f"Request to /v1/chat/completions (model={request_data.model}, stream={request_data.stream})")
-    
+
+    # Normalize model name (dashes→dots, strip dates) for consistent telemetry
+    from kiro.model_resolver import normalize_model_name as _normalize_model
+    _resolved_model = _normalize_model(request_data.model)
+
     # Note: prepare_new_request() and log_request_body() are now called by DebugLoggerMiddleware
     # This ensures debug logging works even for requests that fail Pydantic validation (422 errors)
     
