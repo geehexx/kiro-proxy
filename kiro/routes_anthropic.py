@@ -453,7 +453,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
             session_id=session_id,
             system=system_for_cache,
             messages=messages_for_cache,
-            model=request_data.model,
+            model=_resolved_model,  # use normalized name for stable cache keys
             max_tokens=request_data.max_tokens,
             tools=tools_for_cache,
             thinking=request_data.thinking,
@@ -789,7 +789,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
 
                                 async for chunk in stream_with_first_token_retry_anthropic(
                                     make_request=make_retry_request,
-                                    model=request_data.model,
+                                    model=_resolved_model,  # use normalized name for stable cache keys
                                     model_cache=model_cache,
                                     auth_manager=auth_manager,
                                     initial_response=response,
@@ -1307,7 +1307,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                     _stream_usage: dict = {}
                     async for chunk in stream_with_first_token_retry_anthropic(
                         make_request=make_retry_request,
-                        model=request_data.model,
+                        model=_resolved_model,  # use normalized name for stable cache keys
                         model_cache=model_cache,
                         auth_manager=auth_manager,
                         initial_response=response,
