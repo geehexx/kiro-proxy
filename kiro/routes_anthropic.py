@@ -261,6 +261,7 @@ async def messages(
     )
 
     response_cache = getattr(request.app.state, "response_cache", None)
+    in_flight_dedup = getattr(request.app.state, "in_flight_dedup", None)
     cache_key: Optional[str] = None
     cache_eligible = response_cache is not None and not request_data.stream
     stream_cache_eligible = (
@@ -1139,9 +1140,73 @@ async def messages(
         # Make request to Kiro API (for both streaming and non-streaming modes)
         # Important: we wait for Kiro response BEFORE returning StreamingResponse,
         # so that we can return proper HTTP error codes if Kiro fails
-        _upstream_start = time.monotonic()
-        response = await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
-        _upstream_ms_total = int((time.monotonic() - _upstream_start) * 1000)
+
+        # For non-streaming requests with a cache key, use in-flight dedup to
+        # coalesce concurrent identical requests (e.g. parallel sub-agent fan-outs).
+        # The second caller awaits the first's Future and gets the same result.
+        async def _do_upstream_non_streaming():
+            _start = time.monotonic()
+            _resp = await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
+            _ms = int((time.monotonic() - _start) * 1000)
+            if _resp.status_code != 200:
+                return _resp, _ms
+            if limiter_active:
+                async with session_limiter.acquire(session_id):
+                    _body = await collect_anthropic_response(
+                        _resp, request_data.model, model_cache, auth_manager,
+                        request_messages=messages_for_tokenizer,
+                        request_tools=tools_for_tokenizer,
+                        request_system=system_for_tokenizer,
+                    )
+            else:
+                _body = await collect_anthropic_response(
+                    _resp, request_data.model, model_cache, auth_manager,
+                    request_messages=messages_for_tokenizer,
+                    request_tools=tools_for_tokenizer,
+                    request_system=system_for_tokenizer,
+                )
+            await http_client.close()
+            return _body, _ms
+
+        if (
+            not request_data.stream
+            and cache_eligible
+            and cache_key is not None
+            and in_flight_dedup is not None
+        ):
+            _dedup_result, _upstream_ms_total = await in_flight_dedup.coalesce(
+                cache_key, _do_upstream_non_streaming
+            )
+            # If result is an httpx.Response (error), fall through to error handling
+            import httpx as _httpx
+            if isinstance(_dedup_result, _httpx.Response):
+                response = _dedup_result
+                # Error path — handled below
+            else:
+                # Success — _dedup_result is the anthropic_response dict
+                anthropic_response = _dedup_result
+                await account_manager.report_success(account.id, request_data.model)
+                logger.info(
+                    "HTTP 200 - POST /v1/messages (non-streaming) - completed "
+                    f"msg_id={anthropic_response.get('id', 'unknown')} "
+                    f"response_model={anthropic_response.get('model', 'unknown')}"
+                )
+                if debug_logger:
+                    debug_logger.discard_buffers()
+                if cache_eligible and cache_key is not None and response_cache is not None:
+                    stored = store_cache(response_cache, cache_key, anthropic_response)
+                    if stored:
+                        logger.debug(f"response-cache stored key={cache_key[:8]}")
+                await _emit_gateway_baseline(
+                    request, response_body=anthropic_response, request_model=_resolved_model,
+                    session_id_gw=session_id, cache_key=cache_key, upstream_ms=_upstream_ms_total,
+                    gateway_cache="miss", status=200, re2_applied=_re2_active,
+                )
+                return JSONResponse(content=anthropic_response, headers={"x-kiro-cache": "miss"})
+        else:
+            _upstream_start = time.monotonic()
+            response = await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
+            _upstream_ms_total = int((time.monotonic() - _upstream_start) * 1000)
 
         if response.status_code != 200:
             try:
