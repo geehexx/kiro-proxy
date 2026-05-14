@@ -683,6 +683,7 @@ async def messages(
                             _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
                         break
                 request_data.messages[_re2_target_idx] = _msg.model_copy(update={"content": _new_content})
+            # _re2_active stays True — injection was applied (telemetry will record it correctly)
             logger.debug(f"Re2 injection applied to user message at index {_re2_target_idx}")
         else:
             _re2_active = False
