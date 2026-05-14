@@ -33,7 +33,7 @@ from fastapi.security import APIKeyHeader
 from loguru import logger
 
 from kiro.auth import AuthType
-from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, RE2_ENABLED, RE2_INJECTION, RE2_MIN_MESSAGES, STREAM_CACHE_ENABLED, WEB_SEARCH_ENABLED
+from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, RE2_ENABLED, RE2_INJECTION, RE2_MIN_CHARS, RE2_MIN_MESSAGES, RE2_SKIP_EXTENDED_THINKING, STREAM_CACHE_ENABLED, WEB_SEARCH_ENABLED
 from kiro.converters_anthropic import anthropic_to_kiro
 from kiro.http_client import KiroHttpClient
 from kiro.mcp_tools import handle_native_web_search
@@ -397,7 +397,11 @@ async def messages(
             return False
         if request.headers.get("x-claude-subagent", "").lower() in ("true", "1", "yes"):
             return False
+        # Skip if extended thinking is active — re2 is neutral-to-negative when reasoning is on
+        if RE2_SKIP_EXTENDED_THINKING and request_data.thinking is not None:
+            return False
         # Skip if last user message has no text block (only tool_result blocks)
+        last_user_text = ""
         for _m in reversed(request_data.messages):
             if _m.role == "user":
                 _c = _m.content
@@ -408,7 +412,17 @@ async def messages(
                     )
                     if not has_text:
                         return False
+                    # Extract text for length check
+                    for b in _c:
+                        if isinstance(b, dict) and b.get("type") == "text":
+                            last_user_text = b.get("text", "")
+                            break
+                elif isinstance(_c, str):
+                    last_user_text = _c
                 break
+        # Skip short reactive turns — unlikely to benefit from re-reading
+        if len(last_user_text.strip()) < RE2_MIN_CHARS:
+            return False
         return True
 
     _re2_active = (RE2_ENABLED or request.headers.get("x-kiro-re2", "").lower() == "true") and _re2_eligible()

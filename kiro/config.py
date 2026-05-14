@@ -763,9 +763,13 @@ RE2_INJECTION: str = os.getenv(
     "\n\nRead the question again carefully before answering."
 )
 # Minimum number of messages required for re2 to apply.
-# Requests with fewer messages are typically tool-result polling or tiny sub-agent
-# calls where re2 adds overhead without reasoning benefit.
 RE2_MIN_MESSAGES: int = int(os.getenv("RE2_MIN_MESSAGES", "2"))
+# Minimum characters in the last user message for re2 to apply.
+# Short reactive turns (< 32 chars) are unlikely to benefit from re-reading.
+RE2_MIN_CHARS: int = int(os.getenv("RE2_MIN_CHARS", "32"))
+# Skip re2 when extended thinking is active — arxiv 2512.14982 shows re2 is
+# neutral-to-negative when the model is already in reasoning mode.
+RE2_SKIP_EXTENDED_THINKING: bool = _parse_bool_env("RE2_SKIP_EXTENDED_THINKING", default=True)
 
 # ==================================================================================================
 # Logfire / OpenTelemetry Observability
