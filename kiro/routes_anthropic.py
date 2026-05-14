@@ -645,46 +645,48 @@ async def messages(
     # - Last user message contains ONLY tool_result blocks (no text to re-read)
     # ==============================================================================
     if _re2_active and len(request_data.messages) >= RE2_MIN_MESSAGES:
-        # Check if last user message has any text content (skip pure tool_result messages)
-        _last_user_has_text = False
+        # Find the last user message that has text content.
+        # If the most recent user message is tool_result-only (no text), look back
+        # to find the previous user message with text — that's the one to re-read.
+        _re2_target_idx: Optional[int] = None
         for _i in range(len(request_data.messages) - 1, -1, -1):
             _msg = request_data.messages[_i]
             if _msg.role == "user":
-                if isinstance(_msg.content, str):
-                    _last_user_has_text = bool(_msg.content.strip())
+                if isinstance(_msg.content, str) and _msg.content.strip():
+                    _re2_target_idx = _i
+                    break
                 elif isinstance(_msg.content, list):
-                    _last_user_has_text = any(
+                    has_text = any(
                         (b.get("type") if isinstance(b, dict) else getattr(b, "type", None)) == "text"
                         for b in _msg.content
                     )
-                break
+                    if has_text:
+                        _re2_target_idx = _i
+                        break
 
-        if _last_user_has_text:
-            for _i in range(len(request_data.messages) - 1, -1, -1):
-                _msg = request_data.messages[_i]
-                if _msg.role == "user":
-                    if isinstance(_msg.content, str):
-                        request_data.messages[_i] = _msg.model_copy(
-                            update={"content": _msg.content + RE2_INJECTION}
-                        )
-                    elif isinstance(_msg.content, list):
-                        _new_content = list(_msg.content)
-                        for _j in range(len(_new_content) - 1, -1, -1):
-                            _block = _new_content[_j]
-                            _btype = _block.get("type") if isinstance(_block, dict) else getattr(_block, "type", None)
-                            if _btype == "text":
-                                _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
-                                if isinstance(_block, dict):
-                                    _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
-                                else:
-                                    _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
-                                break
-                        request_data.messages[_i] = _msg.model_copy(update={"content": _new_content})
-                    logger.debug("Re2 injection applied to last user message")
-                    break
+        if _re2_target_idx is not None:
+            _msg = request_data.messages[_re2_target_idx]
+            if isinstance(_msg.content, str):
+                request_data.messages[_re2_target_idx] = _msg.model_copy(
+                    update={"content": _msg.content + RE2_INJECTION}
+                )
+            elif isinstance(_msg.content, list):
+                _new_content = list(_msg.content)
+                for _j in range(len(_new_content) - 1, -1, -1):
+                    _block = _new_content[_j]
+                    _btype = _block.get("type") if isinstance(_block, dict) else getattr(_block, "type", None)
+                    if _btype == "text":
+                        _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
+                        if isinstance(_block, dict):
+                            _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
+                        else:
+                            _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
+                        break
+                request_data.messages[_re2_target_idx] = _msg.model_copy(update={"content": _new_content})
+            logger.debug(f"Re2 injection applied to user message at index {_re2_target_idx}")
         else:
             _re2_active = False
-            logger.debug("Re2 skipped: last user message has no text content (tool_result only)")
+            logger.debug("Re2 skipped: no user message with text content found")
 
     # ==============================================================================
     # Account System: Account System Failover or Legacy Mode
