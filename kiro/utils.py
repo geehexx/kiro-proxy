@@ -30,6 +30,8 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from kiro.config import KIRO_USER_AGENT
+
 if TYPE_CHECKING:
     from kiro.auth import KiroAuthManager
 
@@ -78,7 +80,7 @@ def get_kiro_headers(auth_manager: "KiroAuthManager", token: str) -> dict:
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
-        "User-Agent": f"aws-sdk-js/1.0.27 ua/2.1 os/win32#10.0.19044 lang/js md/nodejs#22.21.1 api/codewhispererstreaming#1.0.27 m/E KiroIDE-0.7.45-{fingerprint}",
+        "User-Agent": f"{KIRO_USER_AGENT}-{fingerprint}",
         "x-amz-user-agent": f"aws-sdk-js/1.0.27 KiroIDE-0.7.45-{fingerprint}",
         "x-amzn-codewhisperer-optout": "true",
         "x-amzn-kiro-agent-mode": "vibe",
