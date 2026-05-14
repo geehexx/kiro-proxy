@@ -312,7 +312,7 @@ HIDDEN_FROM_LIST: list[str] = ["auto"]
 # - Update gateway regularly to get the latest model list
 FALLBACK_MODELS: list[dict] = [
     {"modelId": "auto"},
-    {"modelId": "claude-sonnet-4", "tokenLimits": {"maxInputTokens": 200000}},
+    # claude-sonnet-4 (4.0) is deprecated — removed from list
     {"modelId": "claude-haiku-4.5", "tokenLimits": {"maxInputTokens": 200000}},
     {"modelId": "claude-sonnet-4.5", "tokenLimits": {"maxInputTokens": 200000}},
     {"modelId": "claude-opus-4.5", "tokenLimits": {"maxInputTokens": 200000}},
