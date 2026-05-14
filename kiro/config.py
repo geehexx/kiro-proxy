@@ -434,6 +434,15 @@ DEBUG_DIR: str = os.getenv("DEBUG_DIR", "debug_logs")
 # Oldest directories are pruned when this limit is exceeded.
 DEBUG_ROTATE_MAX_DIRS: int = int(os.getenv("DEBUG_ROTATE_MAX_DIRS", "200"))
 
+# ==================================================================================================
+# Logfire Telemetry Filter Settings
+# ==================================================================================================
+
+# Minimum input tokens for a request to be logged to Logfire.
+# Requests below this threshold are likely sub-agent tool calls or episodic memory
+# lookups — high volume, low value for observability. Set to 0 to log everything.
+LOGFIRE_MIN_INPUT_TOKENS: int = int(os.getenv("LOGFIRE_MIN_INPUT_TOKENS", "500"))
+
 
 def _warn_timeout_configuration():
     """
