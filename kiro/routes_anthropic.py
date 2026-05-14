@@ -770,8 +770,10 @@ async def messages(
                                     request_tools=tools_for_tokenizer,
                                     request_system=system_for_tokenizer,
                                 ):
-                                    # Extract usage from message_delta SSE event
-                                    if not _stream_usage and chunk.startswith("data:"):
+                                    # Extract usage from message_delta SSE event.
+                                    # SSE format: "event: message_delta\ndata: {...}\n\n"
+                                    # chunk starts with "event:", not "data:", so search for "data:" anywhere.
+                                    if not _stream_usage and "data:" in chunk:
                                         try:
                                             data_str = chunk.split("data:", 1)[1].strip()
                                             if data_str and data_str != "[DONE]":
@@ -1206,6 +1208,7 @@ async def messages(
                         return await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
 
                     # Use retry wrapper with initial response
+                    _stream_usage: dict = {}
                     async for chunk in stream_with_first_token_retry_anthropic(
                         make_request=make_retry_request,
                         model=request_data.model,
@@ -1216,6 +1219,20 @@ async def messages(
                         request_tools=tools_for_tokenizer,
                         request_system=system_for_tokenizer,
                     ):
+                        # Extract usage from message_delta SSE event.
+                        # SSE format: "event: message_delta\ndata: {...}\n\n"
+                        # chunk starts with "event:", not "data:", so search for "data:" anywhere.
+                        if not _stream_usage and "data:" in chunk:
+                            try:
+                                data_str = chunk.split("data:", 1)[1].strip()
+                                if data_str and data_str != "[DONE]":
+                                    evt = json.loads(data_str)
+                                    if evt.get("type") == "message_delta":
+                                        usage = evt.get("usage", {})
+                                        if usage.get("input_tokens") or usage.get("output_tokens"):
+                                            _stream_usage = usage
+                            except Exception:
+                                pass
                         # Buffer for streaming cache
                         if stream_cache_eligible and cache_key:
                             _stream_chunks.append(chunk.encode("utf-8") if isinstance(chunk, str) else chunk)
@@ -1256,12 +1273,10 @@ async def messages(
                                     f"entries={response_cache.stats()['entries']}"
                                 )
 
-                    # Emit streaming baseline (legacy dispatch path). Token
-                    # counts unavailable from the stream; reconcile joins via
-                    # the CC transcript tailer on `message_id`.
+                    # Emit streaming baseline with token data extracted from message_delta
                     await _emit_gateway_baseline(
                         request,
-                        response_body={},
+                        response_body={"usage": _stream_usage} if _stream_usage else {},
                         request_model=_resolved_model,
                         session_id_gw=session_id,
                         cache_key=cache_key,
