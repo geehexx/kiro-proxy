@@ -414,9 +414,13 @@ async def messages(
             return False
         if request.headers.get("x-claude-subagent", "").lower() in ("true", "1", "yes"):
             return False
-        # Skip if extended thinking is active — re2 is neutral-to-negative when reasoning is on
+        # Skip if extended thinking is explicitly enabled — re2 is neutral-to-negative
+        # when reasoning is on (arxiv 2512.14982). "adaptive" mode is Anthropic's
+        # auto-routing and does NOT guarantee thinking is active, so we allow RE2 there.
         if RE2_SKIP_EXTENDED_THINKING and request_data.thinking is not None:
-            return False
+            thinking_type = request_data.thinking.get("type") if isinstance(request_data.thinking, dict) else None
+            if thinking_type == "enabled":
+                return False
         # Skip if last user message has no text block (only tool_result blocks)
         last_user_text = ""
         for _m in reversed(request_data.messages):
