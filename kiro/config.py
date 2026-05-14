@@ -679,6 +679,14 @@ APP_DESCRIPTION: str = (
     "OpenAI and Anthropic compatible. Made by @jwadow"
 )
 
+# User-Agent string sent to the Kiro/AWS Q API.
+# Override via KIRO_USER_AGENT env var to customize for your deployment.
+# The default mimics the Kiro IDE client to ensure compatibility with the API.
+KIRO_USER_AGENT: str = os.getenv(
+    "KIRO_USER_AGENT",
+    "aws-sdk-js/1.0.27 ua/2.1 os/win32#10.0.19044 lang/js md/nodejs#22.21.1 api/codewhispererstreaming#1.0.27 m/E KiroIDE-0.7.45",
+)
+
 
 def get_kiro_refresh_url(region: str) -> str:
     """Return Kiro Desktop Auth token refresh URL for the specified region."""
@@ -779,7 +787,7 @@ RE2_SKIP_EXTENDED_THINKING: bool = _parse_bool_env("RE2_SKIP_EXTENDED_THINKING",
 # ==================================================================================================
 
 # Logfire write token — set via LOGFIRE_TOKEN env var
-# Get from: https://logfire.pydantic.dev/geehexx/claude-config
+# Get from: https://logfire.pydantic.dev/<your-workspace>/<your-project>
 LOGFIRE_TOKEN: str = os.getenv("LOGFIRE_TOKEN", "")
 
 # Enable logfire instrumentation (requires LOGFIRE_TOKEN)
