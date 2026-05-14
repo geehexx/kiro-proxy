@@ -419,15 +419,20 @@ FIRST_TOKEN_MAX_RETRIES: int = int(os.getenv("FIRST_TOKEN_MAX_RETRIES", "3"))
 # - off: disabled (default)
 # - errors: save logs only for failed requests (4xx, 5xx)
 # - all: save logs for every request (overwrites on each request)
+# - rotate: save logs for every request in timestamped subdirectories (corpus collection)
 _DEBUG_MODE_RAW: str = os.getenv("DEBUG_MODE", "").lower()
 
-if _DEBUG_MODE_RAW in ("off", "errors", "all"):
+if _DEBUG_MODE_RAW in ("off", "errors", "all", "rotate"):
     DEBUG_MODE: str = _DEBUG_MODE_RAW
 else:
     DEBUG_MODE: str = "off"
 
 # Directory for debug log files
 DEBUG_DIR: str = os.getenv("DEBUG_DIR", "debug_logs")
+
+# Maximum number of per-request subdirectories to keep in rotate mode.
+# Oldest directories are pruned when this limit is exceeded.
+DEBUG_ROTATE_MAX_DIRS: int = int(os.getenv("DEBUG_ROTATE_MAX_DIRS", "200"))
 
 
 def _warn_timeout_configuration():
