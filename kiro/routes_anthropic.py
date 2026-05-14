@@ -441,8 +441,12 @@ async def messages(
                 elif isinstance(_c, str):
                     last_user_text = _c
                 break
-        # Skip short reactive turns — unlikely to benefit from re-reading
-        if len(last_user_text.strip()) < RE2_MIN_CHARS:
+        # RE2_MIN_CHARS applies to the last user message text.
+        # Exception: if the conversation is long (many messages), even a short
+        # "Continue" or "yes" is part of a complex multi-turn session — apply RE2.
+        # Threshold: skip only if BOTH the message is short AND the conversation is short.
+        is_long_conversation = len(request_data.messages) >= 10
+        if len(last_user_text.strip()) < RE2_MIN_CHARS and not is_long_conversation:
             return False
         return True
 
