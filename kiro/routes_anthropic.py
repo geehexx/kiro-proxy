@@ -65,6 +65,7 @@ async def _emit_gateway_baseline(
     retry_count: Optional[int] = None,
     retry_after_applied_ms: Optional[int] = None,
     re2_applied: bool = False,
+    complexity_label: Optional[str] = None,
 ) -> None:
     """Append one record to baselines-gateway-requests.jsonl and emit logfire span.
 
@@ -98,6 +99,7 @@ async def _emit_gateway_baseline(
             "retry_count": retry_count,
             "retry_after_applied_ms": retry_after_applied_ms,
             "re2_applied": re2_applied,
+            "complexity_label": complexity_label,
         }
         await writer.write("gateway-requests", record)
 
@@ -467,6 +469,7 @@ async def messages(
                     gateway_cache="hit",
                     status=200,
                     re2_applied=_re2_active,
+                    complexity_label=_complexity.label.value,
                 )
                 return JSONResponse(
                     content=hit_body,
@@ -493,6 +496,7 @@ async def messages(
                     status=200,
                     stream=True,
                     re2_applied=_re2_active,
+                    complexity_label=_complexity.label.value,
                 )
                 cached_bytes = stream_hit
 
@@ -847,6 +851,7 @@ async def messages(
                                     status=200 if not streaming_error else 500,
                                     stream=True,
                                     re2_applied=_re2_active,
+                    complexity_label=_complexity.label.value,
                                 )
 
                                 if debug_logger:
@@ -919,6 +924,7 @@ async def messages(
                             gateway_cache="miss" if cache_eligible else "bypass",
                             status=200,
                             re2_applied=_re2_active,
+                    complexity_label=_complexity.label.value,
                         )
 
                         return JSONResponse(
@@ -1181,6 +1187,7 @@ async def messages(
                     request, response_body=anthropic_response, request_model=_resolved_model,
                     session_id_gw=session_id, cache_key=cache_key, upstream_ms=_upstream_ms_total,
                     gateway_cache="miss", status=200, re2_applied=_re2_active,
+                    complexity_label=_complexity.label.value,
                 )
                 return JSONResponse(content=anthropic_response, headers={"x-kiro-cache": "miss"})
         else:
@@ -1247,6 +1254,7 @@ async def messages(
                 error_reason=_error_reason,
                 retry_after_applied_ms=_retry_after_hint_ms,
                 re2_applied=_re2_active,
+                    complexity_label=_complexity.label.value,
             )
 
             # Return error in Anthropic format
@@ -1360,6 +1368,7 @@ async def messages(
                         status=200 if not streaming_error else 500,
                         stream=True,
                         re2_applied=_re2_active,
+                    complexity_label=_complexity.label.value,
                     )
 
                     if debug_logger:
@@ -1432,6 +1441,7 @@ async def messages(
                 gateway_cache="miss" if cache_eligible else "bypass",
                 status=200,
                 re2_applied=_re2_active,
+                    complexity_label=_complexity.label.value,
             )
 
             return JSONResponse(
