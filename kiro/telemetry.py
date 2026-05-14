@@ -264,7 +264,19 @@ def record_request(
     """Flat span emitter. Used by _emit_gateway_baseline.
 
     Prefer gateway_request_span() for new code — it creates proper hierarchy.
+    Skips low-token requests (sub-agent tool calls, episodic memory) to reduce noise.
     """
+    if not _configured or not _LOGFIRE_AVAILABLE:
+        return
+    # Skip low-value spans: sub-agent tool calls and episodic memory lookups
+    # are high-volume but low-signal. Only log errors and substantial requests.
+    from kiro.config import LOGFIRE_MIN_INPUT_TOKENS
+    if (
+        status == 200
+        and input_tokens is not None
+        and input_tokens < LOGFIRE_MIN_INPUT_TOKENS
+    ):
+        return
     if not _configured or not _LOGFIRE_AVAILABLE:
         return
     try:
