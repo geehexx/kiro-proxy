@@ -92,3 +92,27 @@ class TestClassifyRequestProperties:
         assert r1.label == r2.label
         assert r1.score == r2.score
         assert r1.re2_eligible == r2.re2_eligible
+
+    @given(model=_model)
+    @settings(max_examples=50)
+    def test_single_tool_result_message_is_skip(self, model):
+        """Single tool_result-only message should be SKIP (no RE2 on tool responses)."""
+        messages = [{"role": "user", "content": [{"type": "tool_result", "tool_use_id": "x", "content": "result"}]}]
+        result = classify_request(model=model, messages=messages)
+        assert not result.re2_eligible
+
+    @given(model=_model, messages=_classify_messages)
+    @settings(max_examples=100)
+    def test_re2_eligible_implies_not_skip(self, model, messages):
+        """RE2 eligibility and SKIP label are mutually exclusive."""
+        result = classify_request(model=model, messages=messages)
+        if result.re2_eligible:
+            assert result.label != ComplexityLabel.SKIP
+
+    @given(model=_model, messages=_classify_messages)
+    @settings(max_examples=100)
+    def test_reason_is_non_empty_string(self, model, messages):
+        """Every result must have a non-empty reason for debugging."""
+        result = classify_request(model=model, messages=messages)
+        assert isinstance(result.reason, str)
+        assert len(result.reason) > 0
