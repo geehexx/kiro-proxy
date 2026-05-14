@@ -1172,9 +1172,11 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
             and cache_key is not None
             and in_flight_dedup is not None
         ):
+            _dedup_hits_before = in_flight_dedup.hits
             _dedup_result, _upstream_ms_total = await in_flight_dedup.coalesce(
                 cache_key, _do_upstream_non_streaming
             )
+            _was_dedup_hit = in_flight_dedup.hits > _dedup_hits_before
             # If result is an httpx.Response (error), fall through to error handling
             import httpx as _httpx
             if isinstance(_dedup_result, _httpx.Response):
@@ -1200,7 +1202,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                     session_id_gw=session_id, cache_key=cache_key, upstream_ms=_upstream_ms_total,
                     gateway_cache="miss", status=200, re2_applied=_re2_active,
                     complexity_label=_complexity.label.value,
-                    dedup_hit=in_flight_dedup.hits > 0,
+                    dedup_hit=_was_dedup_hit,
                 )
                 return JSONResponse(content=anthropic_response, headers={"x-kiro-cache": "miss"})
         else:
