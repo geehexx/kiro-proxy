@@ -621,8 +621,12 @@ async def stream_kiro_to_anthropic(
                 f"{'Model will be notified automatically about truncation.' if TRUNCATION_RECOVERY else 'Set TRUNCATION_RECOVERY=true in .env to auto-notify model about truncation.'}"
             )
 
-        # Calculate output tokens
-        output_tokens = count_tokens(full_content + full_thinking_content)
+        # Calculate output tokens — include tool input JSON for tool_use responses
+        tool_input_text = " ".join(
+            json.dumps(b.get("input", {}), ensure_ascii=False)
+            for b in tool_blocks
+        ) if tool_blocks else ""
+        output_tokens = count_tokens(full_content + full_thinking_content + tool_input_text)
 
         # Calculate total tokens from context usage if available
         if context_usage_percentage is not None:
