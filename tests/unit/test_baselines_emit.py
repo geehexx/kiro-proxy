@@ -205,3 +205,42 @@ async def test_re2_applied_propagated_on_error() -> None:
     assert rec["status"] == 429
     assert rec["error_reason"] == "INSUFFICIENT_MODEL_CAPACITY"
 
+
+
+@pytest.mark.asyncio
+async def test_complexity_label_emitted() -> None:
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    await _emit_gateway_baseline(
+        request,
+        response_body={},
+        request_model="claude-sonnet-4.6",
+        session_id_gw="sess-1",
+        cache_key=None,
+        upstream_ms=100,
+        gateway_cache="miss",
+        status=200,
+        re2_applied=True,
+        complexity_label="medium",
+    )
+    rec = writer.write.call_args.args[1]
+    assert rec["complexity_label"] == "medium"
+    assert rec["re2_applied"] is True
+
+
+@pytest.mark.asyncio
+async def test_complexity_label_none_by_default() -> None:
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    await _emit_gateway_baseline(
+        request,
+        response_body={},
+        request_model="claude-sonnet-4.6",
+        session_id_gw="sess-2",
+        cache_key=None,
+        upstream_ms=100,
+        gateway_cache="miss",
+        status=200,
+    )
+    rec = writer.write.call_args.args[1]
+    assert rec.get("complexity_label") is None
