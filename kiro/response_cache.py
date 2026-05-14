@@ -26,7 +26,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import RLock
-from typing import Any, Optional
+from typing import Any
 
 MAX_ENTRY_BYTES_HARDCAP = 10 * 1024 * 1024
 
@@ -66,6 +66,59 @@ def _tool_signature(tools: list[dict[str, Any]] | None) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
+import re as _re
+
+
+def _normalize_text(value: Any) -> Any:
+    """Normalize string whitespace for stable cache keys.
+
+    Strips leading/trailing whitespace and collapses internal runs of
+    whitespace to a single space. Applied to system prompts and message
+    text content so minor formatting differences don't cause cache misses.
+    """
+    if isinstance(value, str):
+        return _re.sub(r"\s+", " ", value.strip())
+    return value
+
+
+def _normalize_system(system: Any) -> Any:
+    """Normalize system prompt for cache key stability."""
+    if isinstance(system, str):
+        return _normalize_text(system)
+    if isinstance(system, list):
+        result = []
+        for block in system:
+            if isinstance(block, dict) and block.get("type") == "text":
+                result.append({**block, "text": _normalize_text(block.get("text", ""))})
+            else:
+                result.append(block)
+        return result
+    return system
+
+
+def _normalize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize message text content for cache key stability."""
+    result = []
+    for msg in messages:
+        if not isinstance(msg, dict):
+            result.append(msg)
+            continue
+        content = msg.get("content")
+        if isinstance(content, str):
+            result.append({**msg, "content": _normalize_text(content)})
+        elif isinstance(content, list):
+            normalized_blocks = []
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    normalized_blocks.append({**block, "text": _normalize_text(block.get("text", ""))})
+                else:
+                    normalized_blocks.append(block)
+            result.append({**msg, "content": normalized_blocks})
+        else:
+            result.append(msg)
+    return result
+
+
 def _canonical(payload: Any) -> str:
     return json.dumps(
         payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
@@ -96,8 +149,8 @@ def make_key(
     # (Anthropic cache_control, which AWS Q does not support).
     key_material = {
         "session_id": session_id,
-        "system": system,
-        "messages": list(messages),
+        "system": _normalize_system(system),
+        "messages": _normalize_messages(list(messages)),
         "model": model,
         "max_tokens": max_tokens,
         "tool_signature": _tool_signature(tools),

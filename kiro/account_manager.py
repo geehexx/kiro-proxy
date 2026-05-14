@@ -39,9 +39,9 @@ import random
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Optional
 
-import httpx
+import httpx  # noqa: F401 — patched by tests as kiro.account_manager.httpx
 from loguru import logger
 
 from kiro.account_errors import ErrorType
@@ -60,7 +60,6 @@ from kiro.config import (
 )
 from kiro.http_client import KiroHttpClient
 from kiro.model_resolver import ModelResolver, normalize_model_name
-from kiro.utils import get_kiro_headers
 
 
 def _format_duration(seconds: float) -> str:

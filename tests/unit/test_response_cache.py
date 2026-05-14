@@ -334,3 +334,61 @@ class TestClear:
             "misses": 0,
             "evictions": 0,
         }
+
+
+class TestCacheKeyNormalization:
+    """make_key normalizes whitespace so minor formatting differences don't cause misses."""
+
+    def _base_args(self):
+        return dict(
+            session_id="sess-1",
+            model="claude-sonnet-4.6",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": "Hello"}],
+        )
+
+    def test_system_trailing_newline_same_key(self):
+        args = self._base_args()
+        k1 = make_key(**args, system="You are helpful.")
+        k2 = make_key(**args, system="You are helpful.\n")
+        assert k1 == k2
+
+    def test_system_leading_whitespace_same_key(self):
+        args = self._base_args()
+        k1 = make_key(**args, system="You are helpful.")
+        k2 = make_key(**args, system="  You are helpful.")
+        assert k1 == k2
+
+    def test_system_internal_whitespace_collapsed(self):
+        args = self._base_args()
+        k1 = make_key(**args, system="You are  helpful.")
+        k2 = make_key(**args, system="You are helpful.")
+        assert k1 == k2
+
+    def test_message_text_trailing_whitespace_same_key(self):
+        k1 = make_key(session_id="sess-1", model="claude-sonnet-4.6", max_tokens=1024,
+                      system=None, messages=[{"role": "user", "content": "Hello"}])
+        k2 = make_key(session_id="sess-1", model="claude-sonnet-4.6", max_tokens=1024,
+                      system=None, messages=[{"role": "user", "content": "Hello  "}])
+        assert k1 == k2
+
+    def test_different_content_different_key(self):
+        args = self._base_args()
+        k1 = make_key(**args, system="You are helpful.")
+        k2 = make_key(**args, system="You are not helpful.")
+        assert k1 != k2
+
+    def test_system_list_text_block_normalized(self):
+        args = self._base_args()
+        k1 = make_key(**args, system=[{"type": "text", "text": "Be concise."}])
+        k2 = make_key(**args, system=[{"type": "text", "text": "Be concise.\n"}])
+        assert k1 == k2
+
+    def test_message_content_list_text_block_normalized(self):
+        msgs1 = [{"role": "user", "content": [{"type": "text", "text": "Hello"}]}]
+        msgs2 = [{"role": "user", "content": [{"type": "text", "text": "Hello\n"}]}]
+        k1 = make_key(session_id="sess-1", model="claude-sonnet-4.6", max_tokens=1024,
+                      system=None, messages=msgs1)
+        k2 = make_key(session_id="sess-1", model="claude-sonnet-4.6", max_tokens=1024,
+                      system=None, messages=msgs2)
+        assert k1 == k2

@@ -33,7 +33,7 @@ from fastapi.security import APIKeyHeader
 from loguru import logger
 
 from kiro.auth import AuthType
-from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, RE2_ENABLED, RE2_INJECTION, RE2_MIN_CHARS, RE2_MIN_MESSAGES, RE2_SKIP_EXTENDED_THINKING, STREAM_CACHE_ENABLED, WEB_SEARCH_ENABLED
+from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, RE2_ENABLED, RE2_INJECTION, RE2_MIN_MESSAGES, STREAM_CACHE_ENABLED, WEB_SEARCH_ENABLED
 from kiro.converters_anthropic import anthropic_to_kiro
 from kiro.http_client import KiroHttpClient
 from kiro.mcp_tools import handle_native_web_search
@@ -66,6 +66,7 @@ async def _emit_gateway_baseline(
     retry_after_applied_ms: Optional[int] = None,
     re2_applied: bool = False,
     complexity_label: Optional[str] = None,
+    dedup_hit: bool = False,
 ) -> None:
     """Append one record to baselines-gateway-requests.jsonl and emit logfire span.
 
@@ -100,6 +101,7 @@ async def _emit_gateway_baseline(
             "retry_after_applied_ms": retry_after_applied_ms,
             "re2_applied": re2_applied,
             "complexity_label": complexity_label,
+            "dedup_hit": dedup_hit,
         }
         await writer.write("gateway-requests", record)
 
@@ -412,7 +414,7 @@ async def messages(
     # Use complexity classifier to determine RE2 eligibility and thinking budget.
     # The classifier replaces the old _re2_eligible() function with a unified
     # Layer 1+2 heuristic that drives both RE2 and thinking budget injection.
-    from kiro.complexity_classifier import classify_request as _classify_request, ComplexityLabel as _ComplexityLabel
+    from kiro.complexity_classifier import classify_request as _classify_request
     _is_subagent = request.headers.get("x-claude-subagent", "").lower() in ("true", "1", "yes")
     _complexity = _classify_request(
         model=request_data.model,
@@ -1188,6 +1190,7 @@ async def messages(
                     session_id_gw=session_id, cache_key=cache_key, upstream_ms=_upstream_ms_total,
                     gateway_cache="miss", status=200, re2_applied=_re2_active,
                     complexity_label=_complexity.label.value,
+                    dedup_hit=in_flight_dedup.hits > 0,
                 )
                 return JSONResponse(content=anthropic_response, headers={"x-kiro-cache": "miss"})
         else:
