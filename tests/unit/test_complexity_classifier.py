@@ -150,3 +150,94 @@ class TestResultShape:
                 messages=[_user_msg(text), _assistant_msg()],
             )
             assert 0.0 <= result.score <= 1.0
+
+
+class TestLayer2TokenAndConversation:
+    """Tests for Layer 2 token count and conversation length scoring."""
+
+    def test_long_input_tokens_increases_score(self):
+        # Need 2+ messages to bypass single-message short-circuit
+        result = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("analyze this"), _assistant_msg()],
+            input_tokens_estimate=5000,
+        )
+        short_result = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("hello"), _assistant_msg()],
+            input_tokens_estimate=10,
+        )
+        assert result.score > short_result.score
+
+    def test_long_conversation_gets_medium_floor(self):
+        # 20+ messages should get at least MEDIUM
+        messages = []
+        for i in range(10):
+            messages.append({"role": "user", "content": f"question {i}"})
+            messages.append({"role": "assistant", "content": f"answer {i}"})
+        result = classify_request(
+            model="claude-sonnet-4.6",
+            messages=messages,
+        )
+        assert result.label in (
+            ComplexityLabel.MEDIUM,
+            ComplexityLabel.COMPLEX,
+        )
+
+    def test_code_block_increases_score(self):
+        with_code = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("fix this:\n```python\ndef foo(): pass\n```")],
+        )
+        without_code = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("fix this function")],
+        )
+        assert with_code.score >= without_code.score
+
+    def test_multiple_questions_increases_score(self):
+        many_questions = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("Why does this fail? What should I do? How can I fix it?")],
+        )
+        no_questions = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("fix this code")],
+        )
+        assert many_questions.score >= no_questions.score
+
+    def test_reasoning_keywords_increase_score(self):
+        # Need 2+ messages to bypass single-message short-circuit
+        reasoning = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("debug and analyze why this fails and explain the root cause"), _assistant_msg()],
+        )
+        simple = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("hello world"), _assistant_msg()],
+        )
+        assert reasoning.score > simple.score
+
+    def test_lookup_keywords_reduce_complexity(self):
+        lookup = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("what is a list comprehension?")],
+        )
+        reasoning = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("debug and analyze why this complex system fails")],
+        )
+        assert lookup.score <= reasoning.score
+
+    def test_input_tokens_estimate_used_when_provided(self):
+        result_high = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("hello")],
+            input_tokens_estimate=8000,
+        )
+        result_low = classify_request(
+            model="claude-sonnet-4.6",
+            messages=[_user_msg("hello")],
+            input_tokens_estimate=50,
+        )
+        assert result_high.score >= result_low.score
