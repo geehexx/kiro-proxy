@@ -284,3 +284,74 @@ class TestStreamCache:
         assert try_stream_cache_lookup(cache, "k2") is not None
         assert try_stream_cache_lookup(cache, "k1") is not None  # raw bytes of JSON body
         assert try_cache_lookup(cache, "k2") is not None  # raw bytes of SSE chunks
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for issues found in session 15 analysis (2026-05-14)
+# ---------------------------------------------------------------------------
+
+class TestStreamCacheReplayFormat:
+    """Regression: stream cache must store and replay valid SSE bytes, not JSON blobs."""
+
+    def test_stored_chunks_are_sse_format(self) -> None:
+        """Chunks stored in stream cache must be valid SSE bytes."""
+        cache = ResponseCache(max_entries=10, max_bytes=1024 * 1024, ttl_seconds=60)
+        sse_chunks = [
+            b"event: message_start\ndata: {\"type\": \"message_start\"}\n\n",
+            b"event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"delta\": {\"type\": \"text_delta\", \"text\": \"hello\"}}\n\n",
+            b"event: message_delta\ndata: {\"type\": \"message_delta\", \"usage\": {\"input_tokens\": 10, \"output_tokens\": 5}}\n\n",
+            b"event: message_stop\ndata: {\"type\": \"message_stop\"}\n\n",
+        ]
+        store_stream_cache(cache, "sse_key", sse_chunks)
+        result = try_stream_cache_lookup(cache, "sse_key")
+        assert result is not None
+        # Result must be concatenated SSE bytes, not JSON
+        assert b"event:" in result
+        assert b"data:" in result
+        assert b"message_start" in result
+        assert b"message_stop" in result
+
+    def test_replayed_stream_contains_all_events(self) -> None:
+        """All SSE events must be present in the replayed stream."""
+        cache = ResponseCache(max_entries=10, max_bytes=1024 * 1024, ttl_seconds=60)
+        events = [b"event: ping\ndata: {}\n\n", b"event: pong\ndata: {}\n\n"]
+        store_stream_cache(cache, "events_key", events)
+        result = try_stream_cache_lookup(cache, "events_key")
+        assert result == b"event: ping\ndata: {}\n\nevent: pong\ndata: {}\n\n"
+
+
+class TestCapacity429Regression:
+    """Regression: capacity 429s must not cause indefinite hangs."""
+
+    def test_capacity_config_values_are_reasonable(self) -> None:
+        """CAPACITY_BACKOFF_BASE and CAPACITY_MAX_RETRIES must be set to fast-fail values."""
+        from kiro.config import CAPACITY_BACKOFF_BASE, CAPACITY_MAX_RETRIES
+        # Max total wait = CAPACITY_BACKOFF_BASE * (2^0 + 2^1 + ...) * 1.25 jitter
+        # With base=5, retries=1: max ~12.5s — acceptable
+        # With base=15, retries=2: max ~56s — causes hang (the bug)
+        max_total_wait = sum(
+            CAPACITY_BACKOFF_BASE * (2 ** i) * 1.25
+            for i in range(CAPACITY_MAX_RETRIES)
+        )
+        assert max_total_wait < 30, (
+            f"Capacity 429 max wait {max_total_wait:.1f}s exceeds 30s threshold. "
+            f"CAPACITY_BACKOFF_BASE={CAPACITY_BACKOFF_BASE}, CAPACITY_MAX_RETRIES={CAPACITY_MAX_RETRIES}. "
+            "This causes the gateway to hang on Opus capacity exhaustion."
+        )
+
+    def test_deprecated_model_not_in_fallback_list(self) -> None:
+        """claude-sonnet-4 (deprecated 4.0) must not appear in fallback models."""
+        from kiro.config import FALLBACK_MODELS
+        model_ids = [m["modelId"] for m in FALLBACK_MODELS]
+        assert "claude-sonnet-4" not in model_ids, (
+            "claude-sonnet-4 (deprecated 4.0) is in FALLBACK_MODELS. "
+            "It shows as 'deprecated' in the CLI model picker."
+        )
+
+    def test_deprecated_model_hidden_from_list(self) -> None:
+        """claude-sonnet-4 must be in HIDDEN_FROM_LIST to prevent it appearing in /v1/models."""
+        from kiro.config import HIDDEN_FROM_LIST
+        assert "claude-sonnet-4" in HIDDEN_FROM_LIST, (
+            "claude-sonnet-4 must be in HIDDEN_FROM_LIST to prevent it appearing "
+            "in the /v1/models endpoint as a deprecated model."
+        )
