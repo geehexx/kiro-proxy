@@ -209,13 +209,13 @@ def classify_request(
         reasons.append(f"reasoning keywords ({reasoning_hits} hits)")
     elif reasoning_hits == 1:
         score += 0.15
-        reasons.append(f"reasoning keyword (1 hit)")
+        reasons.append("reasoning keyword (1 hit)")
 
     # Lookup keywords (reduce complexity)
     lookup_hits = sum(1 for kw in _LOOKUP_KEYWORDS if lower_text.startswith(kw))
     if lookup_hits >= 1:
         score -= 0.2
-        reasons.append(f"lookup pattern detected")
+        reasons.append("lookup pattern detected")
 
     # Clamp score
     score = max(0.0, min(1.0, score + 0.3))  # base offset of 0.3
