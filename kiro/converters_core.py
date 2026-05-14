@@ -30,8 +30,8 @@ to convert their formats to Kiro API format.
 """
 
 import json
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, List, Optional
 
 from loguru import logger
 
@@ -133,7 +133,7 @@ class KiroPayloadResult:
 # Text Content Extraction
 # ==================================================================================================
 
-def extract_text_content(content: Any) -> str:
+def extract_text_content(content: Any) -> str:  # noqa: C901
     """
     Extracts text content from various formats.
 
@@ -180,7 +180,7 @@ def extract_text_content(content: Any) -> str:
     return str(content)
 
 
-def extract_images_from_content(content: Any) -> list[dict[str, Any]]:
+def extract_images_from_content(content: Any) -> list[dict[str, Any]]:  # noqa: C901, PLR0912, PLR0915
     """
     Extracts images from message content in unified format.
 
@@ -933,7 +933,7 @@ def tool_results_to_text(tool_results: list[dict[str, Any]]) -> str:
 # Message Merging
 # ==================================================================================================
 
-def strip_all_tool_content(messages: list[UnifiedMessage]) -> tuple[list[UnifiedMessage], bool]:
+def strip_all_tool_content(messages: list[UnifiedMessage]) -> tuple[list[UnifiedMessage], bool]:  # noqa: C901
     """
     Strips ALL tool-related content from messages, converting it to text representation.
 
@@ -1093,7 +1093,7 @@ def ensure_assistant_before_tool_results(messages: list[UnifiedMessage]) -> tupl
     return result, converted_any_tool_results
 
 
-def merge_adjacent_messages(messages: list[UnifiedMessage]) -> list[UnifiedMessage]:
+def merge_adjacent_messages(messages: list[UnifiedMessage]) -> list[UnifiedMessage]:  # noqa: C901, PLR0912
     """
     Merges adjacent messages with the same role.
 
@@ -1343,7 +1343,7 @@ def ensure_alternating_roles(messages: list[UnifiedMessage]) -> list[UnifiedMess
 # Kiro History Building
 # ==================================================================================================
 
-def build_kiro_history(messages: list[UnifiedMessage], model_id: str) -> list[dict[str, Any]]:
+def build_kiro_history(messages: list[UnifiedMessage], model_id: str) -> list[dict[str, Any]]:  # noqa: C901, PLR0912
     """
     Builds history array for Kiro API from unified messages.
 
@@ -1428,7 +1428,7 @@ def build_kiro_history(messages: list[UnifiedMessage], model_id: str) -> list[di
 # Main Payload Building
 # ==================================================================================================
 
-def build_kiro_payload(
+def build_kiro_payload(  # noqa: C901, PLR0912, PLR0913, PLR0915
     messages: list[UnifiedMessage],
     system_prompt: str,
     model_id: str,

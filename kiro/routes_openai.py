@@ -174,7 +174,7 @@ async def get_models(request: Request):
 
 
 @router.post("/v1/chat/completions", dependencies=[Depends(verify_api_key)])
-async def chat_completions(request: Request, request_data: ChatCompletionRequest):
+async def chat_completions(request: Request, request_data: ChatCompletionRequest):  # noqa: C901, PLR0912, PLR0915
     """
     Chat completions endpoint - compatible with OpenAI API.
     

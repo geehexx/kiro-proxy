@@ -24,10 +24,9 @@ providing validation and serialization.
 """
 
 import time
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Optional
 
 from pydantic import BaseModel, Field
-from typing import Annotated
 
 # ==================================================================================================
 # Models for /v1/models endpoint

@@ -152,7 +152,7 @@ def user_request_span(
 
 
 @contextmanager
-def gateway_request_span(
+def gateway_request_span(  # noqa: PLR0913
     *,
     model: str,
     stream: bool,
@@ -251,7 +251,7 @@ def emit_upstream_call(
 # Legacy flat emitter — used by _emit_gateway_baseline until routes are refactored
 # ---------------------------------------------------------------------------
 
-def record_request(
+def record_request(  # noqa: PLR0913
     *,
     model: str,
     stream: bool,

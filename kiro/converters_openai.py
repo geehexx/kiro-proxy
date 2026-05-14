@@ -28,7 +28,7 @@ Contains functions for:
 - Building Kiro payload from OpenAI requests
 """
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -138,7 +138,7 @@ def _extract_tool_calls_from_openai(msg: ChatMessage) -> list[dict[str, Any]]:
     return tool_calls
 
 
-def convert_openai_messages_to_unified(messages: list[ChatMessage]) -> tuple[str, list[UnifiedMessage]]:
+def convert_openai_messages_to_unified(messages: list[ChatMessage]) -> tuple[str, list[UnifiedMessage]]:  # noqa: C901, PLR0912
     """
     Converts OpenAI messages to unified format.
 

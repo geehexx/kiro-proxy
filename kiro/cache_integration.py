@@ -45,7 +45,7 @@ def derive_session_id(api_key: Optional[str], client_header: Optional[str]) -> s
     return "anonymous"
 
 
-def compute_cache_key(
+def compute_cache_key(  # noqa: PLR0913
     *,
     session_id: str,
     system: Any,

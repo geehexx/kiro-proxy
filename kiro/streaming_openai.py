@@ -29,8 +29,8 @@ Uses streaming_core.py for parsing Kiro stream into unified KiroEvent objects.
 
 import json
 import time
-from typing import TYPE_CHECKING, Optional
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from typing import TYPE_CHECKING, Optional
 
 import httpx
 from fastapi import HTTPException
@@ -46,7 +46,6 @@ from kiro.parsers import deduplicate_tool_calls, parse_bracket_tool_calls
 # Import from streaming_core - reuse shared parsing logic
 from kiro.streaming_core import (
     FirstTokenTimeoutError,
-    KiroEvent,
     calculate_tokens_from_context_usage,
     parse_kiro_stream,
 )
@@ -71,7 +70,7 @@ except ImportError:
 __all__ = ['FirstTokenTimeoutError', 'stream_kiro_to_openai', 'stream_with_first_token_retry', 'collect_stream_response']
 
 
-async def stream_kiro_to_openai_internal(
+async def stream_kiro_to_openai_internal(  # noqa: C901, PLR0912, PLR0913, PLR0915
     client: httpx.AsyncClient,
     response: httpx.Response,
     model: str,
@@ -449,7 +448,7 @@ async def stream_kiro_to_openai_internal(
             logger.debug("Streaming completed successfully")
 
 
-async def stream_kiro_to_openai(
+async def stream_kiro_to_openai(  # noqa: PLR0913
     client: httpx.AsyncClient,
     response: httpx.Response,
     model: str,
@@ -484,7 +483,7 @@ async def stream_kiro_to_openai(
         yield chunk
 
 
-async def stream_with_first_token_retry(
+async def stream_with_first_token_retry(  # noqa: PLR0913
     make_request: Callable[[], Awaitable[httpx.Response]],
     client: httpx.AsyncClient,
     model: str,
@@ -575,7 +574,7 @@ async def stream_with_first_token_retry(
         yield chunk
 
 
-async def collect_stream_response(
+async def collect_stream_response(  # noqa: C901, PLR0913
     client: httpx.AsyncClient,
     response: httpx.Response,
     model: str,

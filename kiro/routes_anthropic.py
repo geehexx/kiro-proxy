@@ -58,7 +58,7 @@ from kiro.tokenizer import estimate_request_tokens
 from kiro.utils import generate_conversation_id
 
 
-async def _emit_gateway_baseline(
+async def _emit_gateway_baseline(  # noqa: PLR0913
     request: Request,
     *,
     response_body: dict,
@@ -197,7 +197,7 @@ router = APIRouter(tags=["Anthropic API"])
 
 
 @router.post("/v1/messages", dependencies=[Depends(verify_anthropic_api_key)])
-async def messages(
+async def messages(  # noqa: C901, PLR0912, PLR0915
     request: Request,
     request_data: AnthropicMessagesRequest,
     anthropic_version: Optional[str] = Header(None, alias="anthropic-version"),
@@ -775,7 +775,7 @@ async def messages(
                 if response.status_code == 200:
                     if request_data.stream:
                         # Streaming mode
-                        async def stream_wrapper():
+                        async def stream_wrapper():  # noqa: C901, PLR0912, PLR0915
                             streaming_error = None
                             client_disconnected = False
                             # Capture usage from message_delta event for baseline
@@ -1287,7 +1287,7 @@ async def messages(
             if request_data.model.startswith("claude-opus"):
                 _opus_semaphore = getattr(request.app.state, "global_opus_semaphore", None)
 
-            async def stream_wrapper():
+            async def stream_wrapper():  # noqa: C901, PLR0912, PLR0915
                 streaming_error = None
                 client_disconnected = False
                 _sem_acquired = False

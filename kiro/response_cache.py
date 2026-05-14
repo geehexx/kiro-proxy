@@ -125,7 +125,7 @@ def _canonical(payload: Any) -> str:
     )
 
 
-def make_key(
+def make_key(  # noqa: PLR0913
     *,
     session_id: str,
     system: Any,

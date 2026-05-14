@@ -25,8 +25,7 @@ Anthropic's Messages API specification.
 Reference: https://docs.anthropic.com/en/api/messages
 """
 
-import time
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Literal, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 

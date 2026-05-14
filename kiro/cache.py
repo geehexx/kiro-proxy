@@ -25,7 +25,7 @@ with TTL and lazy loading support.
 
 import asyncio
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from loguru import logger
 

@@ -32,7 +32,7 @@ more than GPT-4 (cl100k_base). This is due to differences in BPE vocabularies.
 """
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from loguru import logger
 
@@ -107,7 +107,7 @@ def count_tokens(text: str, apply_claude_correction: bool = True) -> int:
     return base_estimate
 
 
-def count_message_tokens(messages: list[dict[str, Any]], apply_claude_correction: bool = True) -> int:
+def count_message_tokens(messages: list[dict[str, Any]], apply_claude_correction: bool = True) -> int:  # noqa: C901, PLR0912, PLR0915
     """
     Counts tokens in a list of chat messages.
 
