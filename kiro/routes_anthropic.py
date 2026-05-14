@@ -407,50 +407,19 @@ async def messages(
 
     # Compute re2 flag early so cache-hit paths can record it correctly.
     # The actual injection happens below, after cache lookup.
-    # re2 is only useful for genuine reasoning turns — skip for haiku (fast tool calls),
-    # tool_result-only last messages, and sub-agent requests.
-    def _re2_eligible() -> bool:
-        if 'haiku' in request_data.model.lower():
-            return False
-        if request.headers.get("x-claude-subagent", "").lower() in ("true", "1", "yes"):
-            return False
-        # Skip if extended thinking is explicitly enabled — re2 is neutral-to-negative
-        # when reasoning is on (arxiv 2512.14982). "adaptive" mode is Anthropic's
-        # auto-routing and does NOT guarantee thinking is active, so we allow RE2 there.
-        if RE2_SKIP_EXTENDED_THINKING and request_data.thinking is not None:
-            thinking_type = request_data.thinking.get("type") if isinstance(request_data.thinking, dict) else None
-            if thinking_type == "enabled":
-                return False
-        # Skip if last user message has no text block (only tool_result blocks)
-        last_user_text = ""
-        for _m in reversed(request_data.messages):
-            if _m.role == "user":
-                _c = _m.content
-                if isinstance(_c, list):
-                    has_text = any(
-                        (b.get("type") if isinstance(b, dict) else getattr(b, "type", None)) == "text"
-                        for b in _c
-                    )
-                    if not has_text:
-                        return False
-                    # Extract text for length check
-                    for b in _c:
-                        if isinstance(b, dict) and b.get("type") == "text":
-                            last_user_text = b.get("text", "")
-                            break
-                elif isinstance(_c, str):
-                    last_user_text = _c
-                break
-        # RE2_MIN_CHARS applies to the last user message text.
-        # Exception: if the conversation is long (many messages), even a short
-        # "Continue" or "yes" is part of a complex multi-turn session — apply RE2.
-        # Threshold: skip only if BOTH the message is short AND the conversation is short.
-        is_long_conversation = len(request_data.messages) >= 10
-        if len(last_user_text.strip()) < RE2_MIN_CHARS and not is_long_conversation:
-            return False
-        return True
-
-    _re2_active = (RE2_ENABLED or request.headers.get("x-kiro-re2", "").lower() == "true") and _re2_eligible()
+    # Use complexity classifier to determine RE2 eligibility and thinking budget.
+    # The classifier replaces the old _re2_eligible() function with a unified
+    # Layer 1+2 heuristic that drives both RE2 and thinking budget injection.
+    from kiro.complexity_classifier import classify_request as _classify_request, ComplexityLabel as _ComplexityLabel
+    _is_subagent = request.headers.get("x-claude-subagent", "").lower() in ("true", "1", "yes")
+    _complexity = _classify_request(
+        model=request_data.model,
+        messages=[m.model_dump() for m in request_data.messages],
+        thinking=request_data.thinking,
+        tool_choice=request_data.tool_choice.model_dump() if hasattr(request_data.tool_choice, "model_dump") else request_data.tool_choice,
+        is_subagent=_is_subagent,
+    )
+    _re2_active = (RE2_ENABLED or request.headers.get("x-kiro-re2", "").lower() == "true") and _complexity.re2_eligible
 
     # ==============================================================================
     # Response cache lookup — runs AFTER truncation recovery but BEFORE re2
