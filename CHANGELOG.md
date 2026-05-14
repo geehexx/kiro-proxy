@@ -2,7 +2,7 @@
 
 All notable changes to kiro-proxy are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
-## [Unreleased]
+## [2.3] - 2026-05-14
 
 ### Bug Fixes
 
@@ -114,6 +114,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **classifier**: Add complexity classifier for adaptive RE2 + thinking budget
 - **telemetry**: Add complexity_label to baseline records
 - **telemetry**: Add dedup_hit to baselines, cache key normalization, health stats
+- **ci**: Add GitHub Actions CI workflow + property-based tests
 
 ### Maintenance
 
@@ -171,7 +172,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **backcompat**: Add complexity_label forward/backward compat tests
 - **emit**: Add complexity_label emit tests
 
-## [2.3] - 2026-02-03
+## [2.3] - 2026-05-14
 
 ### Bug Fixes
 
