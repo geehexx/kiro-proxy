@@ -39,7 +39,7 @@ from typing import Optional
 
 from loguru import logger
 
-from kiro.config import DEBUG_DIR, DEBUG_MODE
+from kiro.config import DEBUG_DIR, DEBUG_MODE, DEBUG_ROTATE_MAX_DIRS
 
 
 class DebugLogger:
@@ -49,7 +49,8 @@ class DebugLogger:
     Operating modes:
     - off: does nothing
     - errors: buffers data, flushes to files only on errors
-    - all: writes data immediately to files (as before)
+    - all: writes data immediately to files (overwrites on each request)
+    - rotate: writes data to timestamped subdirectories (corpus collection)
     """
     _instance = None
 
@@ -63,6 +64,7 @@ class DebugLogger:
         if self._initialized:
             return
         self.debug_dir = Path(DEBUG_DIR)
+        self._request_dir: Optional[Path] = None  # per-request dir in rotate mode
         self._initialized = True
 
         # Buffers for "errors" mode
@@ -77,11 +79,30 @@ class DebugLogger:
 
     def _is_enabled(self) -> bool:
         """Checks if logging is enabled."""
-        return DEBUG_MODE in ("errors", "all")
+        return DEBUG_MODE in ("errors", "all", "rotate")
 
     def _is_immediate_write(self) -> bool:
-        """Checks if immediate file writing is needed (all mode)."""
-        return DEBUG_MODE == "all"
+        """Checks if immediate file writing is needed (all or rotate mode)."""
+        return DEBUG_MODE in ("all", "rotate")
+
+    def _get_write_dir(self) -> Path:
+        """Return the directory to write files to for the current request."""
+        if DEBUG_MODE == "rotate" and self._request_dir is not None:
+            return self._request_dir
+        return self.debug_dir
+
+    def _prune_rotate_dirs(self) -> None:
+        """Remove oldest per-request dirs when over DEBUG_ROTATE_MAX_DIRS."""
+        try:
+            dirs = sorted(
+                [d for d in self.debug_dir.iterdir() if d.is_dir()],
+                key=lambda d: d.name,
+            )
+            excess = len(dirs) - DEBUG_ROTATE_MAX_DIRS
+            for old_dir in dirs[:excess]:
+                shutil.rmtree(old_dir, ignore_errors=True)
+        except Exception as e:
+            logger.warning(f"[DebugLogger] Prune failed: {e}")
 
     def _clear_buffers(self):
         """Clears all buffers."""
@@ -131,6 +152,7 @@ class DebugLogger:
         Prepares the logger for a new request.
 
         In "all" mode: clears the logs folder.
+        In "rotate" mode: creates a timestamped subdirectory, prunes old ones.
         In "errors" mode: clears buffers.
         In both modes: sets up application log capture.
         """
@@ -143,12 +165,27 @@ class DebugLogger:
         # Set up application log capture
         self._setup_app_logs_capture()
 
-        if self._is_immediate_write():
+        if DEBUG_MODE == "rotate":
+            # Create a new timestamped subdirectory for this request
+            import datetime
+            import uuid
+            ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
+            req_id = uuid.uuid4().hex[:8]
+            self._request_dir = self.debug_dir / f"{ts}_{req_id}"
+            try:
+                self._request_dir.mkdir(parents=True, exist_ok=True)
+                self._prune_rotate_dirs()
+            except Exception as e:
+                logger.error(f"[DebugLogger] Error creating rotate dir: {e}")
+                self._request_dir = self.debug_dir
+                self._get_write_dir().mkdir(parents=True, exist_ok=True)
+        elif self._is_immediate_write():
             # "all" mode - clear folder and recreate
+            self._request_dir = None
             try:
                 if self.debug_dir.exists():
                     shutil.rmtree(self.debug_dir)
-                self.debug_dir.mkdir(parents=True, exist_ok=True)
+                self._get_write_dir().mkdir(parents=True, exist_ok=True)
                 logger.debug(f"[DebugLogger] Directory {self.debug_dir} cleared for new request.")
             except Exception as e:
                 logger.error(f"[DebugLogger] Error preparing directory: {e}")
@@ -234,13 +271,13 @@ class DebugLogger:
 
         try:
             # Ensure directory exists
-            self.debug_dir.mkdir(parents=True, exist_ok=True)
+            self._get_write_dir().mkdir(parents=True, exist_ok=True)
 
             error_info = {
                 "status_code": status_code,
                 "error_message": error_message
             }
-            error_file = self.debug_dir / "error_info.json"
+            error_file = self._get_write_dir() / "error_info.json"
             with open(error_file, "w", encoding="utf-8") as f:
                 json.dump(error_info, f, indent=2, ensure_ascii=False)
 
@@ -282,7 +319,7 @@ class DebugLogger:
             # Create directory if not exists
             if self.debug_dir.exists():
                 shutil.rmtree(self.debug_dir)
-            self.debug_dir.mkdir(parents=True, exist_ok=True)
+            self._get_write_dir().mkdir(parents=True, exist_ok=True)
 
             # Flush buffers to files
             if self._request_body_buffer:
@@ -292,12 +329,12 @@ class DebugLogger:
                 self._write_kiro_request_body_to_file(self._kiro_request_body_buffer)
 
             if self._raw_chunks_buffer:
-                file_path = self.debug_dir / "response_stream_raw.txt"
+                file_path = self._get_write_dir() / "response_stream_raw.txt"
                 with open(file_path, "wb") as f:
                     f.write(self._raw_chunks_buffer)
 
             if self._modified_chunks_buffer:
-                file_path = self.debug_dir / "response_stream_modified.txt"
+                file_path = self._get_write_dir() / "response_stream_modified.txt"
                 with open(file_path, "wb") as f:
                     f.write(self._modified_chunks_buffer)
 
@@ -320,12 +357,12 @@ class DebugLogger:
         Clears buffers without writing to files.
 
         Called when request completed successfully in "errors" mode.
-        Also called in "all" mode to save logs of successful request.
+        Also called in "all"/"rotate" mode to save logs of successful request.
         """
         if DEBUG_MODE == "errors":
             self._clear_buffers()
-        elif DEBUG_MODE == "all":
-            # In "all" mode save logs even for successful requests
+        elif DEBUG_MODE in ("all", "rotate"):
+            # In "all"/"rotate" mode save logs even for successful requests
             self._write_app_logs_to_file()
             self._clear_app_logs_buffer()
 
@@ -334,7 +371,7 @@ class DebugLogger:
     def _write_request_body_to_file(self, body: bytes):
         """Writes request body to file."""
         try:
-            file_path = self.debug_dir / "request_body.json"
+            file_path = self._get_write_dir() / "request_body.json"
             try:
                 json_obj = json.loads(body)
                 with open(file_path, "w", encoding="utf-8") as f:
@@ -348,7 +385,7 @@ class DebugLogger:
     def _write_kiro_request_body_to_file(self, body: bytes):
         """Writes Kiro request body to file."""
         try:
-            file_path = self.debug_dir / "kiro_request_body.json"
+            file_path = self._get_write_dir() / "kiro_request_body.json"
             try:
                 json_obj = json.loads(body)
                 with open(file_path, "w", encoding="utf-8") as f:
@@ -362,7 +399,7 @@ class DebugLogger:
     def _append_raw_chunk_to_file(self, chunk: bytes):
         """Appends raw chunk to file."""
         try:
-            file_path = self.debug_dir / "response_stream_raw.txt"
+            file_path = self._get_write_dir() / "response_stream_raw.txt"
             with open(file_path, "ab") as f:
                 f.write(chunk)
         except Exception:
@@ -371,7 +408,7 @@ class DebugLogger:
     def _append_modified_chunk_to_file(self, chunk: bytes):
         """Appends modified chunk to file."""
         try:
-            file_path = self.debug_dir / "response_stream_modified.txt"
+            file_path = self._get_write_dir() / "response_stream_modified.txt"
             with open(file_path, "ab") as f:
                 f.write(chunk)
         except Exception:
@@ -387,9 +424,9 @@ class DebugLogger:
                 return
 
             # Ensure directory exists
-            self.debug_dir.mkdir(parents=True, exist_ok=True)
+            self._get_write_dir().mkdir(parents=True, exist_ok=True)
 
-            file_path = self.debug_dir / "app_logs.txt"
+            file_path = self._get_write_dir() / "app_logs.txt"
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(logs_content)
 
