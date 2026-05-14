@@ -218,3 +218,40 @@ class TestMixedFormatFile:
         assert parsed["error_reason"] is None
         assert parsed["retry_count"] is None
         assert parsed["retry_after_applied_ms"] is None
+
+
+class TestComplexityLabelBackcompat:
+    """Regression: complexity_label field added in 2026-05-14 session."""
+
+    def test_new_line_has_complexity_label(self, tmp_path):
+        """New records include complexity_label field."""
+        import asyncio
+
+        from kiro.baselines import BaselinesWriter as BaselineWriter
+
+        writer = BaselineWriter(tmp_path)
+        record = {
+            "ts": 1.0, "source": "gateway-requests", "model": "claude-sonnet-4.6",
+            "re2_applied": True, "complexity_label": "medium",
+        }
+        asyncio.run(writer.write("gateway-requests", record))
+        path = tmp_path / "baselines-gateway-requests.jsonl"
+        parsed = json.loads(path.read_text(encoding="utf-8").strip())
+        assert parsed["complexity_label"] == "medium"
+
+    def test_old_line_missing_complexity_label_returns_none(self, tmp_path):
+        """Old records without complexity_label return None via .get()."""
+        import asyncio
+
+        from kiro.baselines import BaselinesWriter as BaselineWriter
+
+        writer = BaselineWriter(tmp_path)
+        record = {
+            "ts": 1.0, "source": "gateway-requests", "model": "claude-sonnet-4.6",
+            "re2_applied": False,
+            # No complexity_label — simulates old record
+        }
+        asyncio.run(writer.write("gateway-requests", record))
+        path = tmp_path / "baselines-gateway-requests.jsonl"
+        parsed = json.loads(path.read_text(encoding="utf-8").strip())
+        assert parsed.get("complexity_label") is None
