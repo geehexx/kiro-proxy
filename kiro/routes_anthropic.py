@@ -229,6 +229,22 @@ async def messages(
         request_data = request_data.model_copy(update={"model": _normalized})
 
     # ==============================================================================
+    # Beta feature stripping — remove unsupported Anthropic betas before processing.
+    # AWS Q/CodeWhisperer does not support Anthropic beta features. When Claude Code
+    # sends betas like "advanced-tool-use-2025-11-20" (Tool Search), the gateway
+    # must strip them so Claude Code falls back to sending full tool definitions.
+    # Without stripping, tool_reference blocks arrive with no input_schema → broken.
+    # ==============================================================================
+    _unsupported_betas = {"advanced-tool-use-2025-11-20", "computer-use-2024-10-22", "files-api-2025-04-14"}
+    _request_betas = getattr(request_data, "betas", None) or []
+    if _request_betas:
+        _stripped_betas = [b for b in _request_betas if b not in _unsupported_betas]
+        if len(_stripped_betas) != len(_request_betas):
+            _removed = set(_request_betas) - set(_stripped_betas)
+            logger.debug(f"Stripped unsupported betas: {_removed}")
+            request_data = request_data.model_copy(update={"betas": _stripped_betas or None})
+
+    # ==============================================================================
     # Response cache setup (non-streaming + streaming)
     # ==============================================================================
     # The cache is a singleton on app.state; if disabled it is None.
