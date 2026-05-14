@@ -297,7 +297,10 @@ MODEL_ALIASES: dict[str, str] = {
 #   HIDDEN_FROM_LIST = ["auto", "claude-old-model"]
 #
 # Default: ["auto"] to show only "auto-kiro" alias
-HIDDEN_FROM_LIST: list[str] = ["auto"]
+HIDDEN_FROM_LIST: list[str] = [
+    "auto",
+    "claude-sonnet-4",  # deprecated 4.0 model — shows as "deprecated" in CLI
+]
 
 # ==================================================================================================
 # Fallback Models Configuration (DNS Failure Recovery)
