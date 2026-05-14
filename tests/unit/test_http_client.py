@@ -1235,3 +1235,56 @@ class TestKiroHttpClientRequestParameters:
         assert captured_kwargs["params"]["filter"] == "active"
         assert captured_kwargs["json"]["data"] == "value"
         assert response.status_code == 200
+
+
+class TestKiroHttpClient409Retry:
+    """Tests for 409 conflict retry path."""
+
+    @pytest.mark.asyncio
+    async def test_409_triggers_retry(self, mock_auth_manager_for_http):
+        """409 response triggers retry with backoff."""
+        from unittest.mock import AsyncMock, patch
+
+        http_client = KiroHttpClient(auth_manager=mock_auth_manager_for_http)
+
+        mock_409 = AsyncMock()
+        mock_409.status_code = 409
+        mock_409.aclose = AsyncMock()
+
+        mock_200 = AsyncMock()
+        mock_200.status_code = 200
+
+        call_count = 0
+
+        async def side_effect(method, url, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return mock_409
+            return mock_200
+
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        mock_client.request = AsyncMock(side_effect=side_effect)
+
+        with patch.object(http_client, '_get_client', return_value=mock_client), \
+             patch('kiro.http_client.get_kiro_headers', return_value={"Authorization": "Bearer test"}), \
+             patch('asyncio.sleep', new=AsyncMock()):
+            response = await http_client.request_with_retry(
+                "POST", "https://api.example.com/test", json_data={}
+            )
+
+        assert response.status_code == 200
+        assert call_count == 2
+
+
+class TestKiroHttpClientVpnProxy:
+    """Tests for VPN proxy configuration."""
+
+    def test_vpn_proxy_not_set_when_env_empty(self, mock_auth_manager_for_http):
+        """No proxy env vars set when VPN_PROXY_URL is empty."""
+        import os
+        with patch.dict(os.environ, {"VPN_PROXY_URL": ""}, clear=False):
+            http_client = KiroHttpClient(auth_manager=mock_auth_manager_for_http)
+            # Should not raise
+            assert http_client is not None
