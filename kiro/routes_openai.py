@@ -29,7 +29,7 @@ Contains all API endpoints:
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, Security
+from fastapi import APIRouter, Depends, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 from loguru import logger
@@ -43,15 +43,12 @@ from kiro.models_openai import (
     ModelList,
     ChatCompletionRequest,
 )
-from kiro.auth import KiroAuthManager, AuthType
-from kiro.cache import ModelInfoCache
-from kiro.model_resolver import ModelResolver
+from kiro.auth import AuthType
 from kiro.converters_openai import build_kiro_payload
-from kiro.streaming_openai import stream_kiro_to_openai, collect_stream_response, stream_with_first_token_retry
+from kiro.streaming_openai import collect_stream_response, stream_with_first_token_retry
 from kiro.http_client import KiroHttpClient
 from kiro.utils import generate_conversation_id
 from kiro.config import WEB_SEARCH_ENABLED
-from kiro.mcp_tools import handle_native_web_search
 
 # Import debug_logger
 try:
@@ -105,17 +102,37 @@ async def root():
 
 
 @router.get("/health")
-async def health():
-    """
-    Detailed health check.
-    
-    Returns:
-        Status, timestamp and version
-    """
+async def health(request: Request):
+    """Detailed health check including cache and dedup stats."""
+    response_cache = getattr(request.app.state, "response_cache", None)
+    in_flight_dedup = getattr(request.app.state, "in_flight_dedup", None)
+
+    cache_stats = response_cache.stats() if response_cache is not None else {}
+    dedup_stats = in_flight_dedup.stats() if in_flight_dedup is not None else {}
+
+    # Compute cache hit rate from stats
+    cache_hits = cache_stats.get("hits", 0)
+    cache_misses = cache_stats.get("misses", 0)
+    cache_total = cache_hits + cache_misses
+    cache_hit_rate_pct = round(100.0 * cache_hits / cache_total, 1) if cache_total > 0 else 0.0
+
+    dedup_hits = dedup_stats.get("hits", 0)
+    dedup_misses = dedup_stats.get("misses", 0)
+
     return {
         "status": "healthy",
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "version": APP_VERSION
+        "version": APP_VERSION,
+        "cache": {
+            "entries": cache_stats.get("entries", 0),
+            "hits": cache_hits,
+            "misses": cache_misses,
+            "hit_rate_pct": cache_hit_rate_pct,
+        },
+        "dedup": {
+            "hits": dedup_hits,
+            "misses": dedup_misses,
+        },
     }
 
 @router.get("/v1/models", response_model=ModelList, dependencies=[Depends(verify_api_key)])
