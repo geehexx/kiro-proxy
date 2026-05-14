@@ -66,7 +66,7 @@ def _tool_signature(tools: list[dict[str, Any]] | None) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-import re as _re
+import re as _re  # noqa: E402 — placed after _tool_signature to keep related cache-key helpers together
 
 
 def _normalize_text(value: Any) -> Any:
@@ -276,7 +276,7 @@ class ResponseCache:
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_suffix(".tmp")
             with open(tmp, "wb") as f:
-                pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)  # nosec B301 — local cache file written by this process, not untrusted input
             tmp.replace(path)
             _logger.info(f"Cache saved: {len(payload['entries'])} entries → {path}")
             return True
@@ -309,7 +309,7 @@ class ResponseCache:
             return cache
         try:
             with open(path, "rb") as f:
-                payload = pickle.load(f)
+                payload = pickle.load(f)  # nosec B301 — local cache file written by this process, not untrusted input
             if payload.get("version") != _PICKLE_VERSION:
                 _logger.info(f"Cache version mismatch — starting fresh (got {payload.get('version')}, want {_PICKLE_VERSION})")
                 return cache

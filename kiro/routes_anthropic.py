@@ -33,7 +33,15 @@ from fastapi.security import APIKeyHeader
 from loguru import logger
 
 from kiro.auth import AuthType
-from kiro.config import GATEWAY_SUBAGENT_STRIP_WEB_SEARCH, PROXY_API_KEY, RE2_ENABLED, RE2_INJECTION, RE2_MIN_MESSAGES, STREAM_CACHE_ENABLED, WEB_SEARCH_ENABLED
+from kiro.config import (
+    GATEWAY_SUBAGENT_STRIP_WEB_SEARCH,
+    PROXY_API_KEY,
+    RE2_ENABLED,
+    RE2_INJECTION,
+    RE2_MIN_MESSAGES,
+    STREAM_CACHE_ENABLED,
+    WEB_SEARCH_ENABLED,
+)
 from kiro.converters_anthropic import anthropic_to_kiro
 from kiro.http_client import KiroHttpClient
 from kiro.mcp_tools import handle_native_web_search
@@ -120,6 +128,8 @@ async def _emit_gateway_baseline(
                 error_reason=error_reason,
                 retry_count=retry_count,
                 session_id=session_id_gw,
+                complexity_label=complexity_label,
+                dedup_hit=dedup_hit,
             )
         except Exception:
             pass
@@ -223,8 +233,8 @@ async def messages(
     # Normalize model name early so all downstream code (baselines, cache keys,
     # logs) uses the canonical form. Aliases (sonnet[1m] → claude-sonnet-4.6)
     # and bracket suffixes ([1m]) are resolved here via the model resolver.
-    from kiro.model_resolver import normalize_model_name
     from kiro.config import MODEL_ALIASES
+    from kiro.model_resolver import normalize_model_name
     _raw_model = request_data.model
     _resolved = MODEL_ALIASES.get(_raw_model, _raw_model)
     _normalized = normalize_model_name(_resolved)
@@ -405,8 +415,8 @@ async def messages(
         )
 
     # Resolve model name once for use in baselines (normalized form, e.g. claude-sonnet-4.6).
-    from kiro.model_resolver import normalize_model_name as _normalize_model
     from kiro.config import MODEL_ALIASES as _MODEL_ALIASES
+    from kiro.model_resolver import normalize_model_name as _normalize_model
     _resolved_model = _normalize_model(_MODEL_ALIASES.get(request_data.model, request_data.model))
 
     # Compute re2 flag early so cache-hit paths can record it correctly.
