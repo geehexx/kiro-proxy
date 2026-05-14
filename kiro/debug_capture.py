@@ -194,7 +194,7 @@ def _atomic_write_json(target: Path, payload: Dict[str, Any]) -> None:
     os.replace(tmp.name, target)
 
 
-def _prune_old_files(root: Path, *, keep: int) -> None:
+def _prune_old_files(root: Path, *, keep: int) -> None:  # noqa: C901
     """Keep at most `keep` most-recent capture files across all date subdirs."""
     if keep <= 0:
         return

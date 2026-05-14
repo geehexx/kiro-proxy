@@ -30,9 +30,9 @@ to convert Kiro events to their respective SSE formats.
 """
 
 import asyncio
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 from collections.abc import AsyncGenerator, Awaitable, Callable
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Optional
 
 import httpx
 from loguru import logger
@@ -115,7 +115,7 @@ class FirstTokenTimeoutError(Exception):
 # Kiro Stream Parsing
 # ==================================================================================================
 
-async def parse_kiro_stream(
+async def parse_kiro_stream(  # noqa: C901, PLR0912
     response: httpx.Response,
     first_token_timeout: float = FIRST_TOKEN_TIMEOUT,
     enable_thinking_parser: bool = True
@@ -363,7 +363,7 @@ def calculate_tokens_from_context_usage(
 # First Token Retry Logic
 # ==================================================================================================
 
-async def stream_with_first_token_retry(
+async def stream_with_first_token_retry(  # noqa: C901, PLR0912, PLR0913
     make_request: Callable[[], Awaitable[httpx.Response]],
     stream_processor: Callable[[httpx.Response], AsyncGenerator[str, None]],
     initial_response: Optional[httpx.Response] = None,

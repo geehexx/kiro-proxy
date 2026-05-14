@@ -29,7 +29,7 @@ Ported from sametakofficial's payload_guards.py, simplified.
 
 import json
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any
 
 
 @dataclass
@@ -62,7 +62,7 @@ def _align_to_user_message(history: list) -> list:
     return history
 
 
-def _repair_orphaned_tool_results(history: list) -> None:
+def _repair_orphaned_tool_results(history: list) -> None:  # noqa: C901, PLR0912
     """
     Remove orphaned toolResults that reference toolUseIds not present
     in the preceding assistant message. Preserve orphaned text content

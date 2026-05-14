@@ -50,7 +50,7 @@ _CODE_BLOCK_RE = re.compile(r"```")
 _QUESTION_RE = re.compile(r"\?")
 
 
-def classify_request(
+def classify_request(  # noqa: C901, PLR0912, PLR0913, PLR0915
     *,
     model: str,
     messages: list[dict[str, Any]],

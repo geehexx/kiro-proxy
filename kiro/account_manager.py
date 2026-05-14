@@ -181,7 +181,7 @@ class AccountManager:
         self._credentials_config: list[dict] = []
         self._current_account_index: int = 0  # GLOBAL sticky index for all models
 
-    async def load_credentials(self) -> None:
+    async def load_credentials(self) -> None:  # noqa: C901, PLR0912, PLR0915
         """
         Load credentials from credentials.json.
 
@@ -409,7 +409,7 @@ class AccountManager:
                     await self._save_state()
                     self._dirty = False
 
-    async def _initialize_account(self, account_id: str) -> bool:
+    async def _initialize_account(self, account_id: str) -> bool:  # noqa: C901, PLR0912, PLR0915
         """
         Initialize account (lazy initialization).
 
@@ -608,7 +608,7 @@ class AccountManager:
         finally:
             await http_client.close()
 
-    async def get_next_account(self, model: str, exclude_accounts: Optional[set] = None) -> Optional[Account]:
+    async def get_next_account(self, model: str, exclude_accounts: Optional[set] = None) -> Optional[Account]:  # noqa: C901, PLR0912, PLR0915
         """
         Get next available account for model (Circuit Breaker + Sticky).
 

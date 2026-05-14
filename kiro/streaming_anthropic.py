@@ -124,7 +124,7 @@ def _extract_cache_usage_fields(usage: Optional[dict[str, Any]]) -> dict[str, in
     return extracted
 
 
-async def stream_kiro_to_anthropic(
+async def stream_kiro_to_anthropic(  # noqa: C901, PLR0912, PLR0913, PLR0915
     response: httpx.Response,
     model: str,
     model_cache: "ModelInfoCache",
@@ -728,7 +728,7 @@ async def stream_kiro_to_anthropic(
             logger.debug(f"Error closing response: {close_error}")
 
 
-async def collect_anthropic_response(
+async def collect_anthropic_response(  # noqa: C901, PLR0912, PLR0913
     response: httpx.Response,
     model: str,
     model_cache: "ModelInfoCache",
@@ -873,7 +873,7 @@ async def collect_anthropic_response(
     }
 
 
-async def stream_with_first_token_retry_anthropic(
+async def stream_with_first_token_retry_anthropic(  # noqa: PLR0913
     make_request,
     model: str,
     model_cache: "ModelInfoCache",

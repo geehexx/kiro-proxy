@@ -174,7 +174,7 @@ class KiroHttpClient:
                 # Propagating here could mask the original exception
                 logger.warning(f"Error closing HTTP client: {e}")
 
-    async def request_with_retry(
+    async def request_with_retry(  # noqa: C901, PLR0912, PLR0915
         self,
         method: str,
         url: str,

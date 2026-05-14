@@ -23,7 +23,7 @@ Contains functions for handling validation errors and other exceptions
 in a JSON-serialization compatible format.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError

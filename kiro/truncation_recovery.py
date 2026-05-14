@@ -27,7 +27,7 @@ and content mid-stream. Since this is an upstream limitation that cannot be
 prevented, we inform the model about the truncation so it can adapt its approach.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from loguru import logger
 

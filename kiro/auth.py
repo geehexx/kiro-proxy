@@ -114,7 +114,7 @@ class KiroAuthManager:
         >>> token = await auth_manager.get_access_token()
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         refresh_token: Optional[str] = None,
         profile_arn: Optional[str] = None,
@@ -243,7 +243,7 @@ class KiroAuthManager:
             self._auth_type = AuthType.KIRO_DESKTOP
             logger.info("Detected auth type: Kiro Desktop")
 
-    def _load_credentials_from_sqlite(self, db_path: str) -> None:
+    def _load_credentials_from_sqlite(self, db_path: str) -> None:  # noqa: C901, PLR0912, PLR0915
         """
         Loads credentials from kiro-cli SQLite database.
 
@@ -376,7 +376,7 @@ class KiroAuthManager:
         except Exception as e:
             logger.error(f"Error loading credentials from SQLite: {e}")
 
-    def _load_credentials_from_file(self, file_path: str) -> None:
+    def _load_credentials_from_file(self, file_path: str) -> None:  # noqa: C901, PLR0912
         """
         Loads credentials from a JSON file.
 

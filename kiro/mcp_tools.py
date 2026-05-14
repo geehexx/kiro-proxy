@@ -33,7 +33,7 @@ import string
 import time
 import uuid
 from datetime import datetime
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional
 
 import httpx
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -73,7 +73,7 @@ def generate_random_id(length: int) -> str:
 # MCP API Functions
 # ==================================================================================================
 
-async def call_kiro_mcp_api(
+async def call_kiro_mcp_api(  # noqa: C901
     query: str,
     auth_manager
 ) -> tuple[Optional[str], Optional[dict]]:
