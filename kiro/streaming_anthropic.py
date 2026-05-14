@@ -31,19 +31,17 @@ Reference: https://docs.anthropic.com/en/api/messages-streaming
 """
 
 import json
-import time
 import uuid
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
 from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING, Any, Optional
 
 import httpx
 from loguru import logger
 
 from kiro.config import FAKE_REASONING_HANDLING, FIRST_TOKEN_MAX_RETRIES, FIRST_TOKEN_TIMEOUT
-from kiro.parsers import deduplicate_tool_calls, parse_bracket_tool_calls
+from kiro.parsers import parse_bracket_tool_calls
 from kiro.streaming_core import (
     FirstTokenTimeoutError,
-    KiroEvent,
     calculate_tokens_from_context_usage,
     collect_stream_to_result,
     parse_kiro_stream,

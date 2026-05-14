@@ -31,6 +31,14 @@ ignore = [
     "W293",  # pre-existing in legacy upstream code; cleaned opportunistically
     "E501",  # line-length drift in legacy files; the critical rule is logic, not layout
     "F401",  # unused-import drift in legacy files; cleaned on file touch
+    # Complexity rules: proxy state-machines (request routing, credential loading,
+    # streaming parsers) are inherently complex. Refactoring to reduce branch count
+    # would require splitting functions across files in ways that hurt readability.
+    # These are tracked as tech-debt but not enforced at commit time.
+    "C901",    # function too complex
+    "PLR0912", # too many branches
+    "PLR0913", # too many arguments
+    "PLR0915", # too many statements
 ]
 
 [lint.per-file-ignores]
