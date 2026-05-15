@@ -1,6 +1,6 @@
 name: Docker Build and Test
 
-on:
+"on":
   push:
     branches: [ main ]
   pull_request:
