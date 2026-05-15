@@ -25,7 +25,7 @@ Reference: https://docs.anthropic.com/en/api/messages
 
 import json
 import time
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Security
 from fastapi.responses import JSONResponse, StreamingResponse
