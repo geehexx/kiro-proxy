@@ -63,6 +63,37 @@ from kiro.http_client import KiroHttpClient
 from kiro.model_resolver import ModelResolver, normalize_model_name
 
 
+def _short_account_id(account_id: str) -> str:
+    """Return a short but unique-by-default human-readable account id.
+
+    Previously the /health endpoint truncated `account_id[-16:]`. For
+    paths like `~/.aws/sso/cache/kiro-auth-token.json` and
+    `~/.aws/sso/cache/kiro-accounts/<acct>/kiro-auth-token.json` the last
+    16 chars are both `-auth-token.json` — collision.
+
+    Strategy:
+      - For credential files, include the parent directory name so two
+        files named `kiro-auth-token.json` in different folders are
+        disambiguated.
+      - For refresh_token-style ids that already have shape
+        `refresh_token_<hex>`, return as-is (already unique).
+      - Length cap: 40 chars (truncate from the LEFT to preserve the
+        unique tail).
+    """
+    if account_id.startswith("refresh_token_"):
+        return account_id
+
+    parts = account_id.rsplit("/", 2)
+    if len(parts) >= 2:
+        short = "/".join(parts[-2:])
+    else:
+        short = parts[-1]
+
+    if len(short) > 40:
+        short = "…" + short[-39:]
+    return short
+
+
 def _format_duration(seconds: float) -> str:
     """
     Format duration in human-readable format.
@@ -868,7 +899,7 @@ class AccountManager:
                         cb_state = "half-open"
 
                 result.append({
-                    "id": account_id[-16:],
+                    "id": _short_account_id(account_id),
                     "cb_state": cb_state,
                     "failures": account.failures,
                     "demoted_remaining_s": round(demoted_remaining),
