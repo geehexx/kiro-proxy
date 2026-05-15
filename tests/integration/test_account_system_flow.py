@@ -141,11 +141,12 @@ class TestAccountSystemFullFlow:
         assert next_account.id == account2_id
 
         # 3. Second account succeeds
-        await manager.report_success(account2_id, "claude-opus-4.5")
+        _sticky_key = "test-session:claude-opus"
+        await manager.report_success(account2_id, "claude-opus-4.5", sticky_key=_sticky_key)
         print(f"Account 2 succeeded: failures={manager._accounts[account2_id].failures}")
 
-        # 4. Verify sticky behavior - should prefer account2 now
-        next_account_again = await manager.get_next_account("claude-opus-4.5")
+        # 4. Verify sticky behavior - should prefer account2 for the same sticky key
+        next_account_again = await manager.get_next_account("claude-opus-4.5", sticky_key=_sticky_key)
         print(f"Next account (sticky): {next_account_again.id if next_account_again else None}")
         assert next_account_again.id == account2_id
 
