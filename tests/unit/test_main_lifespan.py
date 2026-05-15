@@ -60,7 +60,7 @@ class TestLifespanLegacyFallback:
         # Mock AccountManager to prevent actual initialization
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=True)
         mock_manager._save_state = AsyncMock()
         mock_manager.save_state_periodically = AsyncMock()
@@ -111,7 +111,7 @@ class TestLifespanLegacyFallback:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=True)
         mock_manager._save_state = AsyncMock()
         mock_manager.save_state_periodically = AsyncMock()
@@ -194,7 +194,7 @@ class TestLifespanLegacyFallback:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=True)
         mock_manager._save_state = AsyncMock()
         mock_manager.save_state_periodically = AsyncMock()
@@ -247,7 +247,7 @@ class TestLifespanLegacyFallback:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=True)
         mock_manager._save_state = AsyncMock()
         mock_manager.save_state_periodically = AsyncMock()
@@ -300,7 +300,7 @@ class TestLifespanLegacyFallback:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=True)
         mock_manager._save_state = AsyncMock()
         mock_manager.save_state_periodically = AsyncMock()
@@ -365,7 +365,7 @@ class TestLifespanAccountManagerInit:
                 manager_created_with["credentials_file"] = credentials_file
                 manager_created_with["state_file"] = state_file
                 self._accounts = {"test": MagicMock()}
-                self._current_account_index = 0
+                self._sticky_map = {}
 
             async def load_credentials(self):
                 pass
@@ -424,7 +424,7 @@ class TestLifespanAccountManagerInit:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
 
         async def track_load_credentials():
             load_calls["credentials"] = True
@@ -478,7 +478,7 @@ class TestLifespanAccountManagerInit:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=True)
         mock_manager._save_state = AsyncMock()
         mock_manager.save_state_periodically = AsyncMock()
@@ -525,7 +525,7 @@ class TestLifespanAccountManagerInit:
             "account1": MagicMock(),
             "account2": MagicMock()
         }
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
 
         async def track_initialize(account_id):
             initialized_accounts.append(account_id)
@@ -581,7 +581,7 @@ class TestLifespanAccountManagerInit:
             "account2": MagicMock(),
             "account3": MagicMock()
         }
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
 
         async def track_initialize(account_id):
             initialized_attempts.append(account_id)
@@ -633,7 +633,7 @@ class TestLifespanAccountManagerInit:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {}  # Empty accounts dict
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
 
         with patch("main.AccountManager", return_value=mock_manager):
             with patch("main.httpx.AsyncClient") as mock_client_class:
@@ -676,7 +676,7 @@ class TestLifespanAccountManagerInit:
             "account1": MagicMock(),
             "account2": MagicMock()
         }
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=False)  # All fail
 
         with patch("main.AccountManager", return_value=mock_manager):
@@ -719,7 +719,7 @@ class TestLifespanAccountManagerInit:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=True)
 
         async def track_save_state():
@@ -770,7 +770,7 @@ class TestLifespanAccountManagerInit:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=True)
         mock_manager._save_state = AsyncMock()
 
@@ -820,7 +820,7 @@ class TestLifespanAccountManagerInit:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=True)
         mock_manager._save_state = AsyncMock()
 
@@ -878,7 +878,7 @@ class TestLifespanAccountManagerInit:
 
         mock_manager = AsyncMock()
         mock_manager._accounts = {"test": MagicMock()}
-        mock_manager._current_account_index = 0
+        mock_manager._sticky_map = {}
         mock_manager._initialize_account = AsyncMock(return_value=True)
 
         async def track_save_state():

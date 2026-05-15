@@ -141,11 +141,12 @@ class TestAccountSystemFullFlow:
         assert next_account.id == account2_id
 
         # 3. Second account succeeds
-        await manager.report_success(account2_id, "claude-opus-4.5")
+        _sticky_key = "test-session:claude-opus"
+        await manager.report_success(account2_id, "claude-opus-4.5", sticky_key=_sticky_key)
         print(f"Account 2 succeeded: failures={manager._accounts[account2_id].failures}")
 
-        # 4. Verify sticky behavior - should prefer account2 now
-        next_account_again = await manager.get_next_account("claude-opus-4.5")
+        # 4. Verify sticky behavior - should prefer account2 for the same sticky key
+        next_account_again = await manager.get_next_account("claude-opus-4.5", sticky_key=_sticky_key)
         print(f"Next account (sticky): {next_account_again.id if next_account_again else None}")
         assert next_account_again.id == account2_id
 
@@ -197,17 +198,17 @@ class TestAccountSystemFullFlow:
                 manager._model_to_accounts["claude-opus-4.5"] = ModelAccountList()
             manager._model_to_accounts["claude-opus-4.5"].accounts.append(account_id)
 
-        print(f"Initial global index: {manager._current_account_index}")
-        assert manager._current_account_index == 0
+        print(f"Initial sticky map: {manager._sticky_map}")
+        assert isinstance(manager._sticky_map, dict)
 
-        # Act: Report success on second account
+        # Act: Report success on second account with a sticky key
         account2_id = list(manager._accounts.keys())[1]
-        await manager.report_success(account2_id, "claude-opus-4.5")
+        await manager.report_success(account2_id, "claude-opus-4.5", sticky_key="session1:claude-opus")
 
-        # Assert: Global index updated to 1
-        print(f"Updated global index: {manager._current_account_index}")
-        assert manager._current_account_index == 1
-        print("✓ Global index was updated on success")
+        # Assert: sticky_map updated for the key
+        print(f"Updated sticky map: {manager._sticky_map}")
+        assert manager._sticky_map.get("session1:claude-opus") == account2_id
+        print("✓ Sticky map was updated on success")
 
     @pytest.mark.asyncio
     async def test_circuit_breaker_blocks_broken_account(
@@ -398,7 +399,6 @@ class TestAccountSystemFullFlow:
         account.stats.total_requests = 100
         account.stats.successful_requests = 97
         account.stats.failed_requests = 3
-        manager1._current_account_index = 0
 
         # Save state
         await manager1._save_state()
@@ -419,7 +419,7 @@ class TestAccountSystemFullFlow:
         assert account2.stats.total_requests == 100
         assert account2.stats.successful_requests == 97
         assert account2.stats.failed_requests == 3
-        assert manager2._current_account_index == 0
+        assert isinstance(manager2._sticky_map, dict)
 
         print("✓ State was persisted and restored correctly")
 
