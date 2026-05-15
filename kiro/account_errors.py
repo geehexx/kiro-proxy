@@ -96,7 +96,15 @@ def classify_error(status_code: int, reason: Optional[str]) -> ErrorType:
     if status_code == 403:
         return ErrorType.RECOVERABLE
 
-    # RECOVERABLE: Rate limit exceeded
+    # FATAL: Model capacity exhausted — cycling accounts won't help since all
+    # accounts share the same upstream model capacity pool. Fail fast so the
+    # client sees a clear error immediately rather than burning retries.
+    # CC Issues #23497, #44385, #54448: CC doesn't update session state on
+    # proxy model substitution, so silent fallback is also wrong.
+    if status_code == 429 and reason == "INSUFFICIENT_MODEL_CAPACITY":
+        return ErrorType.FATAL
+
+    # RECOVERABLE: Rate limit exceeded (other 429s — per-account rate limits)
     if status_code == 429:
         return ErrorType.RECOVERABLE
 

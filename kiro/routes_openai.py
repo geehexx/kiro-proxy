@@ -160,12 +160,35 @@ async def get_models(request: Request):
         account = request.app.state.account_manager.get_first_account()
         available_model_ids = account.model_resolver.get_available_models()
     
+    # Build context_window lookup from FALLBACK_MODELS config
+    from kiro.config import FALLBACK_MODELS
+    from kiro.model_resolver import normalize_model_name
+    _cw_map: dict[str, int] = {}
+    for _m in FALLBACK_MODELS:
+        _mid = _m.get("modelId", "")
+        _cw = (_m.get("tokenLimits") or {}).get("maxInputTokens")
+        if _mid and _cw:
+            _cw_map[normalize_model_name(_mid)] = _cw
+
+    # Alias overrides: [1m] suffix means 1M context window
+    _ALIAS_CW: dict[str, int] = {
+        "sonnet[1m]": 1_000_000,
+        "opus[1m]": 1_000_000,
+        "haiku[1m]": 1_000_000,
+    }
+
+    def _get_context_window(model_id: str) -> int:
+        if model_id in _ALIAS_CW:
+            return _ALIAS_CW[model_id]
+        return _cw_map.get(normalize_model_name(model_id), 200_000)
+
     # Build OpenAI-compatible model list
     openai_models = [
         OpenAIModel(
             id=model_id,
             owned_by="anthropic",
-            description="Claude model via Kiro API"
+            description="Claude model via Kiro API",
+            context_window=_get_context_window(model_id),
         )
         for model_id in available_model_ids
     ]
