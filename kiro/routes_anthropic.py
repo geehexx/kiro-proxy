@@ -89,6 +89,7 @@ async def _emit_gateway_baseline(  # noqa: PLR0913
         usage = response_body.get("usage") or {}
         input_tokens = usage.get("input_tokens")
         output_tokens = usage.get("output_tokens")
+        response_model = response_body.get("model") if isinstance(response_body, dict) else None
         record = {
             "ts": time.time(),
             "source": "gateway-requests",
@@ -96,6 +97,7 @@ async def _emit_gateway_baseline(  # noqa: PLR0913
             "session_id_gw": session_id_gw,
             "cache_key": cache_key[:16] if cache_key else None,
             "model": request_model,
+            "response_model": response_model,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "cache_read_input_tokens": usage.get("cache_read_input_tokens"),
@@ -112,6 +114,16 @@ async def _emit_gateway_baseline(  # noqa: PLR0913
             "dedup_hit": dedup_hit,
         }
         await writer.write("gateway-requests", record)
+
+        # Routing-mismatch detection — gateway model-routing blind spot.
+        # When upstream (CodeWhisperer) returns a model id that differs from
+        # the request, log warn so silent downgrades surface.
+        if response_model and request_model and response_model != request_model:
+            logger.warning(
+                f"model-routing mismatch: requested={request_model} "
+                f"upstream_returned={response_model} session={session_id_gw} "
+                f"msg={response_body.get('id')}"
+            )
 
         # Emit logfire span (non-blocking, failures swallowed)
         try:
@@ -130,6 +142,7 @@ async def _emit_gateway_baseline(  # noqa: PLR0913
                 session_id=session_id_gw,
                 complexity_label=complexity_label,
                 dedup_hit=dedup_hit,
+                response_model=response_model,
             )
         except Exception:
             pass
@@ -780,6 +793,9 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                             client_disconnected = False
                             # Capture usage from message_delta event for baseline
                             _stream_usage: dict = {}
+                            # Capture upstream model from message_start event for routing audit
+                            _stream_response_model: Optional[str] = None
+                            _stream_message_id: Optional[str] = None
                             # Buffer chunks for streaming cache (only when stream_cache_eligible)
                             _stream_chunks: list[bytes] = []
                             try:
@@ -800,15 +816,20 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                     # Extract usage from message_delta SSE event.
                                     # SSE format: "event: message_delta\ndata: {...}\n\n"
                                     # chunk starts with "event:", not "data:", so search for "data:" anywhere.
-                                    if not _stream_usage and "data:" in chunk:
+                                    if "data:" in chunk:
                                         try:
                                             data_str = chunk.split("data:", 1)[1].strip()
                                             if data_str and data_str != "[DONE]":
                                                 evt = json.loads(data_str)
-                                                if evt.get("type") == "message_delta":
+                                                evt_type = evt.get("type")
+                                                if not _stream_usage and evt_type == "message_delta":
                                                     usage = evt.get("usage", {})
                                                     if usage.get("input_tokens") or usage.get("output_tokens"):
                                                         _stream_usage = usage
+                                                elif evt_type == "message_start" and _stream_response_model is None:
+                                                    msg = evt.get("message", {})
+                                                    _stream_response_model = msg.get("model")
+                                                    _stream_message_id = msg.get("id")
                                         except Exception:
                                             pass
                                     # Buffer for streaming cache
@@ -852,9 +873,16 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                             )
 
                                 # Emit streaming baseline with token data extracted from message_delta
+                                _stream_response_body: dict[str, Any] = {}
+                                if _stream_usage:
+                                    _stream_response_body["usage"] = _stream_usage
+                                if _stream_response_model:
+                                    _stream_response_body["model"] = _stream_response_model
+                                if _stream_message_id:
+                                    _stream_response_body["id"] = _stream_message_id
                                 await _emit_gateway_baseline(
                                     request,
-                                    response_body={"usage": _stream_usage} if _stream_usage else {},
+                                    response_body=_stream_response_body,
                                     request_model=_resolved_model,
                                     session_id_gw=session_id,
                                     cache_key=cache_key,
@@ -1307,6 +1335,8 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
 
                     # Use retry wrapper with initial response
                     _stream_usage: dict = {}
+                    _stream_response_model: Optional[str] = None
+                    _stream_message_id: Optional[str] = None
                     async for chunk in stream_with_first_token_retry_anthropic(
                         make_request=make_retry_request,
                         model=_resolved_model,  # use normalized name for stable cache keys
@@ -1320,15 +1350,20 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                         # Extract usage from message_delta SSE event.
                         # SSE format: "event: message_delta\ndata: {...}\n\n"
                         # chunk starts with "event:", not "data:", so search for "data:" anywhere.
-                        if not _stream_usage and "data:" in chunk:
+                        if "data:" in chunk:
                             try:
                                 data_str = chunk.split("data:", 1)[1].strip()
                                 if data_str and data_str != "[DONE]":
                                     evt = json.loads(data_str)
-                                    if evt.get("type") == "message_delta":
+                                    evt_type = evt.get("type")
+                                    if not _stream_usage and evt_type == "message_delta":
                                         usage = evt.get("usage", {})
                                         if usage.get("input_tokens") or usage.get("output_tokens"):
                                             _stream_usage = usage
+                                    elif evt_type == "message_start" and _stream_response_model is None:
+                                        msg = evt.get("message", {})
+                                        _stream_response_model = msg.get("model")
+                                        _stream_message_id = msg.get("id")
                             except Exception:
                                 pass
                         # Buffer for streaming cache
@@ -1372,9 +1407,16 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                 )
 
                     # Emit streaming baseline with token data extracted from message_delta
+                    _stream_response_body: dict[str, Any] = {}
+                    if _stream_usage:
+                        _stream_response_body["usage"] = _stream_usage
+                    if _stream_response_model:
+                        _stream_response_body["model"] = _stream_response_model
+                    if _stream_message_id:
+                        _stream_response_body["id"] = _stream_message_id
                     await _emit_gateway_baseline(
                         request,
-                        response_body={"usage": _stream_usage} if _stream_usage else {},
+                        response_body=_stream_response_body,
                         request_model=_resolved_model,
                         session_id_gw=session_id,
                         cache_key=cache_key,
