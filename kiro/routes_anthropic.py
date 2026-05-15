@@ -1013,6 +1013,30 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                         if debug_logger:
                             debug_logger.flush_on_error(response.status_code, last_error_message)
 
+                        # Capacity-exhausted fast circuit-breaker: return 503 with
+                        # Retry-After + X-Kiro-Capacity-Exhausted so the client can
+                        # surface a clear message. Silent model substitution is wrong
+                        # because CC doesn't update session state on proxy substitution
+                        # (CC Issues #23497, #44385, #54448).
+                        if error_reason == "INSUFFICIENT_MODEL_CAPACITY":
+                            return JSONResponse(
+                                status_code=503,
+                                headers={
+                                    "Retry-After": "60",
+                                    "X-Kiro-Capacity-Exhausted": request_data.model,
+                                },
+                                content={
+                                    "type": "error",
+                                    "error": {
+                                        "type": "capacity_exhausted",
+                                        "message": (
+                                            f"{request_data.model} capacity exhausted. "
+                                            "Retry in 60s or switch model with /model claude-sonnet-4-6"
+                                        ),
+                                    },
+                                },
+                            )
+
                         return JSONResponse(
                             status_code=response.status_code,
                             content={"type": "error", "error": {"type": "api_error", "message": last_error_message}},
