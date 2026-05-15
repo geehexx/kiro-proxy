@@ -1513,14 +1513,42 @@ class TestGetAccountStats:
         assert result[0]["demoted_remaining_s"] > 0
 
     @pytest.mark.asyncio
-    async def test_id_is_last_16_chars(self, tmp_path):
-        """id field is last 16 chars of account_id."""
+    async def test_id_includes_parent_dir_for_disambiguation(self, tmp_path):
+        """id field disambiguates two creds with same filename in different dirs.
+
+        Regression test for collision where both
+            ~/.aws/sso/cache/kiro-auth-token.json
+            ~/.aws/sso/cache/kiro-accounts/<acct>/kiro-auth-token.json
+        were rendered as `-auth-token.json` (last 16 chars). The /health
+        endpoint must show distinct ids.
+        """
         manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
-        manager._accounts = {"/acc/some_long_path.json": _make_initialized_account("/acc/some_long_path.json")}
+        a1 = "/home/u/.aws/sso/cache/kiro-auth-token.json"
+        a2 = "/home/u/.aws/sso/cache/kiro-accounts/foo/kiro-auth-token.json"
+        manager._accounts = {
+            a1: _make_initialized_account(a1),
+            a2: _make_initialized_account(a2),
+        }
 
         result = await manager.get_account_stats()
 
-        assert result[0]["id"] == "/acc/some_long_path.json"[-16:]
+        ids = [r["id"] for r in result]
+        assert len(set(ids)) == 2, f"ids must be unique, got {ids}"
+        assert "kiro-auth-token.json" in ids[0]
+        assert "kiro-auth-token.json" in ids[1]
+        # Length cap honoured
+        assert all(len(i) <= 40 for i in ids)
+
+    @pytest.mark.asyncio
+    async def test_id_handles_refresh_token_format(self, tmp_path):
+        """refresh_token_<hex> ids pass through unchanged."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        rt_id = "refresh_token_abc123def456"
+        manager._accounts = {rt_id: _make_initialized_account(rt_id)}
+
+        result = await manager.get_account_stats()
+
+        assert result[0]["id"] == rt_id
 
     @pytest.mark.asyncio
     async def test_empty_accounts_returns_empty_list(self, tmp_path):
