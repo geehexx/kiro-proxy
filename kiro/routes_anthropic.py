@@ -137,6 +137,8 @@ async def _emit_gateway_baseline(  # noqa: PLR0913
                 status=status,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                cache_read_input_tokens=usage.get("cache_read_input_tokens"),
+                cache_creation_input_tokens=usage.get("cache_creation_input_tokens"),
                 error_reason=error_reason,
                 retry_count=retry_count,
                 session_id=session_id_gw,
