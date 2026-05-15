@@ -177,17 +177,45 @@ async def get_models(request: Request):
         if _mid and _cw:
             _cw_map[normalize_model_name(_mid)] = _cw
 
-    # Alias overrides: [1m] suffix means 1M context window
+    # Canonical full-form names that have a 1M-context backend variant.
+    # Mirrors the short-alias pattern (sonnet/sonnet[1m], opus/opus[1m], haiku/haiku[1m]):
+    # the no-bracket form is the 200k default; [1m] is the explicit 1M variant.
+    # 2026-05-16: added because CC's gateway-model-discovery looks up the model by id
+    # and was missing claude-{opus,sonnet}-4.{6,7}[1m] in the listing.
+    _CANONICAL_1M_CAPABLE: set[str] = {
+        "claude-opus-4.7",
+        "claude-opus-4.6",
+        "claude-sonnet-4.6",
+    }
+
+    # Alias overrides: [1m] suffix means 1M context window.
     _ALIAS_CW: dict[str, int] = {
         "sonnet[1m]": 1_000_000,
         "opus[1m]": 1_000_000,
         "haiku[1m]": 1_000_000,
     }
+    for _canon in _CANONICAL_1M_CAPABLE:
+        _ALIAS_CW[f"{_canon}[1m]"] = 1_000_000
 
     def _get_context_window(model_id: str) -> int:
         if model_id in _ALIAS_CW:
             return _ALIAS_CW[model_id]
+        # Mirror short-alias semantics: bare canonical name reports 200k default;
+        # callers that want 1M must request the [1m] form explicitly.
+        if model_id in _CANONICAL_1M_CAPABLE:
+            return 200_000
         return _cw_map.get(normalize_model_name(model_id), 200_000)
+
+    # Expand the listing to include [1m] variants for every 1M-capable canonical
+    # not already present in the upstream model list.
+    _existing = set(available_model_ids)
+    expanded_ids = list(available_model_ids)
+    for _canon in _CANONICAL_1M_CAPABLE:
+        if _canon in _existing:
+            _bracket = f"{_canon}[1m]"
+            if _bracket not in _existing:
+                expanded_ids.append(_bracket)
+    expanded_ids.sort()
 
     # Build OpenAI-compatible model list
     openai_models = [
@@ -197,9 +225,9 @@ async def get_models(request: Request):
             description="Claude model via Kiro API",
             context_window=_get_context_window(model_id),
         )
-        for model_id in available_model_ids
+        for model_id in expanded_ids
     ]
-    
+
     return ModelList(data=openai_models)
 
 
