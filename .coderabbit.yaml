@@ -1,0 +1,41 @@
+version: "2"
+
+language: "en-US"
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+  path_instructions:
+    - path: "kiro/**/*.py"
+      instructions: |
+        This is a proxy service translating Anthropic Messages API to AWS CodeWhisperer/Kiro.
+        Focus on: correctness of SSE streaming translation, auth token handling, cache key
+        collisions, and async safety. Flag any blocking I/O in async paths.
+    - path: "tests/**/*.py"
+      instructions: |
+        Tests use pytest + pytest-asyncio. Flag missing edge cases for streaming,
+        retry/backoff logic, and multi-account routing. Prefer real assertions over mocks
+        where the existing suite already does so.
+    - path: ".github/workflows/*.yml"
+      instructions: |
+        Workflows use uv for Python dependency management. Flag any pip install usage
+        outside the docker.yml (which intentionally uses pip for Docker layer caching).
+
+  tools:
+    github-checks:
+      enabled: true
+    ast-grep:
+      enabled: true
+
+chat:
+  auto_reply: true
