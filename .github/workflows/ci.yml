@@ -9,7 +9,7 @@ name: CI
 
 jobs:
   test:
-    name: Test (Python ${{ matrix.python-version }})
+    name: Test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
