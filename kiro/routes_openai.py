@@ -187,6 +187,16 @@ async def get_models(request: Request):
         "claude-opus-4.6",
         "claude-sonnet-4.6",
     }
+    # Dash-form aliases that some clients (Claude Code's
+    # CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY) request directly.
+    # These never appear in available_model_ids (resolver normalises to
+    # dot form), but the listing must include them so /v1/models lookup
+    # by id matches the configured CLAUDE_MODEL value verbatim.
+    _DASH_BRACKET_ALIASES: set[str] = {
+        "claude-opus-4-7[1m]",
+        "claude-opus-4-6[1m]",
+        "claude-sonnet-4-6[1m]",
+    }
 
     # Alias overrides: [1m] suffix means 1M context window.
     _ALIAS_CW: dict[str, int] = {
@@ -196,6 +206,8 @@ async def get_models(request: Request):
     }
     for _canon in _CANONICAL_1M_CAPABLE:
         _ALIAS_CW[f"{_canon}[1m]"] = 1_000_000
+    for _dash in _DASH_BRACKET_ALIASES:
+        _ALIAS_CW[_dash] = 1_000_000
 
     def _get_context_window(model_id: str) -> int:
         if model_id in _ALIAS_CW:
@@ -207,7 +219,8 @@ async def get_models(request: Request):
         return _cw_map.get(normalize_model_name(model_id), 200_000)
 
     # Expand the listing to include [1m] variants for every 1M-capable canonical
-    # not already present in the upstream model list.
+    # not already present in the upstream model list, plus dash-form aliases
+    # that clients may request verbatim.
     _existing = set(available_model_ids)
     expanded_ids = list(available_model_ids)
     for _canon in _CANONICAL_1M_CAPABLE:
@@ -215,6 +228,9 @@ async def get_models(request: Request):
             _bracket = f"{_canon}[1m]"
             if _bracket not in _existing:
                 expanded_ids.append(_bracket)
+    for _dash in _DASH_BRACKET_ALIASES:
+        if _dash not in _existing:
+            expanded_ids.append(_dash)
     expanded_ids.sort()
 
     # Build OpenAI-compatible model list
