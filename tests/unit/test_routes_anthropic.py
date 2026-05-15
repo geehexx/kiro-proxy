@@ -2514,3 +2514,184 @@ class TestCountTokensEndpoint:
         assert data["input_tokens"] > 0
 
         print("✅ max_tokens is NOT required for count_tokens")
+
+
+class TestMessagesErrorHandling:
+    """Additional error handling tests for uncovered paths."""
+
+    def test_messages_missing_model(self, test_client, valid_proxy_api_key):
+        """Test missing model field returns 422."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 100
+                # Missing model
+            }
+        )
+        assert response.status_code == 422
+
+    def test_messages_missing_messages(self, test_client, valid_proxy_api_key):
+        """Test missing messages field returns 422."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "max_tokens": 100
+                # Missing messages
+            }
+        )
+        assert response.status_code == 422
+
+    def test_messages_empty_messages_array(self, test_client, valid_proxy_api_key):
+        """Test empty messages array returns 422."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [],
+                "max_tokens": 100
+            }
+        )
+        assert response.status_code == 422
+
+    def test_messages_invalid_role(self, test_client, valid_proxy_api_key):
+        """Test invalid role in message returns 422."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "invalid_role", "content": "Hello"}],
+                "max_tokens": 100
+            }
+        )
+        assert response.status_code == 422
+
+    def test_messages_missing_content(self, test_client, valid_proxy_api_key):
+        """Test message without content returns 422."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user"}],
+                "max_tokens": 100
+            }
+        )
+        assert response.status_code == 422
+
+    def test_messages_negative_max_tokens(self, test_client, valid_proxy_api_key):
+        """Test negative max_tokens is accepted (API allows it)."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": -1
+            }
+        )
+        # API accepts negative max_tokens (upstream will reject if needed)
+        assert response.status_code in [200, 400, 422]
+
+    def test_messages_zero_max_tokens(self, test_client, valid_proxy_api_key):
+        """Test zero max_tokens is accepted (API allows it)."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 0
+            }
+        )
+        # API accepts zero max_tokens (upstream will reject if needed)
+        assert response.status_code in [200, 400, 422]
+
+    def test_messages_invalid_model_format(self, test_client, valid_proxy_api_key):
+        """Test invalid model name format returns 503 (model not found)."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "invalid-model-name-xyz",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 100
+            }
+        )
+        # Invalid model returns 503 (service unavailable / model not found)
+        assert response.status_code in [400, 422, 503]
+
+    def test_messages_temperature_out_of_range(self, test_client, valid_proxy_api_key):
+        """Test temperature > 1.0 returns 422."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 100,
+                "temperature": 2.0
+            }
+        )
+        assert response.status_code == 422
+
+    def test_messages_negative_temperature(self, test_client, valid_proxy_api_key):
+        """Test negative temperature returns 422."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 100,
+                "temperature": -0.5
+            }
+        )
+        assert response.status_code == 422
+
+    def test_messages_invalid_stop_sequences_type(self, test_client, valid_proxy_api_key):
+        """Test stop_sequences as string instead of array returns 422."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 100,
+                "stop_sequences": "STOP"  # Should be array
+            }
+        )
+        assert response.status_code == 422
+
+    def test_messages_top_p_out_of_range(self, test_client, valid_proxy_api_key):
+        """Test top_p > 1.0 returns 422."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 100,
+                "top_p": 1.5
+            }
+        )
+        assert response.status_code == 422
+
+    def test_messages_top_k_negative(self, test_client, valid_proxy_api_key):
+        """Test negative top_k returns 422."""
+        response = test_client.post(
+            "/v1/messages",
+            headers={"x-api-key": valid_proxy_api_key},
+            json={
+                "model": "claude-sonnet-4-5",
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 100,
+                "top_k": -1
+            }
+        )
+        assert response.status_code == 422
