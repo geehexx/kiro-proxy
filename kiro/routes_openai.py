@@ -134,6 +134,13 @@ async def health(request: Request):
             "hits": cache_hits,
             "misses": cache_misses,
             "hit_rate_pct": cache_hit_rate_pct,
+            # E5: per-type breakdown (streaming vs non-streaming) for the
+            # cache audit watcher.  Aggregate hits/misses are kept above
+            # for back-compat with existing /health consumers.
+            "stream_hits": cache_stats.get("stream_hits", 0),
+            "stream_misses": cache_stats.get("stream_misses", 0),
+            "nonstream_hits": cache_stats.get("nonstream_hits", 0),
+            "nonstream_misses": cache_stats.get("nonstream_misses", 0),
         },
         "dedup": {
             "hits": dedup_hits,
