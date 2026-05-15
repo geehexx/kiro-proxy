@@ -35,6 +35,12 @@ pre-commit:
           --deselect tests/unit/test_config.py::TestServerHostConfig::test_default_server_host_is_0_0_0_0 \
           --deselect tests/unit/test_config.py::TestServerPortConfig::test_default_server_port_is_8000
 
+    bandit:
+      glob: "{kiro,tests,main.py}/**/*.py"
+      run: uvx bandit -r {staged_files} --severity-level medium -q
+    gitleaks:
+      run: gitleaks protect --staged --redact --no-banner
+
 pre-push:
   commands:
     pytest-all:
