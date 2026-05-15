@@ -322,7 +322,7 @@ async def lifespan(app: FastAPI):
     - ModelInfoCache for model caching
     """
     # Configure logfire telemetry before anything else
-    from kiro.telemetry import setup_logfire, instrument_fastapi
+    from kiro.telemetry import instrument_fastapi, setup_logfire
     setup_logfire()
     instrument_fastapi(app)
 

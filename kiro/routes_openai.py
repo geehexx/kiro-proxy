@@ -197,6 +197,14 @@ async def get_models(request: Request):
         "claude-opus-4-6[1m]",
         "claude-sonnet-4-6[1m]",
     }
+    # Dash-form bare canonicals: 200k default, mirroring the dot-form
+    # bare canonicals. Some clients normalise their configured model
+    # to dash form before discovering /v1/models.
+    _DASH_BARE_ALIASES: set[str] = {
+        "claude-opus-4-7",
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+    }
 
     # Alias overrides: [1m] suffix means 1M context window.
     _ALIAS_CW: dict[str, int] = {
@@ -231,6 +239,9 @@ async def get_models(request: Request):
     for _dash in _DASH_BRACKET_ALIASES:
         if _dash not in _existing:
             expanded_ids.append(_dash)
+    for _dash_bare in _DASH_BARE_ALIASES:
+        if _dash_bare not in _existing:
+            expanded_ids.append(_dash_bare)
     expanded_ids.sort()
 
     # Build OpenAI-compatible model list
