@@ -516,21 +516,20 @@ class TestAccountManagerLoadState:
 
         # Assert
         print(f"Model mappings: {len(manager._model_to_accounts)}")
-        print(f"Current account index: {manager._current_account_index}")
 
         assert len(manager._model_to_accounts) > 0
 
     @pytest.mark.asyncio
     async def test_load_state_restore_current_account_index(self, tmp_path):
         """
-        Test restoration of global current_account_index.
+        Test that sticky_map starts empty after load_state (global index removed).
 
-        What it does: Restores sticky index from state
-        Purpose: Verify global sticky behavior persistence
+        What it does: Verifies sticky_map is empty dict after load
+        Purpose: Verify per-key sticky behavior replaces global index
         """
-        print("\n=== Test: load_state restores current_account_index ===")
+        print("\n=== Test: load_state sticky_map starts empty ===")
 
-        # Arrange
+        # Arrange — old state format with current_account_index (should be ignored gracefully)
         state_data = {
             "current_account_index": 2,
             "model_to_accounts": {},
@@ -549,9 +548,10 @@ class TestAccountManagerLoadState:
         await manager.load_state()
 
         # Assert
-        print(f"Current account index: {manager._current_account_index}")
+        print(f"Sticky map: {manager._sticky_map}")
 
-        assert manager._current_account_index == 2
+        assert isinstance(manager._sticky_map, dict)
+        assert len(manager._sticky_map) == 0
 
     @pytest.mark.asyncio
     async def test_load_state_restore_model_to_accounts(self, tmp_path):
@@ -675,10 +675,10 @@ class TestAccountManagerLoadState:
 
         # Assert
         print(f"Model mappings: {len(manager._model_to_accounts)}")
-        print(f"Current account index: {manager._current_account_index}")
+        print(f"Sticky map: {manager._sticky_map}")
 
         assert len(manager._model_to_accounts) == 0
-        assert manager._current_account_index == 0
+        assert isinstance(manager._sticky_map, dict)
 
     @pytest.mark.asyncio
     async def test_load_state_corrupted_json(self, tmp_path):
@@ -1292,3 +1292,234 @@ class TestFormatDuration:
         """Test formatting days."""
         assert _format_duration(86400) == "1d"
         assert _format_duration(172800) == "2d"
+
+
+def _make_initialized_account(account_id: str) -> Account:
+    """Helper: create a fully initialized Account mock."""
+    account = Account(id=account_id)
+    account.auth_manager = Mock()
+    account.model_cache = Mock()
+    account.model_resolver = Mock()
+    account.model_resolver.get_available_models.return_value = ["claude-opus-4.5", "claude-sonnet-4-6"]
+    account.models_cached_at = time.time()
+    return account
+
+
+class TestStickyByKey:
+    """Tests for per-(session_id, model_family) sticky behavior."""
+
+    @pytest.mark.asyncio
+    async def test_sticky_key_stored_on_success(self, tmp_path):
+        """report_success with sticky_key stores account in _sticky_map."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        manager._accounts = {
+            "/acc/a.json": _make_initialized_account("/acc/a.json"),
+            "/acc/b.json": _make_initialized_account("/acc/b.json"),
+        }
+
+        await manager.report_success("/acc/b.json", "claude-opus-4.5", sticky_key="sess1:claude-opus")
+
+        assert manager._sticky_map["sess1:claude-opus"] == "/acc/b.json"
+
+    @pytest.mark.asyncio
+    async def test_sticky_key_prefers_stored_account(self, tmp_path):
+        """get_next_account starts from sticky account when key matches."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        acc_a = _make_initialized_account("/acc/a.json")
+        acc_b = _make_initialized_account("/acc/b.json")
+        manager._accounts = {"/acc/a.json": acc_a, "/acc/b.json": acc_b}
+        manager._model_to_accounts = {}
+        manager._sticky_map = {"sess1:claude-opus": "/acc/b.json"}
+
+        account = await manager.get_next_account("claude-opus-4.5", sticky_key="sess1:claude-opus")
+
+        assert account is not None
+        assert account.id == "/acc/b.json"
+
+    @pytest.mark.asyncio
+    async def test_no_sticky_key_falls_back_to_first(self, tmp_path):
+        """get_next_account without sticky_key starts from index 0."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        acc_a = _make_initialized_account("/acc/a.json")
+        acc_b = _make_initialized_account("/acc/b.json")
+        manager._accounts = {"/acc/a.json": acc_a, "/acc/b.json": acc_b}
+
+        account = await manager.get_next_account("claude-opus-4.5", sticky_key=None)
+
+        assert account is not None
+        assert account.id == "/acc/a.json"
+
+    @pytest.mark.asyncio
+    async def test_sticky_key_unknown_account_falls_back(self, tmp_path):
+        """Sticky map pointing to removed account falls back to first available."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        acc_a = _make_initialized_account("/acc/a.json")
+        manager._accounts = {"/acc/a.json": acc_a}
+        manager._sticky_map = {"sess1:claude-opus": "/acc/gone.json"}
+
+        account = await manager.get_next_account("claude-opus-4.5", sticky_key="sess1:claude-opus")
+
+        assert account is not None
+        assert account.id == "/acc/a.json"
+
+    @pytest.mark.asyncio
+    async def test_different_keys_independent(self, tmp_path):
+        """Different sticky keys can point to different accounts independently."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        acc_a = _make_initialized_account("/acc/a.json")
+        acc_b = _make_initialized_account("/acc/b.json")
+        manager._accounts = {"/acc/a.json": acc_a, "/acc/b.json": acc_b}
+
+        await manager.report_success("/acc/a.json", "claude-opus-4.5", sticky_key="sess1:claude-opus")
+        await manager.report_success("/acc/b.json", "claude-sonnet-4-6", sticky_key="sess1:claude-sonnet")
+
+        assert manager._sticky_map["sess1:claude-opus"] == "/acc/a.json"
+        assert manager._sticky_map["sess1:claude-sonnet"] == "/acc/b.json"
+
+
+class TestDemotionCooldown:
+    """Tests for 5-minute fast demotion triggered by 60s+2-retry."""
+
+    @pytest.mark.asyncio
+    async def test_demote_account_sets_cooldown(self, tmp_path):
+        """demote_account sets _demoted_until ~5min in the future."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        manager._accounts = {"/acc/a.json": _make_initialized_account("/acc/a.json")}
+
+        before = time.time()
+        await manager.demote_account("/acc/a.json")
+        after = time.time()
+
+        demoted_until = manager._demoted_until["/acc/a.json"]
+        assert demoted_until >= before + 299  # ~5min
+        assert demoted_until <= after + 301
+
+    @pytest.mark.asyncio
+    async def test_demote_increments_stats(self, tmp_path):
+        """demote_account increments stats.demotions."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        manager._accounts = {"/acc/a.json": _make_initialized_account("/acc/a.json")}
+
+        await manager.demote_account("/acc/a.json")
+        await manager.demote_account("/acc/a.json")
+
+        assert manager._accounts["/acc/a.json"].stats.demotions == 2
+
+    @pytest.mark.asyncio
+    async def test_demoted_account_skipped_in_selection(self, tmp_path):
+        """get_next_account skips demoted account and returns next available."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        acc_a = _make_initialized_account("/acc/a.json")
+        acc_b = _make_initialized_account("/acc/b.json")
+        manager._accounts = {"/acc/a.json": acc_a, "/acc/b.json": acc_b}
+
+        # Demote account a
+        manager._demoted_until["/acc/a.json"] = time.time() + 300
+
+        account = await manager.get_next_account("claude-opus-4.5")
+
+        assert account is not None
+        assert account.id == "/acc/b.json"
+
+    @pytest.mark.asyncio
+    async def test_expired_demotion_allows_selection(self, tmp_path):
+        """Account with expired demotion is selectable again."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        acc_a = _make_initialized_account("/acc/a.json")
+        manager._accounts = {"/acc/a.json": acc_a}
+
+        # Set demotion in the past
+        manager._demoted_until["/acc/a.json"] = time.time() - 1
+
+        account = await manager.get_next_account("claude-opus-4.5")
+
+        assert account is not None
+        assert account.id == "/acc/a.json"
+
+    @pytest.mark.asyncio
+    async def test_demote_unknown_account_no_crash(self, tmp_path):
+        """demote_account on unknown account_id is a no-op."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+
+        # Should not raise
+        await manager.demote_account("/acc/nonexistent.json")
+
+
+class TestGetAccountStats:
+    """Tests for get_account_stats() telemetry method."""
+
+    def test_returns_list(self, tmp_path):
+        """get_account_stats returns a list."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        manager._accounts = {"/acc/a.json": _make_initialized_account("/acc/a.json")}
+
+        result = manager.get_account_stats()
+
+        assert isinstance(result, list)
+        assert len(result) == 1
+
+    def test_stat_fields_present(self, tmp_path):
+        """Each stat entry has required fields."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        manager._accounts = {"/acc/a.json": _make_initialized_account("/acc/a.json")}
+
+        result = manager.get_account_stats()
+        entry = result[0]
+
+        assert "id" in entry
+        assert "cb_state" in entry
+        assert "failures" in entry
+        assert "demoted_remaining_s" in entry
+        assert "demotions" in entry
+        assert "total_requests" in entry
+        assert "successful_requests" in entry
+        assert "failed_requests" in entry
+
+    def test_cb_state_closed_when_no_failures(self, tmp_path):
+        """cb_state is 'closed' when account has no failures."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        manager._accounts = {"/acc/a.json": _make_initialized_account("/acc/a.json")}
+
+        result = manager.get_account_stats()
+
+        assert result[0]["cb_state"] == "closed"
+        assert result[0]["failures"] == 0
+
+    def test_cb_state_open_during_cooldown(self, tmp_path):
+        """cb_state is 'open' when account is in backoff window."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        acc = _make_initialized_account("/acc/a.json")
+        acc.failures = 1
+        acc.last_failure_time = time.time()  # just failed
+        manager._accounts = {"/acc/a.json": acc}
+
+        result = manager.get_account_stats()
+
+        assert result[0]["cb_state"] == "open"
+
+    def test_demoted_remaining_nonzero_when_demoted(self, tmp_path):
+        """demoted_remaining_s > 0 when account is currently demoted."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        manager._accounts = {"/acc/a.json": _make_initialized_account("/acc/a.json")}
+        manager._demoted_until["/acc/a.json"] = time.time() + 200
+
+        result = manager.get_account_stats()
+
+        assert result[0]["demoted_remaining_s"] > 0
+
+    def test_id_is_last_16_chars(self, tmp_path):
+        """id field is last 16 chars of account_id."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        manager._accounts = {"/acc/some_long_path.json": _make_initialized_account("/acc/some_long_path.json")}
+
+        result = manager.get_account_stats()
+
+        assert result[0]["id"] == "/acc/some_long_path.json"[-16:]
+
+    def test_empty_accounts_returns_empty_list(self, tmp_path):
+        """get_account_stats returns [] when no accounts loaded."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+
+        result = manager.get_account_stats()
+
+        assert result == []

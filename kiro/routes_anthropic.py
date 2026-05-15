@@ -705,9 +705,23 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
         last_error_status = None
         tried_accounts = set()  # Track tried accounts in current failover loop
 
+        # Compute sticky key: (session_id, model_family) for per-session stickiness
+        # model_family = first segment before "-" (e.g. "claude-opus-4.7" → "claude-opus")
+        _model_parts = _resolved_model.split("-")
+        _model_family = "-".join(_model_parts[:2]) if len(_model_parts) >= 2 else _resolved_model
+        _sticky_key = f"{session_id}:{_model_family}" if session_id else None
+
+        # Failover timing: track wall-clock and per-account retry count for demotion trigger
+        _failover_start = time.monotonic()
+        _account_retry_counts: dict[str, int] = {}  # account_id → retry count this loop
+
         for attempt in range(MAX_ATTEMPTS):
             # Get next available account (excluding already tried)
-            account = await account_manager.get_next_account(request_data.model, exclude_accounts=tried_accounts)
+            account = await account_manager.get_next_account(
+                request_data.model,
+                exclude_accounts=tried_accounts,
+                sticky_key=_sticky_key,
+            )
 
             if account is None:
                 # All accounts unavailable
@@ -731,6 +745,17 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
 
             # Mark account as tried in current failover loop
             tried_accounts.add(account.id)
+            _account_retry_counts[account.id] = _account_retry_counts.get(account.id, 0) + 1
+
+            # Demotion trigger: 60s wall-clock + 2 retries on same account → 5min cooldown
+            from kiro.config import ACCOUNT_FAILOVER_MIN_RETRIES, ACCOUNT_FAILOVER_WALL_CLOCK
+            _wall_clock_elapsed = time.monotonic() - _failover_start
+            if (
+                len(all_accounts) > 1
+                and _wall_clock_elapsed >= ACCOUNT_FAILOVER_WALL_CLOCK
+                and _account_retry_counts.get(account.id, 0) >= ACCOUNT_FAILOVER_MIN_RETRIES
+            ):
+                await account_manager.demote_account(account.id)
 
             # Use objects from account
             auth_manager = account.auth_manager
@@ -861,7 +886,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                     logger.info("HTTP 200 - POST /v1/messages (streaming) - client disconnected")
                                 else:
                                     # Body finished cleanly — safe to record success
-                                    await account_manager.report_success(account.id, request_data.model)
+                                    await account_manager.report_success(account.id, request_data.model, sticky_key=_sticky_key)
                                     logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
                                     # Store in streaming cache on clean completion
                                     if stream_cache_eligible and cache_key and _stream_chunks:
@@ -935,7 +960,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
 
                         await http_client.close()
                         # Body collected cleanly — safe to record success
-                        await account_manager.report_success(account.id, request_data.model)
+                        await account_manager.report_success(account.id, request_data.model, sticky_key=_sticky_key)
                         logger.info(
                             "HTTP 200 - POST /v1/messages (non-streaming) - completed "
                             f"msg_id={anthropic_response.get('id', 'unknown')} "
@@ -1237,7 +1262,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
             else:
                 # Success — _dedup_result is the anthropic_response dict
                 anthropic_response = _dedup_result
-                await account_manager.report_success(account.id, request_data.model)
+                await account_manager.report_success(account.id, request_data.model, sticky_key=_sticky_key)
                 logger.info(
                     "HTTP 200 - POST /v1/messages (non-streaming) - completed "
                     f"msg_id={anthropic_response.get('id', 'unknown')} "

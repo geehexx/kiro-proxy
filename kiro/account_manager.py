@@ -49,6 +49,7 @@ from kiro.auth import AuthType, KiroAuthManager
 from kiro.cache import ModelInfoCache
 from kiro.config import (
     ACCOUNT_CACHE_TTL,
+    ACCOUNT_DEMOTION_COOLDOWN,
     ACCOUNT_MAX_BACKOFF_MULTIPLIER,
     ACCOUNT_PROBABILISTIC_RETRY_CHANCE,
     ACCOUNT_RECOVERY_TIMEOUT,
@@ -102,6 +103,7 @@ class AccountStats:
     total_requests: int = 0
     successful_requests: int = 0
     failed_requests: int = 0
+    demotions: int = 0  # times this account was demoted via 60s+2-retry trigger
 
 
 @dataclass
@@ -179,7 +181,11 @@ class AccountManager:
         self._lock = asyncio.Lock()
         self._dirty = False
         self._credentials_config: list[dict] = []
-        self._current_account_index: int = 0  # GLOBAL sticky index for all models
+        # Per-(session_id, model_family) sticky map: key → account_id
+        # Falls back to first available account when key not present.
+        self._sticky_map: dict[str, str] = {}
+        # Demotion map: account_id → demoted_until timestamp
+        self._demoted_until: dict[str, float] = {}
 
     async def load_credentials(self) -> None:  # noqa: C901, PLR0912, PLR0915
         """
@@ -312,8 +318,6 @@ class AccountManager:
         try:
             with open(state_path, 'r', encoding='utf-8') as f:
                 state_data = json.load(f)
-            # Restore global current_account_index
-            self._current_account_index = state_data.get("current_account_index", 0)
 
             # Restore model_to_accounts mapping (without next_index)
             for model, data in state_data.get("model_to_accounts", {}).items():
@@ -333,7 +337,8 @@ class AccountManager:
                     account.stats = AccountStats(
                         total_requests=stats_data.get("total_requests", 0),
                         successful_requests=stats_data.get("successful_requests", 0),
-                        failed_requests=stats_data.get("failed_requests", 0)
+                        failed_requests=stats_data.get("failed_requests", 0),
+                        demotions=stats_data.get("demotions", 0),
                     )
 
             logger.info(f"Loaded state: {len(self._model_to_accounts)} model mappings, {len(self._accounts)} accounts")
@@ -348,7 +353,6 @@ class AccountManager:
         Uses tmp file + rename for atomic write.
         """
         state_data = {
-            "current_account_index": self._current_account_index,
             "accounts": {
                 account_id: {
                     "failures": account.failures,
@@ -357,7 +361,8 @@ class AccountManager:
                     "stats": {
                         "total_requests": account.stats.total_requests,
                         "successful_requests": account.stats.successful_requests,
-                        "failed_requests": account.stats.failed_requests
+                        "failed_requests": account.stats.failed_requests,
+                        "demotions": account.stats.demotions,
                     }
                 }
                 for account_id, account in self._accounts.items()
@@ -608,13 +613,14 @@ class AccountManager:
         finally:
             await http_client.close()
 
-    async def get_next_account(self, model: str, exclude_accounts: Optional[set] = None) -> Optional[Account]:  # noqa: C901, PLR0912, PLR0915
+    async def get_next_account(self, model: str, exclude_accounts: Optional[set] = None, sticky_key: Optional[str] = None) -> Optional[Account]:  # noqa: C901, PLR0912, PLR0915
         """
         Get next available account for model (Circuit Breaker + Sticky).
 
         Implements:
-        - Sticky behavior (prefer successful account)
+        - Sticky behavior per (session_id, model_family) key
         - Circuit Breaker with exponential backoff
+        - Fast demotion: 5min cooldown when triggered externally
         - Probabilistic retry for "dead" accounts (10%)
         - TTL-based model cache refresh
         - Exclusion of already-tried accounts in current failover loop
@@ -622,6 +628,7 @@ class AccountManager:
         Args:
             model: Model name (will be normalized)
             exclude_accounts: Set of account IDs to exclude (already tried in current failover loop)
+            sticky_key: Optional key for per-(session_id, model_family) stickiness
 
         Returns:
             Account object or None if no accounts available
@@ -663,14 +670,16 @@ class AccountManager:
                 # Always return single account (ignore cooldown/failures)
                 return account
 
-            # Multi-account logic: GLOBAL sticky
+            # Multi-account logic: per-(session_id, model_family) sticky
             normalized_model = normalize_model_name(model)
 
-            # ALWAYS start from GLOBAL index (one current account for ALL models)
-            start_index = self._current_account_index
-
-            # ALWAYS iterate over ALL accounts
+            # Determine start account from sticky map, fall back to index 0
             all_account_ids = list(self._accounts.keys())
+            start_index = 0
+            if sticky_key and sticky_key in self._sticky_map:
+                sticky_account_id = self._sticky_map[sticky_key]
+                if sticky_account_id in all_account_ids:
+                    start_index = all_account_ids.index(sticky_account_id)
 
             for i in range(len(all_account_ids)):
                 current_index = (start_index + i) % len(all_account_ids)
@@ -679,6 +688,13 @@ class AccountManager:
 
                 # Skip accounts already tried in current failover loop
                 if exclude_accounts and account_id in exclude_accounts:
+                    continue
+
+                # Check fast demotion cooldown (5min, triggered by 60s+2-retry)
+                demoted_until = self._demoted_until.get(account_id, 0.0)
+                if demoted_until > time.time():
+                    remaining = demoted_until - time.time()
+                    logger.debug(f"Account {account_id} demoted for {_format_duration(remaining)} more")
                     continue
 
                 # Check Circuit Breaker (Half-Open state with exponential backoff)
@@ -730,13 +746,14 @@ class AccountManager:
             # All accounts unavailable
             return None
 
-    async def report_success(self, account_id: str, model: str) -> None:
+    async def report_success(self, account_id: str, model: str, sticky_key: Optional[str] = None) -> None:
         """
         Report successful request (reset failures, update stats, sticky).
 
         Args:
             account_id: Account ID
             model: Model name
+            sticky_key: Optional key for per-(session_id, model_family) stickiness
         """
         async with self._lock:
             account = self._accounts.get(account_id)
@@ -753,15 +770,9 @@ class AccountManager:
             account.stats.successful_requests += 1
             self._dirty = True
 
-            # GLOBAL STICKY: Update global current_account_index
-            all_account_ids = list(self._accounts.keys())
-            try:
-                successful_index = all_account_ids.index(account_id)
-                if self._current_account_index != successful_index:
-                    self._current_account_index = successful_index
-                    self._dirty = True
-            except ValueError:
-                pass
+            # Per-key sticky: update sticky_map for this (session_id, model_family) key
+            if sticky_key:
+                self._sticky_map[sticky_key] = account_id
 
     async def report_failure(
         self,
@@ -806,9 +817,66 @@ class AccountManager:
             account.stats.failed_requests += 1
             self._dirty = True
 
-            # GLOBAL STICKY: Do NOT change _current_account_index on failure
-            # It only changes on success (GLOBAL sticky behavior)
             # Failover happens through exclude_accounts in get_next_account()
+
+    async def demote_account(self, account_id: str) -> None:
+        """
+        Apply fast 5-minute demotion to an account.
+
+        Called by the failover loop when 60s wall-clock + 2 retries on same
+        account are exceeded. Separate from the exponential circuit breaker —
+        this is a short, predictable cooldown for degraded-but-not-dead accounts.
+
+        Args:
+            account_id: Account ID to demote
+        """
+        async with self._lock:
+            account = self._accounts.get(account_id)
+            if not account:
+                return
+            self._demoted_until[account_id] = time.time() + ACCOUNT_DEMOTION_COOLDOWN
+            account.stats.demotions += 1
+            self._dirty = True
+            logger.warning(
+                f"Account {account_id} demoted for {_format_duration(ACCOUNT_DEMOTION_COOLDOWN)} "
+                f"(60s+2-retry trigger, total demotions={account.stats.demotions})"
+            )
+
+    def get_account_stats(self) -> list[dict]:
+        """
+        Return per-account stats for /health endpoint.
+
+        Returns:
+            List of dicts with account id (last 16 chars), stats, circuit breaker state,
+            and demotion status.
+        """
+        now = time.time()
+        result = []
+        for account_id, account in self._accounts.items():
+            demoted_until = self._demoted_until.get(account_id, 0.0)
+            demoted_remaining = max(0.0, demoted_until - now)
+
+            cb_state = "closed"
+            if account.failures > 0:
+                backoff_multiplier = min(2 ** (account.failures - 1), ACCOUNT_MAX_BACKOFF_MULTIPLIER)
+                effective_timeout = ACCOUNT_RECOVERY_TIMEOUT * backoff_multiplier
+                time_since_failure = now - account.last_failure_time
+                if time_since_failure < effective_timeout:
+                    cb_state = "open"
+                else:
+                    cb_state = "half-open"
+
+            result.append({
+                "id": account_id[-16:],
+                "cb_state": cb_state,
+                "failures": account.failures,
+                "demoted_remaining_s": round(demoted_remaining),
+                "demotions": account.stats.demotions,
+                "total_requests": account.stats.total_requests,
+                "successful_requests": account.stats.successful_requests,
+                "failed_requests": account.stats.failed_requests,
+            })
+        return result
 
     def get_first_account(self) -> Account:
         """

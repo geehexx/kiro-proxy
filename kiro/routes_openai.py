@@ -106,6 +106,7 @@ async def health(request: Request):
     """Detailed health check including cache and dedup stats."""
     response_cache = getattr(request.app.state, "response_cache", None)
     in_flight_dedup = getattr(request.app.state, "in_flight_dedup", None)
+    account_manager = getattr(request.app.state, "account_manager", None)
 
     cache_stats = response_cache.stats() if response_cache is not None else {}
     dedup_stats = in_flight_dedup.stats() if in_flight_dedup is not None else {}
@@ -118,6 +119,11 @@ async def health(request: Request):
 
     dedup_hits = dedup_stats.get("hits", 0)
     dedup_misses = dedup_stats.get("misses", 0)
+
+    # Per-account stats (only in account system mode)
+    accounts_stats: list[dict] = []
+    if account_manager is not None and getattr(request.app.state, "account_system", False):
+        accounts_stats = account_manager.get_account_stats()
 
     return {
         "status": "healthy",
@@ -133,6 +139,7 @@ async def health(request: Request):
             "hits": dedup_hits,
             "misses": dedup_misses,
         },
+        "accounts": accounts_stats,
     }
 
 @router.get("/v1/models", response_model=ModelList, dependencies=[Depends(verify_api_key)])

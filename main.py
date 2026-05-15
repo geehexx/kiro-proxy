@@ -538,14 +538,11 @@ async def lifespan(app: FastAPI):
         logger.error("No accounts configured in credentials.json")
         raise RuntimeError("No accounts configured in credentials.json")
 
-    # Determine start index from state.json
-    start_index = app.state.account_manager._current_account_index
-
-    # Try to initialize accounts (full circle)
+    # Try to initialize accounts (full circle), starting from index 0
     initialized = False
 
     for i in range(len(all_accounts)):
-        current_index = (start_index + i) % len(all_accounts)
+        current_index = i % len(all_accounts)
         account_id = all_accounts[current_index]
 
         logger.info(f"Attempting to initialize account: {account_id}")
