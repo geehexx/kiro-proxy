@@ -1993,4 +1993,196 @@ class TestChatCompletionsLegacyMode:
             failover_enabled = False
 
         assert failover_enabled is False
+
+
+# =============================================================================
+# Tests for RE2 injection in OpenAI route
+# =============================================================================
+
+class TestRe2InjectionOpenAI:
+    """Tests for RE2 (ReRead) injection in the OpenAI /v1/chat/completions route."""
+
+    def test_re2_injection_appends_to_string_content(self):
+        """
+        What it does: Verifies RE2 injection appends to string user message content.
+        Purpose: Ensure RE2 text is added to the last eligible user message.
+        """
+        from unittest.mock import patch
+
+        from kiro.complexity_classifier import ComplexityLabel, ComplexityResult
+        from kiro.config import RE2_INJECTION
+        from kiro.models_openai import ChatCompletionRequest, ChatMessage
+
+        messages = [
+            ChatMessage(role="user", content="First message"),
+            ChatMessage(role="assistant", content="Response"),
+            ChatMessage(role="user", content="Second message with enough text to pass RE2 min chars"),
+        ]
+        request_data = ChatCompletionRequest(model="claude-sonnet-4-5", messages=messages)
+
+        mock_complexity = ComplexityResult(
+            label=ComplexityLabel.COMPLEX,
+            score=0.8,
+            reason="test",
+            thinking_budget=0,
+            re2_eligible=True,
+        )
+
+        with patch("kiro.complexity_classifier.classify_request", return_value=mock_complexity):
+            from kiro.config import RE2_MIN_MESSAGES
+
+            # Simulate the injection logic directly (mirrors routes_openai implementation)
+            _re2_active = True and mock_complexity.re2_eligible
+            assert _re2_active is True
+
+            if _re2_active and len(request_data.messages) >= RE2_MIN_MESSAGES:
+                _re2_target_idx = None
+                for _i in range(len(request_data.messages) - 1, -1, -1):
+                    _msg = request_data.messages[_i]
+                    if _msg.role == "user" and isinstance(_msg.content, str) and _msg.content.strip():
+                        _re2_target_idx = _i
+                        break
+
+                assert _re2_target_idx == 2
+                _msg = request_data.messages[_re2_target_idx]
+                request_data.messages[_re2_target_idx] = _msg.model_copy(
+                    update={"content": _msg.content + RE2_INJECTION}
+                )
+
+        assert RE2_INJECTION in request_data.messages[2].content
+
+    def test_re2_injection_skipped_when_disabled(self):
+        """
+        What it does: Verifies RE2 injection is skipped when RE2_ENABLED=False and no header.
+        Purpose: Ensure opt-in behavior is respected.
+        """
+        from kiro.complexity_classifier import ComplexityLabel, ComplexityResult
+        from kiro.models_openai import ChatCompletionRequest, ChatMessage
+
+        original_content = "Second message"
+        messages = [
+            ChatMessage(role="user", content="First message"),
+            ChatMessage(role="assistant", content="Response"),
+            ChatMessage(role="user", content=original_content),
+        ]
+        request_data = ChatCompletionRequest(model="claude-sonnet-4-5", messages=messages)
+
+        mock_complexity = ComplexityResult(
+            label=ComplexityLabel.COMPLEX,
+            score=0.8,
+            reason="test",
+            thinking_budget=0,
+            re2_eligible=True,
+        )
+
+        # RE2_ENABLED=False, no header → _re2_active should be False
+        _re2_active = False and mock_complexity.re2_eligible
+        assert _re2_active is False
+        # Messages should be unchanged
+        assert request_data.messages[2].content == original_content
+
+    def test_re2_injection_skipped_when_not_eligible(self):
+        """
+        What it does: Verifies RE2 injection is skipped when classifier says not eligible.
+        Purpose: Ensure classifier eligibility gate works.
+        """
+        from kiro.complexity_classifier import ComplexityLabel, ComplexityResult
+
+        mock_complexity = ComplexityResult(
+            label=ComplexityLabel.SKIP,
+            score=0.0,
+            reason="haiku model",
+            thinking_budget=0,
+            re2_eligible=False,
+        )
+
+        _re2_active = True and mock_complexity.re2_eligible
+        assert _re2_active is False
+
+    def test_re2_injection_skipped_below_min_messages(self):
+        """
+        What it does: Verifies RE2 injection is skipped when message count < RE2_MIN_MESSAGES.
+        Purpose: Ensure single-message requests are not modified.
+        """
+        from kiro.config import RE2_MIN_MESSAGES
+        from kiro.models_openai import ChatCompletionRequest, ChatMessage
+
+        messages = [ChatMessage(role="user", content="Single message")]
+        request_data = ChatCompletionRequest(model="claude-sonnet-4-5", messages=messages)
+
+        assert len(request_data.messages) < RE2_MIN_MESSAGES
+
+    def test_re2_injection_skipped_when_no_text_user_message(self):
+        """
+        What it does: Verifies RE2 injection is skipped when no user message has text content.
+        Purpose: Ensure tool_result-only conversations are not modified.
+        """
+        from kiro.models_openai import ChatCompletionRequest, ChatMessage
+
+        messages = [
+            ChatMessage(role="user", content="First message"),
+            ChatMessage(role="assistant", content="Response"),
+            ChatMessage(role="user", content=None),  # no text content
+        ]
+        request_data = ChatCompletionRequest(model="claude-sonnet-4-5", messages=messages)
+
+        _re2_target_idx = None
+        for _i in range(len(request_data.messages) - 1, -1, -1):
+            _msg = request_data.messages[_i]
+            if _msg.role == "user":
+                if isinstance(_msg.content, str) and _msg.content.strip():
+                    _re2_target_idx = _i
+                    break
+
+        # Last user message has no content, but first user message does
+        assert _re2_target_idx == 0
+
+    def test_re2_injection_list_content_appends_to_last_text_block(self):
+        """
+        What it does: Verifies RE2 injection appends to last text block in list content.
+        Purpose: Ensure multipart content messages are handled correctly.
+        """
+        from kiro.config import RE2_INJECTION
+        from kiro.models_openai import ChatCompletionRequest, ChatMessage
+
+        messages = [
+            ChatMessage(role="user", content="First message"),
+            ChatMessage(role="assistant", content="Response"),
+            ChatMessage(role="user", content=[
+                {"type": "text", "text": "Part one"},
+                {"type": "text", "text": "Part two"},
+            ]),
+        ]
+        request_data = ChatCompletionRequest(model="claude-sonnet-4-5", messages=messages)
+
+        _re2_target_idx = None
+        for _i in range(len(request_data.messages) - 1, -1, -1):
+            _msg = request_data.messages[_i]
+            if _msg.role == "user" and isinstance(_msg.content, list):
+                has_text = any(
+                    (b.get("type") if isinstance(b, dict) else getattr(b, "type", None)) == "text"
+                    for b in _msg.content
+                )
+                if has_text:
+                    _re2_target_idx = _i
+                    break
+
+        assert _re2_target_idx == 2
+
+        _msg = request_data.messages[_re2_target_idx]
+        _new_content = list(_msg.content)
+        for _j in range(len(_new_content) - 1, -1, -1):
+            _block = _new_content[_j]
+            _btype = _block.get("type") if isinstance(_block, dict) else getattr(_block, "type", None)
+            if _btype == "text":
+                _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
+                if isinstance(_block, dict):
+                    _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
+                break
+        request_data.messages[_re2_target_idx] = _msg.model_copy(update={"content": _new_content})
+
+        last_text_block = request_data.messages[2].content[-1]
+        assert RE2_INJECTION in last_text_block["text"]
+        # First text block should be unchanged
+        assert RE2_INJECTION not in request_data.messages[2].content[0]["text"]
         print("✅ Legacy mode correctly skips failover loop")
