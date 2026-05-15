@@ -1,13 +1,71 @@
 name: CI
 
-on:
+"on":
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   test:
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
     steps:
       - uses: actions/checkout@v4
-      - run: echo "hello"
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "${{ matrix.python-version }}"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -r requirements.txt
+          uv pip install --system -r requirements-dev.txt
+
+      - name: Lint (ruff check)
+        run: uv run --no-project ruff check kiro/ tests/ main.py
+
+      - name: Format check (ruff format)
+        run: uv run --no-project ruff format --check kiro/ tests/ main.py
+
+      - name: Type check (pyright)
+        run: uv run --no-project pyright --level error kiro/
+
+      - name: Run tests
+        run: |
+          uv run --no-project pytest tests/unit -q --tb=short \
+            --deselect tests/unit/test_config.py::TestServerHostConfig::test_default_server_host_is_0_0_0_0 \
+            --deselect tests/unit/test_config.py::TestServerPortConfig::test_default_server_port_is_8000
+
+  security:
+    name: Security audit (bandit)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -r requirements.txt
+          uv pip install --system -r requirements-dev.txt
+
+      - name: Run bandit
+        run: uv run --no-project bandit -r kiro/ main.py --severity-level medium -q
