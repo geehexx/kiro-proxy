@@ -261,6 +261,8 @@ def record_request(  # noqa: PLR0913
     status: int,
     input_tokens: Optional[int] = None,
     output_tokens: Optional[int] = None,
+    cache_read_input_tokens: Optional[int] = None,
+    cache_creation_input_tokens: Optional[int] = None,
     error_reason: Optional[str] = None,
     retry_count: Optional[int] = None,
     session_id: Optional[str] = None,
@@ -310,6 +312,10 @@ def record_request(  # noqa: PLR0913
             attrs["kiro.conversation.id"] = session_id[:16]
         if complexity_label:
             attrs["kiro.gateway.complexity_label"] = complexity_label
+        if cache_read_input_tokens:
+            attrs["gen_ai.usage.cache_read_input_tokens"] = cache_read_input_tokens
+        if cache_creation_input_tokens:
+            attrs["gen_ai.usage.cache_creation_input_tokens"] = cache_creation_input_tokens
         if dedup_hit:
             attrs["kiro.gateway.dedup_hit"] = True
         if response_model:
