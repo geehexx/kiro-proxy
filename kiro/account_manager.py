@@ -842,7 +842,7 @@ class AccountManager:
                 f"(60s+2-retry trigger, total demotions={account.stats.demotions})"
             )
 
-    def get_account_stats(self) -> list[dict]:
+    async def get_account_stats(self) -> list[dict]:
         """
         Return per-account stats for /health endpoint.
 
@@ -850,33 +850,34 @@ class AccountManager:
             List of dicts with account id (last 16 chars), stats, circuit breaker state,
             and demotion status.
         """
-        now = time.time()
-        result = []
-        for account_id, account in self._accounts.items():
-            demoted_until = self._demoted_until.get(account_id, 0.0)
-            demoted_remaining = max(0.0, demoted_until - now)
+        async with self._lock:
+            now = time.time()
+            result = []
+            for account_id, account in self._accounts.items():
+                demoted_until = self._demoted_until.get(account_id, 0.0)
+                demoted_remaining = max(0.0, demoted_until - now)
 
-            cb_state = "closed"
-            if account.failures > 0:
-                backoff_multiplier = min(2 ** (account.failures - 1), ACCOUNT_MAX_BACKOFF_MULTIPLIER)
-                effective_timeout = ACCOUNT_RECOVERY_TIMEOUT * backoff_multiplier
-                time_since_failure = now - account.last_failure_time
-                if time_since_failure < effective_timeout:
-                    cb_state = "open"
-                else:
-                    cb_state = "half-open"
+                cb_state = "closed"
+                if account.failures > 0:
+                    backoff_multiplier = min(2 ** (account.failures - 1), ACCOUNT_MAX_BACKOFF_MULTIPLIER)
+                    effective_timeout = ACCOUNT_RECOVERY_TIMEOUT * backoff_multiplier
+                    time_since_failure = now - account.last_failure_time
+                    if time_since_failure < effective_timeout:
+                        cb_state = "open"
+                    else:
+                        cb_state = "half-open"
 
-            result.append({
-                "id": account_id[-16:],
-                "cb_state": cb_state,
-                "failures": account.failures,
-                "demoted_remaining_s": round(demoted_remaining),
-                "demotions": account.stats.demotions,
-                "total_requests": account.stats.total_requests,
-                "successful_requests": account.stats.successful_requests,
-                "failed_requests": account.stats.failed_requests,
-            })
-        return result
+                result.append({
+                    "id": account_id[-16:],
+                    "cb_state": cb_state,
+                    "failures": account.failures,
+                    "demoted_remaining_s": round(demoted_remaining),
+                    "demotions": account.stats.demotions,
+                    "total_requests": account.stats.total_requests,
+                    "successful_requests": account.stats.successful_requests,
+                    "failed_requests": account.stats.failed_requests,
+                })
+            return result
 
     def get_first_account(self) -> Account:
         """

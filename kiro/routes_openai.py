@@ -123,7 +123,7 @@ async def health(request: Request):
     # Per-account stats (only in account system mode)
     accounts_stats: list[dict] = []
     if account_manager is not None and getattr(request.app.state, "account_system", False):
-        accounts_stats = account_manager.get_account_stats()
+        accounts_stats = await account_manager.get_account_stats()
 
     return {
         "status": "healthy",

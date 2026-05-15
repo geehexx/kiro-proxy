@@ -708,9 +708,9 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
         tried_accounts = set()  # Track tried accounts in current failover loop
 
         # Compute sticky key: (session_id, model_family) for per-session stickiness
-        # model_family = first segment before "-" (e.g. "claude-opus-4.7" → "claude-opus")
+        # Use first 3 parts to distinguish claude-3-5-* from claude-3-* families
         _model_parts = _resolved_model.split("-")
-        _model_family = "-".join(_model_parts[:2]) if len(_model_parts) >= 2 else _resolved_model
+        _model_family = "-".join(_model_parts[:3]) if len(_model_parts) >= 3 else _resolved_model
         _sticky_key = f"{session_id}:{_model_family}" if session_id else None
 
         # Failover timing: track wall-clock and per-account retry count for demotion trigger

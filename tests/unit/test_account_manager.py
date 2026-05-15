@@ -1448,22 +1448,24 @@ class TestDemotionCooldown:
 class TestGetAccountStats:
     """Tests for get_account_stats() telemetry method."""
 
-    def test_returns_list(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_returns_list(self, tmp_path):
         """get_account_stats returns a list."""
         manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
         manager._accounts = {"/acc/a.json": _make_initialized_account("/acc/a.json")}
 
-        result = manager.get_account_stats()
+        result = await manager.get_account_stats()
 
         assert isinstance(result, list)
         assert len(result) == 1
 
-    def test_stat_fields_present(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_stat_fields_present(self, tmp_path):
         """Each stat entry has required fields."""
         manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
         manager._accounts = {"/acc/a.json": _make_initialized_account("/acc/a.json")}
 
-        result = manager.get_account_stats()
+        result = await manager.get_account_stats()
         entry = result[0]
 
         assert "id" in entry
@@ -1475,17 +1477,19 @@ class TestGetAccountStats:
         assert "successful_requests" in entry
         assert "failed_requests" in entry
 
-    def test_cb_state_closed_when_no_failures(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_cb_state_closed_when_no_failures(self, tmp_path):
         """cb_state is 'closed' when account has no failures."""
         manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
         manager._accounts = {"/acc/a.json": _make_initialized_account("/acc/a.json")}
 
-        result = manager.get_account_stats()
+        result = await manager.get_account_stats()
 
         assert result[0]["cb_state"] == "closed"
         assert result[0]["failures"] == 0
 
-    def test_cb_state_open_during_cooldown(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_cb_state_open_during_cooldown(self, tmp_path):
         """cb_state is 'open' when account is in backoff window."""
         manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
         acc = _make_initialized_account("/acc/a.json")
@@ -1493,33 +1497,36 @@ class TestGetAccountStats:
         acc.last_failure_time = time.time()  # just failed
         manager._accounts = {"/acc/a.json": acc}
 
-        result = manager.get_account_stats()
+        result = await manager.get_account_stats()
 
         assert result[0]["cb_state"] == "open"
 
-    def test_demoted_remaining_nonzero_when_demoted(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_demoted_remaining_nonzero_when_demoted(self, tmp_path):
         """demoted_remaining_s > 0 when account is currently demoted."""
         manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
         manager._accounts = {"/acc/a.json": _make_initialized_account("/acc/a.json")}
         manager._demoted_until["/acc/a.json"] = time.time() + 200
 
-        result = manager.get_account_stats()
+        result = await manager.get_account_stats()
 
         assert result[0]["demoted_remaining_s"] > 0
 
-    def test_id_is_last_16_chars(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_id_is_last_16_chars(self, tmp_path):
         """id field is last 16 chars of account_id."""
         manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
         manager._accounts = {"/acc/some_long_path.json": _make_initialized_account("/acc/some_long_path.json")}
 
-        result = manager.get_account_stats()
+        result = await manager.get_account_stats()
 
         assert result[0]["id"] == "/acc/some_long_path.json"[-16:]
 
-    def test_empty_accounts_returns_empty_list(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_empty_accounts_returns_empty_list(self, tmp_path):
         """get_account_stats returns [] when no accounts loaded."""
         manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
 
-        result = manager.get_account_stats()
+        result = await manager.get_account_stats()
 
         assert result == []
