@@ -267,6 +267,7 @@ def record_request(  # noqa: PLR0913
     is_overage: bool = False,
     complexity_label: Optional[str] = None,
     dedup_hit: bool = False,
+    response_model: Optional[str] = None,
 ) -> None:
     """Flat span emitter. Used by _emit_gateway_baseline.
 
@@ -311,6 +312,10 @@ def record_request(  # noqa: PLR0913
             attrs["kiro.gateway.complexity_label"] = complexity_label
         if dedup_hit:
             attrs["kiro.gateway.dedup_hit"] = True
+        if response_model:
+            attrs["gen_ai.response.model"] = response_model
+            if response_model != model:
+                attrs["kiro.gateway.routing_mismatch"] = True
 
         span_name = f"gateway.request [{'stream' if stream else 'sync'}] [{gateway_cache}]"
         with _logfire.span(span_name, **attrs):

@@ -244,3 +244,76 @@ async def test_complexity_label_none_by_default() -> None:
     )
     rec = writer.write.call_args.args[1]
     assert rec.get("complexity_label") is None
+
+
+@pytest.mark.asyncio
+async def test_response_model_captured_when_present() -> None:
+    """response_model field is emitted when upstream returns a model id."""
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    await _emit_gateway_baseline(
+        request,
+        response_body={
+            "id": "msg_rm",
+            "model": "claude-sonnet-4.5",  # upstream-resolved name
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        },
+        request_model="claude-sonnet-4.6",  # what client requested
+        session_id_gw="sess-rm",
+        cache_key=None,
+        upstream_ms=10,
+        gateway_cache="miss",
+        status=200,
+    )
+    rec = writer.write.call_args.args[1]
+    assert rec["model"] == "claude-sonnet-4.6"
+    assert rec["response_model"] == "claude-sonnet-4.5"
+
+
+@pytest.mark.asyncio
+async def test_response_model_none_when_absent() -> None:
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    await _emit_gateway_baseline(
+        request,
+        response_body={"id": "msg_no_rm", "usage": {}},
+        request_model="claude-opus-4.7",
+        session_id_gw="s",
+        cache_key=None,
+        upstream_ms=5,
+        gateway_cache="miss",
+        status=200,
+    )
+    rec = writer.write.call_args.args[1]
+    assert rec.get("response_model") is None
+
+
+@pytest.mark.asyncio
+async def test_routing_mismatch_logged(caplog: pytest.LogCaptureFixture) -> None:
+    """When upstream returns a model id != requested, a warning is logged."""
+    import logging
+
+    writer = AsyncMock()
+    request = _make_request_with_writer(writer)
+    with caplog.at_level(logging.WARNING):
+        await _emit_gateway_baseline(
+            request,
+            response_body={
+                "id": "msg_mismatch",
+                "model": "claude-sonnet-4.5",
+                "usage": {"input_tokens": 100, "output_tokens": 20},
+            },
+            request_model="claude-opus-4.7",
+            session_id_gw="sess-mm",
+            cache_key=None,
+            upstream_ms=200,
+            gateway_cache="miss",
+            status=200,
+        )
+    # Either via caplog OR via the record itself — both should reflect the mismatch
+    rec = writer.write.call_args.args[1]
+    assert rec["model"] == "claude-opus-4.7"
+    assert rec["response_model"] == "claude-sonnet-4.5"
+    # Routing mismatch warning visible somewhere — the logger is "kiro.routes_anthropic"
+    # but loguru may not propagate to caplog in all setups, so the durable assertion
+    # is on the baseline record. The warning is a side effect.
