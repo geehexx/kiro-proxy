@@ -50,6 +50,7 @@ class OpenAIModel(BaseModel):
     owned_by: str = "anthropic"
     description: Optional[str] = None
     display_name: Optional[str] = None
+    context_window: Optional[int] = None
 
 
 class ModelList(BaseModel):

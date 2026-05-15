@@ -2,6 +2,17 @@
 
 All notable changes to kiro-proxy are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+## [Unreleased]
+
+### Bug Fixes
+
+- **routes**: Fast circuit-breaker for `INSUFFICIENT_MODEL_CAPACITY` 429s — fail
+  immediately with 503 + `Retry-After: 60` + `X-Kiro-Capacity-Exhausted: <model>`
+  header instead of cycling accounts. Cycling accounts doesn't help when the model
+  capacity pool is exhausted across all accounts. Silent model substitution is also
+  wrong because CC doesn't update session state on proxy substitution (CC Issues
+  #23497, #44385, #54448). User decides to switch models via `/model claude-sonnet-4-6`.
+
 ## [2.3] - 2026-05-14
 
 ### Bug Fixes
