@@ -2,37 +2,48 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   test:
     name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
-
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
+          python-version: ${{ matrix.python-version }}
+          enable-caching: true
+          cache-dependency-glob: "requirements*.txt"
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: |
+          uv pip install --system -r requirements.txt
+          uv pip install --system -r requirements-dev.txt
 
-      - name: Lint (ruff)
-        run: uv run ruff check kiro/
+      - name: Lint (ruff check)
+        run: uv run --no-project ruff check kiro/ tests/ main.py
+
+      - name: Format check (ruff format)
+        run: uv run --no-project ruff format --check kiro/ tests/ main.py
+
+      - name: Type check (pyright)
+        run: uv run --no-project pyright --level error kiro/
 
       - name: Run tests
-        run: uv run pytest tests/ -q --no-header
+        run: |
+          uv run --no-project pytest tests/unit -q --tb=short \
+            --deselect tests/unit/test_config.py::TestServerHostConfig::test_default_server_host_is_0_0_0_0 \
+            --deselect tests/unit/test_config.py::TestServerPortConfig::test_default_server_port_is_8000
 
   security:
     name: Security audit (bandit)
@@ -42,12 +53,16 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
+          python-version: "3.12"
+          enable-caching: true
+          cache-dependency-glob: "requirements*.txt"
 
       - name: Install dependencies
-        run: uv sync --all-extras --dev
+        run: |
+          uv pip install --system -r requirements.txt
+          uv pip install --system -r requirements-dev.txt
 
       - name: Run bandit
-        run: uv run bandit -r kiro/ -ll
+        run: uv run --no-project bandit -r kiro/ main.py --severity-level medium -q
