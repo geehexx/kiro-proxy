@@ -530,38 +530,34 @@ async def lifespan(app: FastAPI):
     app.state.account_system = ACCOUNT_SYSTEM
 
     # ==============================================================================
-    # Initialize first working account (blocking)
+    # Defer account initialisation to first request (lazy init)
     # ==============================================================================
+    # Eager initialisation at boot was the cause of the 2026-05-16 restart loop:
+    # kiro-proxy.service starts before DNS resolves on WSL, _initialize_account
+    # 502s on AWS SSO, the circuit breaker trips and persists into state.json.
+    # Lazy init lets the proxy start cleanly; get_next_account already does
+    # on-demand initialisation per-account at request time, and a background
+    # warm-up task probes pending accounts every 30s without tripping the CB.
     all_accounts = list(app.state.account_manager._accounts.keys())
 
     if not all_accounts:
         logger.error("No accounts configured in credentials.json")
         raise RuntimeError("No accounts configured in credentials.json")
 
-    # Try to initialize accounts (full circle), starting from index 0
-    initialized = False
+    logger.info(
+        f"Account system initialised lazily: {len(all_accounts)} account(s) "
+        f"configured; warm-up runs in the background, real requests trigger "
+        f"per-account init on demand"
+    )
 
-    for i in range(len(all_accounts)):
-        current_index = i % len(all_accounts)
-        account_id = all_accounts[current_index]
-
-        logger.info(f"Attempting to initialize account: {account_id}")
-
-        success = await app.state.account_manager._initialize_account(account_id)
-
-        if success:
-            logger.info(f"Successfully initialized account: {account_id}")
-            initialized = True
-            break
-        else:
-            logger.warning(f"Failed to initialize account: {account_id}")
-
-    if not initialized:
-        logger.error("Failed to initialize any account. Check your credentials.")
-        raise RuntimeError("Failed to initialize any account")
-
-    # Save initial state
+    # Save initial state (model_to_accounts mapping from load_state, no failures recorded)
     await app.state.account_manager._save_state()
+
+    # Background warm-up: probe uninitialised accounts every 30s (quiet mode —
+    # transient failures don't trip the circuit breaker)
+    warmup_task = asyncio.create_task(
+        app.state.account_manager.warm_up_uninitialized_accounts(interval_seconds=30.0)
+    )
 
     # Start background task for periodic state saving
     save_task = asyncio.create_task(app.state.account_manager.save_state_periodically())
@@ -598,10 +594,16 @@ async def lifespan(app: FastAPI):
         app.state.response_cache.save(_cache_path)
         logger.info("Response cache saved to disk")
 
-    # Cancel account save task
+    # Cancel account save task and warm-up task
     save_task.cancel()
     try:
         await save_task
+    except asyncio.CancelledError:
+        pass
+
+    warmup_task.cancel()
+    try:
+        await warmup_task
     except asyncio.CancelledError:
         pass
 
