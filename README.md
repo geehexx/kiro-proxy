@@ -21,6 +21,22 @@ Made with ❤️ by [@Jwadow](https://github.com/jwadow)
 
 ---
 
+## geehexx fork enhancements
+
+This fork extends the upstream gateway with reliability and observability improvements
+for high-concurrency agentic workloads (e.g. Claude Code sub-agent fan-out).
+
+| Enhancement | Description |
+|-------------|-------------|
+| **Adaptive retry token bucket** | Rate-limits outgoing retries using a token-bucket algorithm, preventing thundering-herd storms when many sub-agents hit quota simultaneously |
+| **Body-content retry classifier** | Inspects error response bodies to distinguish hard quota exhaustion (no retry) from transient throttling (safe to retry), reducing wasted retries |
+| **Per-chunk stalled-stream protection** | Enforces a per-chunk read timeout on upstream SSE streams; bounds the wait on hung upstream connections rather than relying solely on a global request timeout |
+| **Circuit breaker + exponential backoff** | Wraps multi-account routing with per-account circuit breakers; failed accounts are backed off exponentially and probed for recovery before re-admission |
+| **Cache telemetry** | Tracks per-type cache hit rates and `cache_creation_input_tokens` / `cache_read_input_tokens` from `message_start` events; emits structured spans to Logfire |
+| **RE2 injection + complexity routing** | Injects RE2 system-prompt guidance on the OpenAI route and classifies request complexity to route simple requests to faster/cheaper models automatically |
+
+---
+
 ## 🤖 Available Models (Free List)
 
 > ⚠️ **Important:** Model availability depends on your Kiro tier (free/paid). The gateway provides access to whatever models are available in your IDE or CLI based on your subscription. The list below shows models commonly available on the **free tier**.
