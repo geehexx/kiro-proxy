@@ -38,6 +38,7 @@ from kiro.auth import AuthType
 from kiro.config import (
     APP_VERSION,
     PROXY_API_KEY,
+    RE2_AB_SAMPLE_RATE,
     RE2_ENABLED,
     RE2_INJECTION,
     RE2_MIN_MESSAGES,
@@ -407,6 +408,13 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
         and _complexity.re2_eligible
     )
 
+    # A/B sampling: down-sample RE2 injection to measure cache-hit-rate impact.
+    if _re2_active and RE2_AB_SAMPLE_RATE < 1.0:
+        import random as _random
+        if _random.random() >= RE2_AB_SAMPLE_RATE:
+            _re2_active = False
+            logger.debug(f"Re2 A/B sampled out (rate={RE2_AB_SAMPLE_RATE})")
+
     if _re2_active and len(request_data.messages) >= RE2_MIN_MESSAGES:
         _re2_target_idx = None
         for _i in range(len(request_data.messages) - 1, -1, -1):
@@ -438,9 +446,9 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                     if _btype == "text":
                         _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
                         if isinstance(_block, dict):
-                            _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
+                            _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}  # type: ignore[operator]
                         else:
-                            _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
+                            _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})  # type: ignore[operator]
                         break
                 request_data.messages[_re2_target_idx] = _msg.model_copy(update={"content": _new_content})
             logger.debug(f"Re2 injection applied to user message at index {_re2_target_idx} (OpenAI route)")
@@ -561,7 +569,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                                 
                                 async for chunk in stream_with_first_token_retry(
                                     make_request=make_retry_request,
-                                    client=http_client.client,
+                                    client=http_client.client,  # type: ignore[arg-type]
                                     model=request_data.model,
                                     model_cache=model_cache,
                                     auth_manager=auth_manager,
@@ -601,7 +609,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                     else:
                         # Non-streaming mode
                         openai_response = await collect_stream_response(
-                            http_client.client,
+                            http_client.client,  # type: ignore[arg-type]
                             response,
                             request_data.model,
                             model_cache,
@@ -723,7 +731,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
             # Single account - return its original error
             # last_error_status and last_error_message are guaranteed to be set
             raise HTTPException(
-                status_code=last_error_status,
+                status_code=last_error_status,  # type: ignore[arg-type]
                 detail=last_error_message
             )
         else:
@@ -860,7 +868,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                     # Use retry wrapper with initial response
                     async for chunk in stream_with_first_token_retry(
                         make_request=make_retry_request,
-                        client=http_client.client,
+                        client=http_client.client,  # type: ignore[arg-type]
                         model=request_data.model,
                         model_cache=model_cache,
                         auth_manager=auth_manager,
@@ -906,7 +914,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
             
             # Non-streaming mode - collect entire response
             openai_response = await collect_stream_response(
-                http_client.client,
+                http_client.client,  # type: ignore[arg-type]
                 response,
                 request_data.model,
                 model_cache,

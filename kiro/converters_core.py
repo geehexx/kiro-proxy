@@ -966,9 +966,9 @@ def strip_all_tool_content(messages: list[UnifiedMessage]) -> tuple[list[Unified
 
         if has_tool_calls or has_tool_results:
             if has_tool_calls:
-                total_tool_calls_stripped += len(msg.tool_calls)
+                total_tool_calls_stripped += len(msg.tool_calls)  # type: ignore[arg-type]
             if has_tool_results:
-                total_tool_results_stripped += len(msg.tool_results)
+                total_tool_results_stripped += len(msg.tool_results)  # type: ignore[arg-type]
 
             # Start with existing text content
             existing_content = extract_text_content(msg.content)
@@ -979,13 +979,13 @@ def strip_all_tool_content(messages: list[UnifiedMessage]) -> tuple[list[Unified
 
             # Convert tool_calls to text (for assistant messages)
             if has_tool_calls:
-                tool_text = tool_calls_to_text(msg.tool_calls)
+                tool_text = tool_calls_to_text(msg.tool_calls)  # type: ignore[arg-type]
                 if tool_text:
                     content_parts.append(tool_text)
 
             # Convert tool_results to text (for user messages)
             if has_tool_results:
-                result_text = tool_results_to_text(msg.tool_results)
+                result_text = tool_results_to_text(msg.tool_results)  # type: ignore[arg-type]
                 if result_text:
                     content_parts.append(result_text)
 
@@ -1383,7 +1383,7 @@ def build_kiro_history(messages: list[UnifiedMessage], model_id: str) -> list[di
             if images:
                 kiro_images = convert_images_to_kiro_format(images)
                 if kiro_images:
-                    user_input["images"] = kiro_images
+                    user_input["images"] = kiro_images  # type: ignore[assignment]
 
             # Build userInputMessageContext for tools and toolResults only
             user_input_context: dict[str, Any] = {}
@@ -1401,7 +1401,7 @@ def build_kiro_history(messages: list[UnifiedMessage], model_id: str) -> list[di
 
             # Add context if not empty (contains toolResults only, not images)
             if user_input_context:
-                user_input["userInputMessageContext"] = user_input_context
+                user_input["userInputMessageContext"] = user_input_context  # type: ignore[assignment]
 
             history.append({"userInputMessage": user_input})
 
@@ -1417,7 +1417,7 @@ def build_kiro_history(messages: list[UnifiedMessage], model_id: str) -> list[di
             # Process tool_calls
             tool_uses = extract_tool_uses_from_message(msg.content, msg.tool_calls)
             if tool_uses:
-                assistant_response["toolUses"] = tool_uses
+                assistant_response["toolUses"] = tool_uses  # type: ignore[assignment]
 
             history.append({"assistantResponseMessage": assistant_response})
 
@@ -1592,11 +1592,11 @@ def build_kiro_payload(  # noqa: C901, PLR0912, PLR0913, PLR0915
 
     # Add images directly to userInputMessage (NOT to userInputMessageContext)
     if kiro_images:
-        user_input_message["images"] = kiro_images
+        user_input_message["images"] = kiro_images  # type: ignore[assignment]
 
     # Add user_input_context if present (contains tools and toolResults only)
     if user_input_context:
-        user_input_message["userInputMessageContext"] = user_input_context
+        user_input_message["userInputMessageContext"] = user_input_context  # type: ignore[assignment]
 
     # Assemble final payload
     payload = {
@@ -1615,7 +1615,7 @@ def build_kiro_payload(  # noqa: C901, PLR0912, PLR0913, PLR0915
 
     # Add profileArn
     if profile_arn:
-        payload["profileArn"] = profile_arn
+        payload["profileArn"] = profile_arn  # type: ignore[assignment]
 
     # Payload size guard — auto-trim if enabled
     if AUTO_TRIM_PAYLOAD:
