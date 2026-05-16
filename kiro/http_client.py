@@ -238,12 +238,12 @@ class KiroHttpClient:
                     # Connection: close was a workaround for CLOSE_WAIT leaks (issue #38)
                     # with HTTP/1.1 — not needed with HTTP/2 and actively harmful
                     # (forces TLS re-handshake on every streaming request, ~900ms overhead).
-                    req = client.build_request(method, url, **request_kwargs)
+                    req = client.build_request(method, url, **request_kwargs)  # type: ignore[arg-type]
                     logger.debug("Sending request to Kiro API...")
                     response = await client.send(req, stream=True)
                 else:
                     logger.debug("Sending request to Kiro API...")
-                    response = await client.request(method, url, **request_kwargs)
+                    response = await client.request(method, url, **request_kwargs)  # type: ignore[arg-type]
 
                 # Check status
                 if response.status_code == 200:
