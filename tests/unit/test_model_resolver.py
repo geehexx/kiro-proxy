@@ -1737,3 +1737,122 @@ class TestAliasSystemSecurity:
         print(f"Received suggestions: {suggestions}")
         # This is expected behavior - alias name doesn't contain family
         assert len(suggestions) > 0
+
+
+# =============================================================================
+# TestModelGeneralization - Phase 2.9: unknown/bracket/normalization tests
+# =============================================================================
+
+class TestModelGeneralization:
+    """
+    Tests that the proxy handles model names it hasn't seen before.
+
+    Covers:
+    - Unknown model names pass through without error
+    - Bracket form [1m] is stripped correctly
+    - Dot vs dash normalization is consistent
+    """
+
+    def test_unknown_model_passes_through_without_error(self, model_resolver):
+        """
+        What it does: An unknown model name resolves via passthrough, no exception.
+        Goal: Gateway must never crash on an unseen model name.
+        """
+        result = model_resolver.resolve("claude-future-99.0")
+
+        assert isinstance(result, ModelResolution)
+        assert result.source == "passthrough"
+        assert result.is_verified is False
+        assert result.internal_id == "claude-future-99.0"
+
+    def test_completely_unknown_model_passes_through(self, model_resolver):
+        """
+        What it does: A totally foreign model name passes through unchanged.
+        Goal: Gateway is a proxy, not a gatekeeper — unknown = passthrough.
+        """
+        result = model_resolver.resolve("some-vendor-model-v3")
+
+        assert isinstance(result, ModelResolution)
+        assert result.source == "passthrough"
+        assert result.internal_id == "some-vendor-model-v3"
+
+    def test_bracket_1m_form_is_stripped_by_normalize(self):
+        """
+        What it does: claude-sonnet-4.6[1m] → claude-sonnet-4.6 via normalize_model_name.
+        Goal: [1m] bracket suffix must be stripped before resolution.
+        """
+        result = normalize_model_name("claude-sonnet-4.6[1m]")
+        assert result == "claude-sonnet-4.6"
+
+    def test_bracket_1m_dash_form_is_stripped(self):
+        """
+        What it does: claude-sonnet-4-6[1m] → claude-sonnet-4.6 (strip bracket + dash→dot).
+        Goal: Bracket stripping and dash→dot normalization compose correctly.
+        """
+        result = normalize_model_name("claude-sonnet-4-6[1m]")
+        assert result == "claude-sonnet-4.6"
+
+    def test_bracket_form_opus_is_stripped(self):
+        """
+        What it does: claude-opus-4.7[1m] → claude-opus-4.7.
+        Goal: Bracket stripping works for all families.
+        """
+        result = normalize_model_name("claude-opus-4.7[1m]")
+        assert result == "claude-opus-4.7"
+
+    def test_bracket_form_haiku_is_stripped(self):
+        """
+        What it does: claude-haiku-4.5[1m] → claude-haiku-4.5.
+        Goal: Bracket stripping works for haiku.
+        """
+        result = normalize_model_name("claude-haiku-4.5[1m]")
+        assert result == "claude-haiku-4.5"
+
+    def test_dot_and_dash_forms_normalize_to_same_result(self):
+        """
+        What it does: claude-sonnet-4-6 and claude-sonnet-4.6 both normalize to claude-sonnet-4.6.
+        Goal: Dot vs dash minor-version forms must be consistent — same cache key.
+        """
+        dot_form = normalize_model_name("claude-sonnet-4.6")
+        dash_form = normalize_model_name("claude-sonnet-4-6")
+        assert dot_form == dash_form == "claude-sonnet-4.6"
+
+    def test_dot_and_dash_forms_resolve_to_same_model(self, mock_model_cache):
+        """
+        What it does: Dot and dash forms of the same model resolve identically.
+        Goal: Clients using either separator must hit the same backend model.
+        """
+        cache = ModelInfoCache()
+        cache._cache = {
+            "claude-sonnet-4.6": {"modelId": "claude-sonnet-4.6"},
+        }
+        resolver = ModelResolver(cache=cache)
+
+        dot_result = resolver.resolve("claude-sonnet-4.6")
+        dash_result = resolver.resolve("claude-sonnet-4-6")
+
+        assert dot_result.internal_id == dash_result.internal_id == "claude-sonnet-4.6"
+        assert dot_result.source == dash_result.source == "cache"
+
+    def test_bracket_form_resolves_via_resolver(self, mock_model_cache):
+        """
+        What it does: claude-sonnet-4.5[1m] resolves to claude-sonnet-4.5 in the cache.
+        Goal: End-to-end: bracket form → normalize → cache hit.
+        """
+        result = mock_model_cache.is_valid_model(normalize_model_name("claude-sonnet-4.5[1m]"))
+        assert result is True
+
+    @pytest.mark.parametrize("model_name", [
+        "claude-totally-new-5.0",
+        "claude-experimental-x1",
+        "claude-research-preview-2027",
+        "my-custom-model",
+        "gpt-5-turbo",
+    ])
+    def test_various_unknown_models_never_raise(self, model_resolver, model_name):
+        """
+        What it does: A range of unseen model names all resolve without exception.
+        Goal: resolve() must be total — no input causes a crash.
+        """
+        result = model_resolver.resolve(model_name)
+        assert isinstance(result, ModelResolution)

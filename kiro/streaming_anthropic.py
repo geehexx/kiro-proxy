@@ -125,7 +125,7 @@ def _extract_cache_usage_fields(usage: Optional[dict[str, Any]]) -> dict[str, in
     return extracted
 
 
-async def stream_kiro_to_anthropic(  # noqa: C901, PLR0912, PLR0913, PLR0915
+async def stream_kiro_to_anthropic(  # noqa: C901, PLR0912, PLR0913, PLR0915  # type: ignore[misc]
     response: httpx.Response,
     model: str,
     model_cache: "ModelInfoCache",
