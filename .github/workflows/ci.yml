@@ -1,15 +1,11 @@
 name: CI
 
-# CI temporarily disabled — runner setup fails before any workflow step can
-# execute (since 2026-05-15 19:09Z; runs return in 2-3s with empty `steps`).
-# Root cause appears to be GitHub-side (billing/quota/runner-pool exhaustion),
-# NOT a code regression — see open PRs #6/#7/#8 (and now #10/#11/#12/#13/#14)
-# that all fail identically on every branch. Workflows are kept under
-# workflow_dispatch only (manual run) so the YAML stays in version control
-# and re-enabling later is a one-line revert. Re-enable by restoring the
-# `push:` and `pull_request:` triggers when the runner issue is resolved.
 on:
-  workflow_dispatch:  # manual-run only — see comment block above
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   test:
