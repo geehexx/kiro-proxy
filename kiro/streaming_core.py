@@ -42,6 +42,7 @@ from kiro.config import (
     FAKE_REASONING_HANDLING,
     FIRST_TOKEN_MAX_RETRIES,
     FIRST_TOKEN_TIMEOUT,
+    STREAMING_READ_TIMEOUT,
 )
 from kiro.parsers import AwsEventStreamParser, deduplicate_tool_calls, parse_bracket_tool_calls
 from kiro.thinking_parser import ThinkingParser
@@ -111,6 +112,17 @@ class FirstTokenTimeoutError(Exception):
     pass
 
 
+class StalledStreamError(Exception):
+    """Exception raised when an in-flight stream stalls past the per-chunk grace period.
+
+    Distinct from FirstTokenTimeoutError: that fires before any token is received;
+    StalledStreamError fires AFTER the first token, when subsequent chunks fail to
+    arrive within STREAMING_READ_TIMEOUT (or the per-call override).  Backport of
+    aws-sdk-rust ``StalledStreamProtectionConfig`` (5min grace by default).
+    """
+    pass
+
+
 # ==================================================================================================
 # Kiro Stream Parsing
 # ==================================================================================================
@@ -172,8 +184,28 @@ async def parse_kiro_stream(  # noqa: C901, PLR0912
         async for event in _process_chunk(parser, first_byte_chunk, thinking_parser):
             yield event
 
-        # Continue reading remaining chunks
-        async for chunk in byte_iterator:
+        # Continue reading remaining chunks — bounded per-chunk grace via
+        # STREAMING_READ_TIMEOUT.  Without this, a hung upstream blocks the
+        # client until the underlying httpx read-timeout (which defaults to
+        # 300s but can be overridden globally; the per-chunk gate makes the
+        # bound explicit and surfaces a typed exception the caller can
+        # classify).  Backport of aws-sdk-rust StalledStreamProtectionConfig.
+        while True:
+            try:
+                chunk = await asyncio.wait_for(
+                    byte_iterator.__anext__(),
+                    timeout=STREAMING_READ_TIMEOUT,
+                )
+            except StopAsyncIteration:
+                break
+            except asyncio.TimeoutError as exc:
+                logger.warning(
+                    f"[StalledStream] No chunk received within {STREAMING_READ_TIMEOUT}s grace period"
+                )
+                raise StalledStreamError(
+                    f"Stream stalled — no chunk in {STREAMING_READ_TIMEOUT}s"
+                ) from exc
+
             if debug_logger:
                 debug_logger.log_raw_chunk(chunk)
 
