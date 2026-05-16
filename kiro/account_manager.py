@@ -197,7 +197,7 @@ class AccountManager:
         >>> await manager.report_success(account.id, "claude-opus-4.5")
     """
 
-    def __init__(self, credentials_file: str, state_file: str):
+    def __init__(self, credentials_file: str, state_file: str) -> None:
         """
         Initialize AccountManager.
 

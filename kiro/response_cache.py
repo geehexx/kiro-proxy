@@ -320,6 +320,7 @@ class ResponseCache:
         """
         try:
             with self._lock:
+                entries: list[tuple[str, CacheEntry]] = list(self._entries.items())
                 payload = {
                     "version": _PICKLE_VERSION,
                     "saved_at": time.time(),
@@ -329,7 +330,7 @@ class ResponseCache:
                         "ttl": self._ttl,
                         "max_entry_bytes": self._max_entry_bytes,
                     },
-                    "entries": list(self._entries.items()),
+                    "entries": entries,
                     "total_bytes": self._total_bytes,
                     "hits": self.hits,
                     "misses": self.misses,
@@ -340,7 +341,7 @@ class ResponseCache:
             with open(tmp, "wb") as f:
                 pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)  # nosec B301 — local cache file written by this process, not untrusted input
             tmp.replace(path)
-            _logger.info(f"Cache saved: {len(payload['entries'])} entries → {path}")
+            _logger.info(f"Cache saved: {len(entries)} entries → {path}")
             return True
         except Exception as e:
             _logger.warning(f"Cache save failed (non-fatal): {e}")
