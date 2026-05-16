@@ -40,6 +40,7 @@ from loguru import logger
 
 from kiro.auth import KiroAuthManager
 from kiro.config import (
+    ADAPTIVE_RETRY_ENABLED,
     BASE_RETRY_DELAY,
     CAPACITY_BACKOFF_BASE,
     CAPACITY_MAX_RETRIES,
@@ -48,6 +49,7 @@ from kiro.config import (
     STREAMING_READ_TIMEOUT,
 )
 from kiro.network_errors import NetworkErrorInfo, classify_network_error, get_short_error_message
+from kiro.retry_bucket import get_singleton as _retry_bucket
 from kiro.utils import get_kiro_headers
 
 
@@ -244,6 +246,8 @@ class KiroHttpClient:
 
                 # Check status
                 if response.status_code == 200:
+                    if ADAPTIVE_RETRY_ENABLED:
+                        await _retry_bucket().record_success()
                     return response
 
                 # 403 - token expired, refresh and retry
@@ -300,6 +304,12 @@ class KiroHttpClient:
                             delay = base_delay * (1.0 + random.uniform(-0.25, 0.25))
                             logger.warning(f"Received 429, waiting {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
                         await asyncio.sleep(delay)
+                        if ADAPTIVE_RETRY_ENABLED:
+                            bucket = _retry_bucket()
+                            await bucket.record_throttle()
+                            extra = await bucket.acquire(jitter=True)
+                            if extra > 0:
+                                logger.debug(f"adaptive bucket added {extra:.2f}s to retry pacing")
                     continue
 
                 # 409 - conflict / request already in progress, retry with backoff
