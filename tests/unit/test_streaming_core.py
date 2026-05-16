@@ -1830,3 +1830,87 @@ class TestStreamWithFirstTokenRetryCore:
         assert make_request_call_count == 1
         assert len(chunks) == 1
         print("✓ make_request called immediately when initial_response is None")
+
+
+class TestStalledStreamProtection:
+    """Verifies the per-chunk grace period that bounds upstream-stall waits.
+
+    Distinct from FirstTokenTimeoutError (which fires before any token is
+    received): StalledStreamError fires AFTER the first token, when subsequent
+    chunks fail to arrive within STREAMING_READ_TIMEOUT.
+
+    Backport of aws-sdk-rust StalledStreamProtectionConfig (Pattern 5 from
+    B-amazon-q-cli-backport-patterns.md).
+    """
+
+    @pytest.mark.asyncio
+    async def test_first_chunk_arrives_then_stream_stalls_raises_typed_error(
+        self, mock_response, mock_parser
+    ):
+        """Goal: After first token, if no chunk arrives within the grace
+        period, the stream raises StalledStreamError, not a generic timeout.
+        """
+        from kiro.streaming_core import StalledStreamError, parse_kiro_stream
+
+        mock_parser.feed.return_value = [{"type": "content", "data": "Hi"}]
+
+        # First chunk yields, then the iterator stalls (asyncio.sleep longer
+        # than the test's patched STREAMING_READ_TIMEOUT).
+        async def mock_aiter_bytes():
+            yield b"chunk1"
+            await asyncio.sleep(2.0)  # > patched timeout
+            yield b"chunk2-never-arrives"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
+
+        with (
+            patch("kiro.streaming_core.AwsEventStreamParser", return_value=mock_parser),
+            patch("kiro.streaming_core.FAKE_REASONING_ENABLED", False),
+            patch("kiro.streaming_core.STREAMING_READ_TIMEOUT", 0.1),
+        ):
+            collected = []
+            with pytest.raises(StalledStreamError):
+                async for ev in parse_kiro_stream(mock_response):
+                    collected.append(ev)
+
+            # First chunk should have produced an event before the stall.
+            assert len(collected) >= 1
+
+    @pytest.mark.asyncio
+    async def test_normal_completion_does_not_raise(self, mock_response, mock_parser):
+        """Goal: A well-behaved stream that yields multiple chunks within
+        the grace period completes normally — no StalledStreamError.
+        """
+        from kiro.streaming_core import parse_kiro_stream
+
+        mock_parser.feed.return_value = [{"type": "content", "data": "x"}]
+
+        async def mock_aiter_bytes():
+            yield b"chunk1"
+            yield b"chunk2"
+            yield b"chunk3"
+
+        mock_response.aiter_bytes = mock_aiter_bytes
+
+        with (
+            patch("kiro.streaming_core.AwsEventStreamParser", return_value=mock_parser),
+            patch("kiro.streaming_core.FAKE_REASONING_ENABLED", False),
+            patch("kiro.streaming_core.STREAMING_READ_TIMEOUT", 1.0),
+        ):
+            events = [
+                ev async for ev in parse_kiro_stream(mock_response)
+            ]
+            # 3 chunks * 1 event/chunk = 3 events
+            assert len(events) == 3
+
+    @pytest.mark.asyncio
+    async def test_stalled_error_distinct_from_first_token_timeout(self):
+        """Sanity: the two exceptions are distinct types so callers can
+        tell pre-first-token failures (retriable, may indicate auth)
+        from mid-stream stalls (likely upstream gateway issue)."""
+        from kiro.streaming_core import FirstTokenTimeoutError, StalledStreamError
+
+        assert StalledStreamError is not FirstTokenTimeoutError
+        assert not issubclass(StalledStreamError, FirstTokenTimeoutError)
+        assert not issubclass(FirstTokenTimeoutError, StalledStreamError)
+

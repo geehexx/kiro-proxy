@@ -42,6 +42,7 @@ from kiro.config import FAKE_REASONING_HANDLING, FIRST_TOKEN_MAX_RETRIES, FIRST_
 from kiro.parsers import parse_bracket_tool_calls
 from kiro.streaming_core import (
     FirstTokenTimeoutError,
+    StalledStreamError,
     calculate_tokens_from_context_usage,
     collect_stream_to_result,
     parse_kiro_stream,
@@ -703,6 +704,23 @@ async def stream_kiro_to_anthropic(  # noqa: C901, PLR0912, PLR0913, PLR0915
         )
 
     except FirstTokenTimeoutError:
+        raise
+    except StalledStreamError as e:
+        # Stream stalled mid-flight (after first token).  Emit a typed terminal
+        # SSE error event so clients can distinguish stalls from generic errors,
+        # then re-raise so the route layer logs / increments metrics.
+        error_msg = str(e) if str(e) else "(empty message)"
+        logger.error(
+            f"Anthropic streaming stalled: {error_msg}",
+            exc_info=True,
+        )
+        yield format_sse_event("error", {
+            "type": "error",
+            "error": {
+                "type": "stalled_stream",
+                "message": f"Upstream stream stalled: {error_msg}",
+            },
+        })
         raise
     except GeneratorExit:
         logger.debug("Client disconnected (GeneratorExit)")
