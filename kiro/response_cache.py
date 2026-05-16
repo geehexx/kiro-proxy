@@ -68,6 +68,31 @@ def _tool_signature(tools: list[dict[str, Any]] | None) -> str:
 
 import re as _re  # noqa: E402 — placed after _tool_signature to keep related cache-key helpers together
 
+# Patterns for non-deterministic fields in tool_result content that vary
+# across agent-loop replays but carry no semantic meaning for cache keying.
+_UUID_RE = _re.compile(
+    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+    _re.IGNORECASE,
+)
+_ISO_TS_RE = _re.compile(
+    r"\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b"
+)
+_UNIX_TS_RE = _re.compile(r"\b1[6-9]\d{9}(?:\.\d+)?\b")  # unix timestamps 2023-2033
+
+
+def _strip_nondeterministic(text: str) -> str:
+    """Replace UUIDs and timestamps in tool_result text with stable placeholders.
+
+    Conservative: only replaces patterns that are structurally non-deterministic
+    (UUIDs, ISO-8601 timestamps, unix epoch seconds). Does not touch numeric IDs
+    or other content that may be semantically load-bearing.
+    """
+    text = _UUID_RE.sub("<uuid>", text)
+    text = _ISO_TS_RE.sub("<timestamp>", text)
+    text = _UNIX_TS_RE.sub("<unix_ts>", text)
+    return text
+
+
 
 def _normalize_text(value: Any) -> Any:
     """Normalize string whitespace for stable cache keys.
@@ -109,8 +134,25 @@ def _normalize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         elif isinstance(content, list):
             normalized_blocks = []
             for block in content:
-                if isinstance(block, dict) and block.get("type") == "text":
+                if not isinstance(block, dict):
+                    normalized_blocks.append(block)
+                elif block.get("type") == "text":
                     normalized_blocks.append({**block, "text": _normalize_text(block.get("text", ""))})
+                elif block.get("type") == "tool_result":
+                    # Strip non-deterministic fields (UUIDs, timestamps) from tool_result
+                    # content so agent-loop replays hit the cache on identical tool calls.
+                    inner = block.get("content", "")
+                    if isinstance(inner, str):
+                        inner = _strip_nondeterministic(inner)
+                    elif isinstance(inner, list):
+                        stripped = []
+                        for ib in inner:
+                            if isinstance(ib, dict) and ib.get("type") == "text":
+                                stripped.append({**ib, "text": _strip_nondeterministic(ib.get("text", ""))})
+                            else:
+                                stripped.append(ib)
+                        inner = stripped
+                    normalized_blocks.append({**block, "content": inner})
                 else:
                     normalized_blocks.append(block)
             result.append({**msg, "content": normalized_blocks})
