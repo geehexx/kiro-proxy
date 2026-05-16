@@ -1,0 +1,5 @@
+# Empty seed gitleaks ignore — populate as false-positives are triaged.
+#
+# Add fingerprint lines from `gitleaks detect --redact -r out.json` if a real
+# false positive needs whitelisting. NEVER use this file to hide a true secret.
+# Pre-commit hook is `gitleaks protect --staged --redact` (see lefthook.yml).

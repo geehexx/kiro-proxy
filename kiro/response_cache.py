@@ -194,20 +194,40 @@ class ResponseCache:
         self.hits = 0
         self.misses = 0
         self.evictions = 0
+        # Per-type counters (E5 — break out streaming vs non-streaming).
+        # Aggregate hits/misses are preserved for back-compat; per-type
+        # counters are populated when callers pass `streaming=` to
+        # get()/put(). Default False keeps behaviour unchanged.
+        self.stream_hits = 0
+        self.stream_misses = 0
+        self.nonstream_hits = 0
+        self.nonstream_misses = 0
 
-    def get(self, key: str) -> CacheEntry | None:
+    def get(self, key: str, *, streaming: bool = False) -> CacheEntry | None:
         with self._lock:
             entry = self._entries.get(key)
             if entry is None:
                 self.misses += 1
+                if streaming:
+                    self.stream_misses += 1
+                else:
+                    self.nonstream_misses += 1
                 return None
             if time.time() - entry.created_at > self._ttl:
                 self._entries.pop(key)
                 self._total_bytes -= entry.size_bytes
                 self.misses += 1
+                if streaming:
+                    self.stream_misses += 1
+                else:
+                    self.nonstream_misses += 1
                 return None
             self._entries.move_to_end(key)
             self.hits += 1
+            if streaming:
+                self.stream_hits += 1
+            else:
+                self.nonstream_hits += 1
             # Return a copy so callers cannot mutate the cached headers dict.
             return CacheEntry(
                 body=entry.body,
@@ -359,6 +379,13 @@ class ResponseCache:
                 "hits": self.hits,
                 "misses": self.misses,
                 "evictions": self.evictions,
+                # E5: per-type breakdown — populated when callers pass
+                # streaming= to get()/put(). Sum of stream_* + nonstream_*
+                # equals hits/misses only after all callers have migrated.
+                "stream_hits": self.stream_hits,
+                "stream_misses": self.stream_misses,
+                "nonstream_hits": self.nonstream_hits,
+                "nonstream_misses": self.nonstream_misses,
             }
 
     def clear(self) -> None:
@@ -368,3 +395,7 @@ class ResponseCache:
             self.hits = 0
             self.misses = 0
             self.evictions = 0
+            self.stream_hits = 0
+            self.stream_misses = 0
+            self.nonstream_hits = 0
+            self.nonstream_misses = 0

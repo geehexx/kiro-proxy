@@ -83,7 +83,7 @@ def try_cache_lookup(
     """
     if cache is None:
         return None
-    return cache.get(key)
+    return cache.get(key, streaming=False)
 
 
 def store_cache(
@@ -135,7 +135,7 @@ def try_stream_cache_lookup(
     """Return raw SSE bytes for a cached streaming response, or None."""
     if cache is None:
         return None
-    entry = cache.get(key)
+    entry = cache.get(key, streaming=True)
     if entry is None:
         return None
     return entry.body
