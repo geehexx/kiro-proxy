@@ -54,12 +54,16 @@ _THROTTLE_MARKERS: tuple[str, ...] = (
 )
 
 
-def _decode_body(body: bytes | None) -> str:
-    if not body:
+def _decode_body(body: object) -> str:
+    """Decode bytes-like input; tolerate any non-bytes (mocks, None, garbage)
+    by returning empty string so callers fall through to status-only logic.
+    Production callers pass bytes; defensive against test mocks that pass
+    a coroutine or arbitrary type."""
+    if not body or not isinstance(body, (bytes, bytearray)):
         return ""
     try:
-        return body.decode("utf-8", errors="replace")
-    except (UnicodeDecodeError, AttributeError):
+        return bytes(body).decode("utf-8", errors="replace")
+    except (UnicodeDecodeError, AttributeError, TypeError):
         return ""
 
 
