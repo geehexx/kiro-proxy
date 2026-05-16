@@ -70,7 +70,7 @@ def setup_logfire() -> bool:
         return False
 
     try:
-        _logfire.configure(
+        _logfire.configure(  # type: ignore[union-attr]
             token=token,
             service_name=os.getenv("LOGFIRE_SERVICE_NAME", "kiro-gateway"),
             service_version=os.getenv("APP_VERSION", "2.4-dev"),
@@ -80,7 +80,7 @@ def setup_logfire() -> bool:
             # Only INFO+ — suppress debug spans and test noise
             min_level="info",
             # Scrub common secret patterns from attributes
-            scrubbing=_logfire.ScrubbingOptions(
+            scrubbing=_logfire.ScrubbingOptions(  # type: ignore[union-attr]
                 extra_patterns=["token", "api.key", "auth", "bearer", "secret"]
             ) if hasattr(_logfire, "ScrubbingOptions") else None,
         )
@@ -97,12 +97,12 @@ def instrument_fastapi(app: object) -> None:
     if not _configured or not _LOGFIRE_AVAILABLE:
         return
     try:
-        _logfire.instrument_fastapi(
+        _logfire.instrument_fastapi(  # type: ignore[union-attr]
             app,  # type: ignore[arg-type]
             capture_headers=False,
             excluded_urls="/health,/metrics,/v1/models",
         )
-        _logfire.instrument_httpx()
+        _logfire.instrument_httpx()  # type: ignore[union-attr]
         logger.info("Logfire FastAPI + httpx instrumentation active")
     except Exception as e:
         logger.warning(f"Logfire instrumentation failed (non-fatal): {e}")
@@ -145,7 +145,7 @@ def user_request_span(
         if last_user_message_preview:
             attrs["kiro.request.prompt_preview"] = _trunc(last_user_message_preview, _MAX_PROMPT_CHARS)
 
-        with _logfire.span("user_request", **attrs):
+        with _logfire.span("user_request", **attrs):  # type: ignore[union-attr]
             yield
     except Exception:
         yield
@@ -191,7 +191,7 @@ def gateway_request_span(  # noqa: PLR0913
             attrs["kiro.cost.is_overage"] = True
 
         span_name = f"gateway {'stream' if stream else 'sync'} [{cache_result}]"
-        with _logfire.span(span_name, **attrs):
+        with _logfire.span(span_name, **attrs):  # type: ignore[union-attr]
             yield
     except Exception:
         yield
@@ -211,9 +211,9 @@ def emit_cache_event(
     if not _configured or not _LOGFIRE_AVAILABLE:
         return
     try:
-        _logfire.info(
+        _logfire.info(  # type: ignore[union-attr]
             f"cache.{event}",
-            **{
+            **{  # type: ignore[arg-type]
                 "kiro.cache.event": event,
                 "kiro.cache.model": model,
                 "kiro.cache.key": cache_key_prefix or "",
@@ -324,7 +324,7 @@ def record_request(  # noqa: C901, PLR0913
                 attrs["kiro.gateway.routing_mismatch"] = True
 
         span_name = f"gateway.request [{'stream' if stream else 'sync'}] [{gateway_cache}]"
-        with _logfire.span(span_name, **attrs):
+        with _logfire.span(span_name, **attrs):  # type: ignore[union-attr]
             pass
     except Exception as e:
         logger.debug(f"Logfire record_request failed (non-fatal): {e}")
@@ -341,9 +341,9 @@ def record_model_resolution(
         return
     try:
         if raw_model != resolved_model:
-            _logfire.info(
+            _logfire.info(  # type: ignore[union-attr]
                 "model.resolved",
-                **{
+                **{  # type: ignore[arg-type]
                     "kiro.model.raw": raw_model,
                     "kiro.model.resolved": resolved_model,
                     "kiro.model.source": resolution_source,
