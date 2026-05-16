@@ -99,10 +99,10 @@ def load_credentials_from_json(file_path: str) -> bool:
         # Detect auth type
         if CLIENT_ID and CLIENT_SECRET:
             AUTH_TYPE = AuthType.AWS_SSO_OIDC
-            logger.info(f"Detected auth type: AWS SSO OIDC")
+            logger.info("Detected auth type: AWS SSO OIDC")
         else:
             AUTH_TYPE = AuthType.KIRO_DESKTOP
-            logger.info(f"Detected auth type: Kiro Desktop")
+            logger.info("Detected auth type: Kiro Desktop")
         
         logger.info(f"Credentials loaded from {file_path}")
         return True
@@ -175,10 +175,10 @@ def load_credentials_from_sqlite(db_path: str) -> bool:
         # Detect auth type
         if CLIENT_ID and CLIENT_SECRET:
             AUTH_TYPE = AuthType.AWS_SSO_OIDC
-            logger.info(f"Detected auth type: AWS SSO OIDC (from SQLite)")
+            logger.info("Detected auth type: AWS SSO OIDC (from SQLite)")
         else:
             AUTH_TYPE = AuthType.KIRO_DESKTOP
-            logger.info(f"Detected auth type: Kiro Desktop (from SQLite)")
+            logger.info("Detected auth type: Kiro Desktop (from SQLite)")
         
         logger.info(f"Credentials loaded from SQLite: {db_path}")
         return True
@@ -434,7 +434,7 @@ def test_generate_content():
 
 
 if __name__ == "__main__":
-    logger.info(f"Starting Kiro API tests...")
+    logger.info("Starting Kiro API tests...")
     logger.info(f"  Credentials source: {cred_source}")
     logger.info(f"  Auth type: {AUTH_TYPE.value}")
     logger.info(f"  API Region: {API_REGION}")
@@ -458,11 +458,11 @@ if __name__ == "__main__":
         generate_ok = test_generate_content()
 
         if models_ok and generate_ok:
-            logger.success(f"All tests passed successfully!")
+            logger.success("All tests passed successfully!")
             logger.success(f"  Auth type: {AUTH_TYPE.value}")
             logger.success(f"  Credentials: {cred_source}")
         else:
-            logger.warning(f"One or more tests failed.")
+            logger.warning("One or more tests failed.")
     else:
         logger.error("Failed to refresh token. Tests not started.")
         logger.error(f"  Auth type: {AUTH_TYPE.value}")
