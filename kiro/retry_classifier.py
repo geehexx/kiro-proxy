@@ -35,6 +35,8 @@ class RetryKind(str, Enum):
 class RetryDecision:
     kind: RetryKind
     reason: str
+    is_capacity: bool = False  # SR#3: structured marker — caller checks this
+                               # instead of grep'ing the human-readable reason.
 
 
 # Body markers — string-match against the decoded response body.
@@ -98,7 +100,12 @@ def classify(status: int, body: bytes | None) -> RetryDecision:
     # ServiceUnavailableException should be treated as a throttle.
     for marker in _THROTTLE_MARKERS:
         if marker in body_str or (json_reason and marker in json_reason):
-            return RetryDecision(RetryKind.THROTTLE, f"throttle: {marker}")
+            is_cap = marker == "INSUFFICIENT_MODEL_CAPACITY"
+            return RetryDecision(
+                RetryKind.THROTTLE,
+                f"throttle: {marker}",
+                is_capacity=is_cap,
+            )
 
     # Status-code-based defaults — back-compat with today's behaviour.
     if status == 429:

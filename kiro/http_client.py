@@ -265,14 +265,18 @@ class KiroHttpClient:
                 if response.status_code == 429:
                     last_response = response  # Retain to return after retry exhaustion
                     if attempt < max_retries - 1:
-                        if stream:
-                            await response.aclose()
-
+                        # Read body BEFORE closing the stream — closing first
+                        # empties the body for streamed responses, which would
+                        # silently miss NO_RETRY markers (MONTHLY_REQUEST_COUNT)
+                        # and burn the entire retry budget. Mirrors the 5xx
+                        # pattern at L334.  See SR#1 finding 2026-05-16.
                         body_bytes = b""
                         try:
                             body_bytes = await response.aread()
                         except Exception:
                             pass
+                        if stream:
+                            await response.aclose()
                         decision = classify_retry(429, body_bytes)
                         if decision.kind is RetryKind.NO_RETRY:
                             logger.warning(
@@ -282,11 +286,15 @@ class KiroHttpClient:
                             break  # Surface the response to the caller without further retries.
 
                         # Capacity-aware backoff: longer base delay, capped retries.
-                        is_capacity_throttle = (
-                            decision.kind is RetryKind.THROTTLE
-                            and "INSUFFICIENT_MODEL_CAPACITY" in decision.reason
-                        )
-                        if is_capacity_throttle and CAPACITY_BACKOFF_BASE > 0:
+                        # SR#3 — use the structured is_capacity flag instead of
+                        # grep'ing the human-readable reason.  The 429 path
+                        # restricts capacity backoff to INSUFFICIENT_MODEL_CAPACITY
+                        # (the only marker that's a sustained capacity issue);
+                        # the 5xx path is broader (see SR#4 — keeping the existing
+                        # asymmetry; promoting all THROTTLE markers on 429 would
+                        # make `ThrottlingException`-flagged 429s wait 15s instead
+                        # of ~1s, regressing happy-path).
+                        if decision.kind is RetryKind.THROTTLE and decision.is_capacity and CAPACITY_BACKOFF_BASE > 0:
                             if attempt >= CAPACITY_MAX_RETRIES:
                                 logger.warning(
                                     f"Capacity 429 retry budget exhausted "
@@ -324,8 +332,9 @@ class KiroHttpClient:
                     continue
 
                 # 5xx - server error.  Body-content classifier decides
-                # whether this is THROTTLE (capacity masquerading as 5xx —
-                # longer backoff matters) or STANDARD (generic transient).
+                # whether this is NO_RETRY (hard quota markers — never retry),
+                # THROTTLE (capacity masquerading as 5xx — longer backoff
+                # matters), or STANDARD (generic transient).
                 if 500 <= response.status_code < 600:
                     last_response = response  # Retain to return after retry exhaustion
                     if attempt < max_retries - 1:
@@ -337,6 +346,16 @@ class KiroHttpClient:
                         if stream:
                             await response.aclose()
                         decision = classify_retry(response.status_code, body_bytes)
+                        # SR#2: hard-quota markers can land in 5xx bodies —
+                        # break before retrying.  Today no upstream returns
+                        # 5xx + MONTHLY_REQUEST_COUNT, but this closes the
+                        # gap surfaced by the silent-failure audit.
+                        if decision.kind is RetryKind.NO_RETRY:
+                            logger.warning(
+                                f"Received {response.status_code} with hard-quota marker "
+                                f"({decision.reason}); not retrying"
+                            )
+                            break
                         if decision.kind is RetryKind.THROTTLE and CAPACITY_BACKOFF_BASE > 0:
                             if attempt >= CAPACITY_MAX_RETRIES:
                                 logger.warning(
