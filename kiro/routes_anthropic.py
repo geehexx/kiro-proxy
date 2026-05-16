@@ -839,6 +839,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                     request_messages=messages_for_tokenizer,
                                     request_tools=tools_for_tokenizer,
                                     request_system=system_for_tokenizer,
+                                    response_model=_raw_model,  # echo client original (with brackets)
                                 ):
                                     # Extract usage from message_delta SSE event.
                                     # SSE format: "event: message_delta\ndata: {...}\n\n"
@@ -948,6 +949,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                     request_messages=messages_for_tokenizer,
                                     request_tools=tools_for_tokenizer,
                                     request_system=system_for_tokenizer,
+                                    response_model=_raw_model,
                                 )
                         else:
                             anthropic_response = await collect_anthropic_response(
@@ -958,6 +960,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                 request_messages=messages_for_tokenizer,
                                 request_tools=tools_for_tokenizer,
                                 request_system=system_for_tokenizer,
+                                response_model=_raw_model,
                             )
 
                         await http_client.close()
@@ -1234,6 +1237,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                         request_messages=messages_for_tokenizer,
                         request_tools=tools_for_tokenizer,
                         request_system=system_for_tokenizer,
+                        response_model=_raw_model,
                     )
             else:
                 _body = await collect_anthropic_response(
@@ -1241,6 +1245,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                     request_messages=messages_for_tokenizer,
                     request_tools=tools_for_tokenizer,
                     request_system=system_for_tokenizer,
+                    response_model=_raw_model,
                 )
             await http_client.close()
             return _body, _ms
@@ -1397,6 +1402,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                         request_messages=messages_for_tokenizer,
                         request_tools=tools_for_tokenizer,
                         request_system=system_for_tokenizer,
+                        response_model=_raw_model,  # echo client original (with brackets)
                     ):
                         # Extract usage from message_delta SSE event.
                         # SSE format: "event: message_delta\ndata: {...}\n\n"
@@ -1506,6 +1512,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                         request_messages=messages_for_tokenizer,
                         request_tools=tools_for_tokenizer,
                         request_system=system_for_tokenizer,
+                        response_model=_raw_model,
                     )
             else:
                 anthropic_response = await collect_anthropic_response(
@@ -1516,6 +1523,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                     request_messages=messages_for_tokenizer,
                     request_tools=tools_for_tokenizer,
                     request_system=system_for_tokenizer,
+                    response_model=_raw_model,
                 )
 
             await http_client.close()
