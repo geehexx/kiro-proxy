@@ -655,6 +655,15 @@ CAPACITY_BACKOFF_BASE: float = float(os.getenv("CAPACITY_BACKOFF_BASE", "15.0"))
 # condition; hammering the endpoint wastes quota.
 # Default: 2  (i.e. up to 3 total attempts: original + 2 retries)
 CAPACITY_MAX_RETRIES: int = int(os.getenv("CAPACITY_MAX_RETRIES", "2"))
+# Adaptive retry token bucket — backport of aws-sdk RetryConfig::adaptive
+# (see kiro/retry_bucket.py).  When enabled, every retry attempt acquires
+# a token from a process-wide bucket; throttling halves the refill rate so
+# concurrent retries become rarer under sustained throttling, preventing
+# thundering-herd at fan-out scale.  Layered ON TOP of existing exponential
+# backoff — does not replace it; the bucket adds a concurrency cap.
+ADAPTIVE_RETRY_ENABLED: bool = os.getenv("ADAPTIVE_RETRY_ENABLED", "true").lower() in (
+    "1", "true", "yes", "on",
+)
 
 # ==================================================================================================
 # Global Opus Concurrency Cap (§3 — feature-flagged OFF by default)
