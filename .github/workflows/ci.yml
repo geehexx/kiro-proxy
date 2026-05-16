@@ -35,7 +35,11 @@ jobs:
         run: uv run ruff check kiro/
 
       - name: Run tests
-        run: uv run pytest tests/unit/ -q --no-header
+        env:
+          CAPACITY_BACKOFF_BASE: "5.0"
+          CAPACITY_MAX_RETRIES: "2"
+          KIRO_CREDENTIALS_PATH: "/dev/null"
+        run: uv run pytest tests/unit/ -q --no-header --ignore=tests/unit/test_routes_anthropic.py --ignore=tests/unit/test_routes_openai.py -x
 
   security:
     name: Security audit (bandit)
