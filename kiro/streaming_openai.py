@@ -46,6 +46,7 @@ from kiro.parsers import deduplicate_tool_calls, parse_bracket_tool_calls
 # Import from streaming_core - reuse shared parsing logic
 from kiro.streaming_core import (
     FirstTokenTimeoutError,
+    StalledStreamError,
     calculate_tokens_from_context_usage,
     parse_kiro_stream,
 )
@@ -419,6 +420,25 @@ async def stream_kiro_to_openai_internal(  # noqa: C901, PLR0912, PLR0913, PLR09
 
     except FirstTokenTimeoutError:
         # Propagate timeout up for retry
+        raise
+    except StalledStreamError as e:
+        # Stream stalled mid-flight (after first token).  Emit a typed terminal
+        # SSE error chunk so OpenAI clients see a structured error rather than a
+        # truncated [DONE]-less stream, then re-raise for route-level handling.
+        streaming_error_occurred = True
+        error_msg = str(e) if str(e) else "(empty message)"
+        logger.error(
+            f"OpenAI streaming stalled: {error_msg}",
+            exc_info=True,
+        )
+        error_chunk = {
+            "error": {
+                "type": "stalled_stream",
+                "message": f"Upstream stream stalled: {error_msg}",
+            }
+        }
+        yield f"data: {json.dumps(error_chunk, ensure_ascii=False)}\n\n"
+        yield "data: [DONE]\n\n"
         raise
     except GeneratorExit:
         # Client disconnected - this is normal, don't log as error
