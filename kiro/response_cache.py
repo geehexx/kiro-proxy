@@ -121,7 +121,7 @@ def _normalize_system(system: Any) -> Any:
     return system
 
 
-def _normalize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _normalize_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:  # noqa: C901
     """Normalize message text content for cache key stability."""
     result = []
     for msg in messages:

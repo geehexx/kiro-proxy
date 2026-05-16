@@ -153,7 +153,7 @@ async def health(request: Request):
     }
 
 @router.get("/v1/models", response_model=ModelList, dependencies=[Depends(verify_api_key)])
-async def get_models(request: Request):
+async def get_models(request: Request):  # noqa: C901
     """
     Return list of available models.
     

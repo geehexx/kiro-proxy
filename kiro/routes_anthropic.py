@@ -58,7 +58,7 @@ from kiro.tokenizer import estimate_request_tokens
 from kiro.utils import generate_conversation_id
 
 
-def _extract_stream_telemetry_from_chunk(chunk: str) -> dict:
+def _extract_stream_telemetry_from_chunk(chunk: str) -> dict:  # noqa: C901
     """Extract telemetry fields from one Anthropic SSE chunk.
 
     Handles two event types:
@@ -257,6 +257,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
     request: Request,
     request_data: AnthropicMessagesRequest,
     anthropic_version: Optional[str] = Header(None, alias="anthropic-version"),
+    anthropic_beta: Optional[str] = Header(None, alias="anthropic-beta"),
 ):
     """
     Anthropic Messages API endpoint.
@@ -285,6 +286,15 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
 
     if anthropic_version:
         logger.debug(f"Anthropic-Version header: {anthropic_version}")
+
+    # Merge anthropic-beta header into request_data.betas (header takes precedence
+    # over body field; Anthropic SDK sends betas as a comma-separated header value).
+    if anthropic_beta:
+        header_betas = [b.strip() for b in anthropic_beta.split(",") if b.strip()]
+        body_betas = list(getattr(request_data, "betas", None) or [])
+        merged = list(dict.fromkeys(body_betas + header_betas))  # deduplicate, preserve order
+        request_data = request_data.model_copy(update={"betas": merged or None})
+        logger.debug(f"anthropic-beta header merged: {merged}")
 
     # Normalize model name early so all downstream code (baselines, cache keys,
     # logs) uses the canonical form. Aliases (sonnet[1m] → claude-sonnet-4.6)
