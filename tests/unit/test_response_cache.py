@@ -333,6 +333,10 @@ class TestClear:
             "hits": 0,
             "misses": 0,
             "evictions": 0,
+            "stream_hits": 0,
+            "stream_misses": 0,
+            "nonstream_hits": 0,
+            "nonstream_misses": 0,
         }
 
 
@@ -392,3 +396,59 @@ class TestCacheKeyNormalization:
         k2 = make_key(session_id="sess-1", model="claude-sonnet-4.6", max_tokens=1024,
                       system=None, messages=msgs2)
         assert k1 == k2
+
+class TestPerTypeStats:
+    """E5: streaming vs non-streaming get/put split — populated when callers
+    pass `streaming=` to get(). stats() exposes stream_* and nonstream_*
+    counters separately from the aggregate hits/misses."""
+
+    def test_streaming_hit_increments_stream_counters(self):
+        cache = ResponseCache()
+        cache.put("k", b"v")
+        cache.get("k", streaming=True)
+        s = cache.stats()
+        assert s["hits"] == 1
+        assert s["stream_hits"] == 1
+        assert s["nonstream_hits"] == 0
+
+    def test_nonstream_default_increments_nonstream_counter(self):
+        cache = ResponseCache()
+        cache.put("k", b"v")
+        cache.get("k")  # default: streaming=False
+        s = cache.stats()
+        assert s["hits"] == 1
+        assert s["nonstream_hits"] == 1
+        assert s["stream_hits"] == 0
+
+    def test_miss_increments_correct_per_type_miss_counter(self):
+        cache = ResponseCache()
+        cache.get("missing", streaming=True)
+        cache.get("missing", streaming=False)
+        s = cache.stats()
+        assert s["misses"] == 2
+        assert s["stream_misses"] == 1
+        assert s["nonstream_misses"] == 1
+
+    def test_aggregate_equals_sum_of_per_type(self):
+        cache = ResponseCache()
+        cache.put("k1", b"v")
+        cache.get("k1", streaming=True)
+        cache.get("k1", streaming=False)
+        cache.get("missing-stream", streaming=True)
+        cache.get("missing-non", streaming=False)
+        s = cache.stats()
+        assert s["hits"] == s["stream_hits"] + s["nonstream_hits"]
+        assert s["misses"] == s["stream_misses"] + s["nonstream_misses"]
+
+    def test_clear_zeroes_per_type_counters(self):
+        cache = ResponseCache()
+        cache.put("k", b"v")
+        cache.get("k", streaming=True)
+        cache.get("missing", streaming=False)
+        cache.clear()
+        s = cache.stats()
+        assert s["stream_hits"] == 0
+        assert s["stream_misses"] == 0
+        assert s["nonstream_hits"] == 0
+        assert s["nonstream_misses"] == 0
+
