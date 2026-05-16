@@ -5,7 +5,6 @@ Verifies that INSUFFICIENT_MODEL_CAPACITY 429s are classified as FATAL
 (not RECOVERABLE) so kiro-proxy fails fast instead of cycling accounts.
 """
 
-import pytest
 
 from kiro.account_errors import ErrorType, classify_error
 

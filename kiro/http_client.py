@@ -30,7 +30,6 @@ with connection pooling for better resource management.
 """
 
 import asyncio
-import json
 import random
 from typing import Optional
 
