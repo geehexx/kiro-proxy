@@ -50,6 +50,8 @@ from kiro.config import (
 )
 from kiro.network_errors import NetworkErrorInfo, classify_network_error, get_short_error_message
 from kiro.retry_bucket import get_singleton as _retry_bucket
+from kiro.retry_classifier import RetryKind
+from kiro.retry_classifier import classify as classify_retry
 from kiro.utils import get_kiro_headers
 
 
@@ -258,29 +260,38 @@ class KiroHttpClient:
                     await self.auth_manager.force_refresh()
                     continue
 
-                # 429 - rate limit, wait and retry
+                # 429 - rate limit, wait and retry.  Body-content classifier
+                # (Pattern 3 backport) decides between NO_RETRY (hard quota
+                # markers like MONTHLY_REQUEST_COUNT — never retry, just
+                # surface the response), THROTTLE (capacity / rate-limit —
+                # longer backoff for sustained capacity issues), and STANDARD
+                # (no body marker found, fall back to status-only logic).
                 if response.status_code == 429:
                     last_response = response  # Retain to return after retry exhaustion
                     if attempt < max_retries - 1:
                         if stream:
                             await response.aclose()
 
-                        # Detect capacity-exhaustion 429s by parsing the response body.
-                        # INSUFFICIENT_MODEL_CAPACITY warrants a longer backoff than a
-                        # standard rate-limit because capacity is a sustained condition.
-                        is_capacity_error = False
+                        body_bytes = b""
                         try:
                             body_bytes = await response.aread()
-                            body_json = json.loads(body_bytes)
-                            if body_json.get("reason") == "INSUFFICIENT_MODEL_CAPACITY":
-                                is_capacity_error = True
                         except Exception:
-                            pass  # Body unreadable — fall back to standard backoff
+                            pass
+                        decision = classify_retry(429, body_bytes)
+                        if decision.kind is RetryKind.NO_RETRY:
+                            logger.warning(
+                                f"Received 429 with hard-quota marker ({decision.reason}); "
+                                "not retrying"
+                            )
+                            break  # Surface the response to the caller without further retries.
 
-                        if is_capacity_error and CAPACITY_BACKOFF_BASE > 0:
-                            # Capacity-aware backoff: longer base delay, capped retries.
+                        # Capacity-aware backoff: longer base delay, capped retries.
+                        is_capacity_throttle = (
+                            decision.kind is RetryKind.THROTTLE
+                            and "INSUFFICIENT_MODEL_CAPACITY" in decision.reason
+                        )
+                        if is_capacity_throttle and CAPACITY_BACKOFF_BASE > 0:
                             if attempt >= CAPACITY_MAX_RETRIES:
-                                # Exceeded capacity retry budget — stop retrying.
                                 logger.warning(
                                     f"Capacity 429 retry budget exhausted "
                                     f"(attempt {attempt + 1}/{max_retries})"
@@ -289,7 +300,7 @@ class KiroHttpClient:
                             base_delay = CAPACITY_BACKOFF_BASE * (2 ** attempt)
                             delay = base_delay * (1.0 + random.uniform(-0.25, 0.25))
                             logger.warning(
-                                f"Received 429 (INSUFFICIENT_MODEL_CAPACITY), "
+                                f"Received 429 ({decision.reason}), "
                                 f"capacity backoff {delay:.1f}s "
                                 f"(attempt {attempt + 1}/{max_retries})"
                             )
@@ -300,7 +311,6 @@ class KiroHttpClient:
                                 base_delay = float(retry_after) if retry_after else BASE_RETRY_DELAY * (2 ** attempt)
                             except (ValueError, TypeError):
                                 base_delay = BASE_RETRY_DELAY * (2 ** attempt)
-                            # Add ±25% jitter to prevent thundering herd on concurrent 429s.
                             delay = base_delay * (1.0 + random.uniform(-0.25, 0.25))
                             logger.warning(f"Received 429, waiting {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
                         await asyncio.sleep(delay)
@@ -323,17 +333,40 @@ class KiroHttpClient:
                         await asyncio.sleep(delay)
                     continue
 
-                # 5xx - server error, wait and retry
+                # 5xx - server error.  Body-content classifier decides
+                # whether this is THROTTLE (capacity masquerading as 5xx —
+                # longer backoff matters) or STANDARD (generic transient).
                 if 500 <= response.status_code < 600:
                     last_response = response  # Retain to return after retry exhaustion
                     if attempt < max_retries - 1:
+                        body_bytes = b""
+                        try:
+                            body_bytes = await response.aread()
+                        except Exception:
+                            pass
                         if stream:
                             await response.aclose()
-                        delay = BASE_RETRY_DELAY * (2 ** attempt)
-                        logger.warning(
-                            f"Received {response.status_code}, waiting {delay}s "
-                            f"(attempt {attempt + 1}/{max_retries})"
-                        )
+                        decision = classify_retry(response.status_code, body_bytes)
+                        if decision.kind is RetryKind.THROTTLE and CAPACITY_BACKOFF_BASE > 0:
+                            if attempt >= CAPACITY_MAX_RETRIES:
+                                logger.warning(
+                                    f"Capacity 5xx retry budget exhausted "
+                                    f"(attempt {attempt + 1}/{max_retries})"
+                                )
+                                continue
+                            base_delay = CAPACITY_BACKOFF_BASE * (2 ** attempt)
+                            delay = base_delay * (1.0 + random.uniform(-0.25, 0.25))
+                            logger.warning(
+                                f"Received {response.status_code} ({decision.reason}), "
+                                f"capacity backoff {delay:.1f}s "
+                                f"(attempt {attempt + 1}/{max_retries})"
+                            )
+                        else:
+                            delay = BASE_RETRY_DELAY * (2 ** attempt)
+                            logger.warning(
+                                f"Received {response.status_code}, waiting {delay}s "
+                                f"(attempt {attempt + 1}/{max_retries})"
+                            )
                         await asyncio.sleep(delay)
                     continue
 
