@@ -91,7 +91,7 @@ def count_tokens(text: str, apply_claude_correction: bool = True) -> int:
     encoding = _get_encoding()
     if encoding:
         try:
-            base_tokens = len(encoding.encode(text))
+            base_tokens = len(encoding.encode(text))  # type: ignore[union-attr]
             if apply_claude_correction:
                 return int(base_tokens * CLAUDE_CORRECTION_FACTOR)
             return base_tokens

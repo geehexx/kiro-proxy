@@ -653,7 +653,7 @@ async def handle_native_web_search(
             sse_generator = generate_openai_web_search_sse(
                 request_data.model,
                 query,
-                tool_use_id,
+                tool_use_id or "",
                 results,
                 input_tokens
             )
@@ -661,7 +661,7 @@ async def handle_native_web_search(
             sse_generator = generate_anthropic_web_search_sse(
                 request_data.model,
                 query,
-                tool_use_id,
+                tool_use_id or "",
                 results,
                 input_tokens
             )
