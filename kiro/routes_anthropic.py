@@ -159,7 +159,9 @@ async def _emit_gateway_baseline(  # noqa: PLR0913
         # Routing-mismatch detection — gateway model-routing blind spot.
         # When upstream (CodeWhisperer) returns a model id that differs from
         # the request, log warn so silent downgrades surface.
-        if response_model and request_model and response_model != request_model:
+        # Normalize dot/dash variants (e.g. 4.5 vs 4-5) before comparing.
+        from kiro.model_resolver import normalize_model_name as _norm
+        if response_model and request_model and _norm(response_model) != _norm(request_model):
             logger.warning(
                 f"model-routing mismatch: requested={request_model} "
                 f"upstream_returned={response_model} session={session_id_gw} "
