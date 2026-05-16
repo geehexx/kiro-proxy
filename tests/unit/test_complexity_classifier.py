@@ -239,3 +239,52 @@ class TestLayer2TokenAndConversation:
             input_tokens_estimate=50,
         )
         assert result_high.score >= result_low.score
+
+
+class TestPropertyBased:
+    """Property-based tests using Hypothesis for classify_request."""
+
+    def test_classify_never_raises_for_valid_messages(self):
+        from hypothesis import given, settings
+        from hypothesis import strategies as st
+
+        msg_strategy = st.fixed_dictionaries({
+            "role": st.sampled_from(["user", "assistant"]),
+            "content": st.text(max_size=200),
+        })
+
+        @given(
+            model=st.sampled_from(["claude-sonnet-4.6", "claude-haiku-4.5", "claude-opus-4.7"]),
+            messages=st.lists(msg_strategy, min_size=1, max_size=10),
+        )
+        @settings(max_examples=200)
+        def inner(model: str, messages: list[dict]) -> None:
+            result = classify_request(model=model, messages=messages)
+            assert isinstance(result, ComplexityResult)
+            assert 0.0 <= result.score <= 1.0
+            assert isinstance(result.label, ComplexityLabel)
+            assert isinstance(result.thinking_budget, int)
+            assert result.thinking_budget >= 0
+            assert isinstance(result.re2_eligible, bool)
+
+        inner()
+
+    def test_classify_score_always_in_range(self):
+        from hypothesis import given, settings
+        from hypothesis import strategies as st
+
+        @given(
+            text=st.text(max_size=500),
+            tokens=st.one_of(st.none(), st.integers(min_value=0, max_value=100_000)),
+        )
+        @settings(max_examples=200)
+        def inner(text: str, tokens: int | None) -> None:
+            result = classify_request(
+                model="claude-sonnet-4.6",
+                messages=[{"role": "user", "content": text},
+                          {"role": "assistant", "content": "ok"}],
+                input_tokens_estimate=tokens,
+            )
+            assert 0.0 <= result.score <= 1.0
+
+        inner()

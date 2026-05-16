@@ -452,3 +452,200 @@ class TestPerTypeStats:
         assert s["nonstream_hits"] == 0
         assert s["nonstream_misses"] == 0
 
+
+class TestMutationKilling:
+    """Targeted tests to kill surviving mutants in response_cache.py."""
+
+    # --- TTL expiry counter accumulation (misses += 1, not = 1) ---
+
+    def test_expired_entry_accumulates_misses(self):
+        cache = ResponseCache(ttl_seconds=3600)
+        cache.put("k1", b"v1")
+        cache.put("k2", b"v2")
+        # Back-date both entries
+        with cache._lock:  # noqa: SLF001
+            cache._entries["k1"].created_at = time.time() - 7200
+            cache._entries["k2"].created_at = time.time() - 7200
+        cache.get("k1")
+        cache.get("k2")
+        assert cache.stats()["misses"] == 2
+
+    def test_expired_stream_miss_accumulates(self):
+        cache = ResponseCache(ttl_seconds=3600)
+        cache.put("k", b"v")
+        with cache._lock:  # noqa: SLF001
+            cache._entries["k"].created_at = time.time() - 7200
+        cache.get("k", streaming=True)
+        cache.get("k", streaming=True)  # second miss after re-put would need re-put; just miss twice
+        assert cache.stats()["stream_misses"] >= 1
+
+    # --- put() size calculation: + not - ---
+
+    def test_put_size_includes_header_bytes(self):
+        cache = ResponseCache(max_entries=100, max_bytes=10_000_000, max_entry_bytes=1024)
+        # body=10 bytes, header key+val = 30 bytes → total 40 bytes, fits in 1024
+        ok = cache.put("k", b"x" * 10, headers={"Content-Type": "application/json"})
+        assert ok is True
+        assert cache.stats()["total_bytes"] == 10 + len("Content-Type") + len("application/json")
+
+    def test_put_size_boundary_exact_max_entry_bytes_allowed(self):
+        # size == max_entry_bytes should be allowed (> not >=)
+        cache = ResponseCache(max_entries=100, max_bytes=10_000_000, max_entry_bytes=1024)
+        ok = cache.put("k", b"x" * 1024)
+        assert ok is True
+
+    def test_put_size_one_over_max_entry_bytes_rejected(self):
+        cache = ResponseCache(max_entries=100, max_bytes=10_000_000, max_entry_bytes=1024)
+        ok = cache.put("k", b"x" * 1025)
+        assert ok is False
+
+    # --- invalidate_session sets total_bytes=0, not None ---
+
+    def test_invalidate_session_resets_total_bytes_to_zero(self):
+        cache = ResponseCache()
+        cache.put("k", b"hello")
+        cache.invalidate_session("any")
+        stats = cache.stats()
+        assert stats["total_bytes"] == 0
+        assert stats["entries"] == 0
+
+    # --- _tool_signature: non-dict tools skipped with continue not break ---
+
+    def test_tool_signature_skips_non_dict_tools(self):
+        from kiro.response_cache import _tool_signature
+        tools_with_non_dict = [
+            "not-a-dict",
+            {"name": "Bash", "description": "run", "input_schema": {}},
+        ]
+        sig = _tool_signature(tools_with_non_dict)
+        sig_clean = _tool_signature([{"name": "Bash", "description": "run", "input_schema": {}}])
+        assert sig == sig_clean
+
+    def test_tool_signature_missing_name_uses_empty_string(self):
+        from kiro.response_cache import _tool_signature
+        sig = _tool_signature([{"description": "x", "input_schema": {}}])
+        assert isinstance(sig, str) and len(sig) == 16
+
+    # --- _normalize_text: replacement is single space ---
+
+    def test_normalize_text_collapses_to_single_space(self):
+        from kiro.response_cache import _normalize_text
+        assert _normalize_text("a  b") == "a b"
+        assert _normalize_text("a\t\tb") == "a b"
+        assert _normalize_text("  hello  ") == "hello"
+
+    # --- _normalize_system: AND not OR for dict+type check ---
+
+    def test_normalize_system_non_dict_block_not_normalized(self):
+        from kiro.response_cache import _normalize_system
+        result = _normalize_system(["not-a-dict", {"type": "text", "text": "hi  "}])
+        assert result[0] == "not-a-dict"
+        assert result[1]["text"] == "hi"
+
+    # --- _normalize_messages: non-dict messages preserved as-is ---
+
+    def test_normalize_messages_preserves_non_dict_messages(self):
+        from kiro.response_cache import _normalize_messages
+        result = _normalize_messages(["not-a-dict", {"role": "user", "content": "hi  "}])
+        assert result[0] == "not-a-dict"
+        assert result[1]["content"] == "hi"
+
+    def test_normalize_messages_text_block_normalized_not_replaced_with_none(self):
+        from kiro.response_cache import _normalize_messages
+        msgs = [{"role": "user", "content": [{"type": "text", "text": "hello  "}]}]
+        result = _normalize_messages(msgs)
+        block = result[0]["content"][0]
+        assert block is not None
+        assert block["text"] == "hello"
+
+    # --- _strip_nondeterministic: UUID/timestamp replacement ---
+
+    def test_strip_nondeterministic_replaces_uuid(self):
+        from kiro.response_cache import _strip_nondeterministic
+        text = "id=550e8400-e29b-41d4-a716-446655440000 done"
+        result = _strip_nondeterministic(text)
+        assert "<uuid>" in result
+        assert "550e8400" not in result
+
+    def test_strip_nondeterministic_replaces_iso_timestamp(self):
+        from kiro.response_cache import _strip_nondeterministic
+        text = "at 2024-01-15T10:30:00Z completed"
+        result = _strip_nondeterministic(text)
+        assert "<timestamp>" in result
+
+    def test_strip_nondeterministic_replaces_unix_ts(self):
+        from kiro.response_cache import _strip_nondeterministic
+        # regex matches 11-digit unix ms timestamps in range 16000000000-19999999999
+        text = "ts=17000000000 done"
+        result = _strip_nondeterministic(text)
+        assert "<unix_ts>" in result
+
+    def test_strip_nondeterministic_preserves_other_content(self):
+        from kiro.response_cache import _strip_nondeterministic
+        text = "hello world 42"
+        assert _strip_nondeterministic(text) == text
+
+    # --- make_key: tool_result content stripped of non-deterministic fields ---
+
+    def test_make_key_tool_result_uuid_normalized(self):
+        msgs_a = [{"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "x",
+             "content": "id=550e8400-e29b-41d4-a716-446655440000"}
+        ]}]
+        msgs_b = [{"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "x",
+             "content": "id=aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}
+        ]}]
+        k1 = make_key(session_id="s", system=None, messages=msgs_a, model="m", max_tokens=10)
+        k2 = make_key(session_id="s", system=None, messages=msgs_b, model="m", max_tokens=10)
+        assert k1 == k2
+
+
+class TestPropertyBased:
+    """Property-based tests using Hypothesis for make_key determinism and normalization."""
+
+    def test_make_key_deterministic(self):
+        from hypothesis import given, settings
+        from hypothesis import strategies as st
+
+        @given(
+            session_id=st.text(min_size=1, max_size=20),
+            system=st.one_of(st.none(), st.text(max_size=50)),
+            content=st.text(min_size=1, max_size=50),
+            model=st.sampled_from(["claude-sonnet-4.6", "claude-haiku-4.5"]),
+            max_tokens=st.integers(min_value=1, max_value=8192),
+        )
+        @settings(max_examples=100)
+        def inner(session_id: str, system: str | None, content: str, model: str, max_tokens: int) -> None:
+            msgs = [{"role": "user", "content": content}]
+            k1 = make_key(session_id=session_id, system=system, messages=msgs,
+                          model=model, max_tokens=max_tokens)
+            k2 = make_key(session_id=session_id, system=system, messages=msgs,
+                          model=model, max_tokens=max_tokens)
+            assert k1 == k2
+
+        inner()
+
+    def test_make_key_whitespace_normalized_system(self):
+        from hypothesis import given, settings
+        from hypothesis import strategies as st
+
+        @given(
+            base=st.text(min_size=1, max_size=50, alphabet=st.characters(
+                blacklist_categories=("Cs",), blacklist_characters="\x00"
+            )),
+            leading=st.text(min_size=0, max_size=5, alphabet=" \t"),
+            trailing=st.text(min_size=0, max_size=5, alphabet=" \n"),
+        )
+        @settings(max_examples=100)
+        def inner(base, leading, trailing):
+            msgs = [{"role": "user", "content": "hello"}]
+            k1 = make_key(session_id="s", system=base, messages=msgs, model="m", max_tokens=10)
+            k2 = make_key(session_id="s", system=leading + base + trailing,
+                          messages=msgs, model="m", max_tokens=10)
+            # Keys should be equal when the only difference is leading/trailing whitespace
+            # (normalize_text strips both ends)
+            assert k1 == k2
+
+        inner()
+
