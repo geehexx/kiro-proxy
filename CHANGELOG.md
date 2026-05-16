@@ -6,6 +6,210 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Bug Fixes
 
+- **models**: Add tool_reference content block support (#90)
+- Disable AUTO_TRIM_PAYLOAD by default (#73)
+- **anthropic**: Accurate token estimation for Anthropic API path (#135)
+- **streaming**: Enable retry mechanism and return correct finish_reason on truncation (#113)
+- **auth**: Preserve unknown fields in SQLite write-back (#131)
+- **docker**: Mount kiro-cli volume as rw and exclude .cache from image (#97)
+- **auth**: Truncate nanoseconds in SQLite expires_at parsing (#78)
+- **auth**: Remove duplicate re import
+- **streaming**: Import stream_with_first_token_retry_anthropic in routes_anthropic (#138)
+- **docker**: Exclude credentials.json and state.json from image
+- **ci**: Remove test artifacts before Docker build
+- **docker**: Remove runtime files from image build
+- **docker**: Remove read-only credentials.json before writing
+- **docker**: Grant write permissions to /app for kiro user
+- **main**: Correct indentation for credentials.json save block
+- **cli**: Parse arguments before config validation for --version support
+- **cache**: Correct make_key to include trailing turn; rename PrefixCache -> ResponseCache
+- **cache**: Rename PREFIX_CACHE_* imports to RESPONSE_CACHE_* (INT-73)
+- **cache,retry,dedup**: Correctness and robustness fixes
+- **config**: Revert pyrightconfig.json venvPath to relative path
+- **lint,docs**: Address remaining bot review comments
+- **retry**: Add Retry-After respect and jitter to 429 backoff
+- **retry**: Add 409 handling with exponential backoff
+- **correctness**: Address new CodeRabbit Major findings
+- **types,tests**: PEP 585 generics + correct flaky backoff test
+- **async**: Offload _save_state disk IO to thread executor
+- **accounts**: Guard Optional.attr deref in account_manager
+- **config**: Update FALLBACK_MODELS with correct context windows for Opus 4.7 + Sonnet 4.6
+- **config**: Add Opus 4.6 to FALLBACK_MODELS with 1M context window
+- Apply upstream PR #158/#163 — tool write failures + thinking injection
+- **model-resolver**: Strip [1m] bracket suffixes + add shorthand aliases
+- **routes**: Move _re2_active before cache lookup, fix NameError on cache hits
+- **openai**: Remove placeholder reference from mock organizations endpoint
+- **telemetry**: Add logfire[fastapi,httpx] extras to requirements.txt
+- **baselines**: Extract token usage from streaming SSE in both dispatch paths
+- **telemetry**: Count tool input JSON in output_tokens for tool_use responses
+- **models**: Remove deprecated claude-sonnet-4 (4.0) from fallback list
+- **models**: Hide deprecated claude-sonnet-4 from /v1/models endpoint
+- **re2**: Only skip RE2 when thinking.type='enabled', not 'adaptive'
+- **re2**: Apply RE2 to long conversations even with short last message
+- **re2**: Inject into last user message with text, not just last user message
+- **re2**: Keep _re2_active=True when injection applied to earlier message
+- **oss**: Make User-Agent configurable, redact personal Logfire URL
+- **oss**: Fix ruff lint issues in complexity_classifier and in_flight_dedup
+- **telemetry**: Suppress test spans, add complexity_label+dedup_hit to Logfire
+- **tests**: Sort imports in test_capacity_circuit_breaker.py (ruff I001) (#3)
+- **lint**: Add missing Any import to routes_anthropic typing imports
+- **tests**: Resolve RuntimeWarning for unawaited coroutine in test_429_triggers_backoff
+- **health**: Disambiguate account ids with parent-dir prefix (#8)
+
+### CI/CD
+
+- **docker**: Replace runtime tests with structure tests
+
+### Documentation
+
+- **models**: Add DeepSeek-V3.2, MiniMax M2.1, Qwen3-Coder-Next
+- Add payload size guard settings to .env.example (#73)
+- Update funding links
+- **agents**: Add feature parity and reverse engineering context
+- Enforce consistency and quality standards
+- **limiter**: Explain why streaming path is unwired
+- **cache**: Add STREAM_CACHE_ENABLED to .env.example + streaming cache tests
+- **re2**: Document RE2_ENABLED and RE2_INJECTION in .env.example
+- **re2**: Document proxy-level tradeoff vs canonical optillm formulation
+- Add ARCHITECTURE.md, CONTRIBUTING.md, TROUBLESHOOTING.md for OSS readiness
+- **env**: Add KIRO_USER_AGENT to .env.example
+- Generate CHANGELOG.md from git history via git-cliff
+- **claude**: Add CLAUDE.md + .claude/CLAUDE.md for peer-agent bootstrap
+
+### Features
+
+- Payload size guard with pre-flight check and auto-trim (#73)
+- **thinking**: Add client thinking budget support for OpenAI and Anthropic APIs (#111)
+- **websearch**: Add MCP tool emulation support (#101)
+- **auth**: Auto-detect API region from credentials (#132, #133)
+- **account-system**: Add multi-account support with failover (#93)
+- **anthropic**: Add /v1/messages/count_tokens endpoint
+- **cache**: Add in-memory prefix cache module + 31 unit tests
+- **cache**: Wire prefix cache singleton into app.state
+- **cache**: In-flight request deduplication (Layer A)
+- **gateway**: Humanised model naming + usage parity with Anthropic spec
+- **cache**: Wire response cache into /v1/messages non-streaming path (INT-68)
+- **dedup**: Instantiate InFlightDedup singleton on app.state
+- **gateway**: Log msg_id + response_model on /v1/messages completion
+- **limiter**: Add SessionLimiter — per-session concurrency cap (unwired)
+- **limiter**: Add acquire_slot() for streaming lifetimes
+- **limiter**: Instantiate SessionLimiter on app.state (unwired)
+- **limiter**: Wire SessionLimiter into non-streaming dispatch (flag-gated)
+- **baselines**: Add BaselinesWriter — async JSONL telemetry emitter (#2)
+- **gateway**: Emit per-request baselines to gateway-requests.jsonl (#4)
+- **gateway**: Emit streaming baselines — 100% of /v1/messages coverage (#6)
+- **model_display**: Per-version descriptions differentiate Opus tiers
+- **429**: Capacity-aware backoff, telemetry fields, global Opus cap
+- **429**: Capacity-aware backoff, telemetry fields, global Opus cap
+- **gateway**: Strip web_search from sub-agent requests to prevent SDK 422
+- **gateway**: Strip web_search from sub-agent requests (SDK 422 prevention)
+- **baselines**: Extract token usage from streaming message_delta events
+- **streaming-cache**: Add streaming response cache infrastructure
+- **re2**: Add ReRead injection — OptiLLM technique for improved reasoning
+- **openai**: Add mock /api/organizations endpoint for Claude Code CLI
+- **cache**: Add disk persistence + fix re2 cache key ordering
+- **re2**: Add eligibility rules — skip for tool_result-only + short requests
+- **re2**: Add eligibility filter — skip haiku, tool_result-only, sub-agents
+- **telemetry**: Add logfire instrumentation with cost tracking
+- **debug**: Add debug_capture module + fix pre-existing test failures
+- **debug**: Add rotate mode for per-request log corpus collection
+- **telemetry**: Filter low-token Logfire spans to reduce sub-agent noise
+- **re2**: Add RE2_MIN_CHARS and RE2_SKIP_EXTENDED_THINKING guards
+- **betas**: Strip unsupported Anthropic betas before upstream dispatch
+- **dedup**: Wire in_flight_dedup for non-streaming requests
+- **classifier**: Add complexity classifier for adaptive RE2 + thinking budget
+- **telemetry**: Add complexity_label to baseline records
+- **telemetry**: Add dedup_hit to baselines, cache key normalization, health stats
+- **ci**: Add GitHub Actions CI workflow + property-based tests
+- **telemetry**: Normalize model names in OpenAI route for consistent baselines
+- **telemetry**: Capture response_model from SSE for routing audit
+- **models**: Add context_window to /v1/models response (#4)
+- **account_manager**: W3-1 multi-account sticky routing + demotion + telemetry (#5)
+- **cache**: Per-type stats — streaming vs non-streaming hits/misses (#10)
+- **retry**: Body-content retry classifier (Pattern 3 backport) (#12)
+- **retry**: Adaptive token-bucket pacing — amazon-q-cli backport (#11)
+- **stream**: Per-chunk stalled-stream protection (Pattern 5 backport) (#13)
+- **routes**: Preserve client model name in response (auto-compact fix) (#16)
+- **retry**: Wire body-content classifier into http_client (replaces #14) (#17)
+- **account_manager**: Defer init to first request, prevent boot-DNS-race trip (#7)
+- **openai**: Add RE2 injection and complexity classification to OpenAI route (#18)
+
+### Maintenance
+
+- **cla**: Update contributors
+- **cla**: Update contributors
+- **cla**: Update contributors
+- **contributors**: Recognize core contributors
+- **cla**: Update contributors
+- Add license headers and update contributors (#73)
+- **cla**: Update contributors
+- **cla**: Update contributors
+- Improve code documentation and remove unnecessary type counting (#135)
+- **cla**: Update contributors
+- **cla**: Update contributors
+- **contributors**: Update list
+- **cla**: Update list
+- Bump version to 2.4-dev.10
+- **contributors**: Update list
+- **cla**: Update list
+- **cla**: Update list
+- **i18n**: Translate Russian comments and docstrings to English
+- **lsp**: Add pyrightconfig.json to bind .venv for editor diagnostics
+- **tooling**: Add lefthook + ruff config + dev deps (fix INT-73 lane)
+- **pyright**: Bind .venv via root pyrightconfig — 0 missing-imports
+- **ruff**: Remove pre-existing F401 + I001 in tests/ (#3)
+- **baselines**: Rename upstream_ms_first_token → upstream_ms_total (#5)
+- Add HANDOFF.md to .gitignore
+- Fix HANDOFF.md gitignore pattern (was only matching htmlcov/)
+- **oss**: Bandit nosec annotations, ruff complexity config, import cleanup
+- **release**: Add commitizen config for conventional commit enforcement
+- Add .mcp.json and .claude/settings.json
+- Add CodeRabbit config for PR review automation
+- Add bandit and gitleaks pre-commit hooks to lefthook
+- **ci**: Switch ci.yml + docker.yml to workflow_dispatch only (#15)
+- **lint**: Fix import sort order in 3 test files (ruff I001)
+
+### Performance
+
+- **http**: Enable HTTP/2 + extend keepalive to 120s
+- **http**: Remove Connection: close header — HTTP/2 handles connection lifecycle
+
+### Refactoring
+
+- **payload-guard**: Improve trim logging message
+- **telemetry**: Redesign logfire spans with hierarchy + truncation
+- **re2**: Replace _re2_eligible() with complexity classifier
+
+### Styling
+
+- Strip trailing whitespace, fix pre-existing lint violations
+- **types**: Modernize deprecated typing imports (partial)
+
+### Testing
+
+- **account-system**: Add comprehensive test suite and fix critical bugs (#93)
+- **cache**: Property tests for cache correctness (5 hypothesis tests)
+- **gateway**: Add PBT coverage for tokenizer + live smoke suite
+- **dedup**: Add cancellation test for in_flight_dedup coalesce()
+- Add thinking cache key regression + fix account stats assertions
+- **regression**: Add stream cache format and capacity 429 regression tests
+- **backcompat**: Add complexity_label forward/backward compat tests
+- **emit**: Add complexity_label emit tests
+- **property**: Add 3 more property tests for complexity classifier
+- **telemetry**: Add 19 unit tests for _trunc, _cost_usd, setup_logfire, record_request, record_model_resolution
+- **utils**: Add 14 unit tests for utils.py — fingerprint, IDs, conversation stability
+- **classifier**: Add 7 Layer 2 tests for token count, conversation length, code blocks, keywords
+- **http**: Add 409 retry and VPN proxy tests for http_client.py
+- **routes**: Add 13 error handling tests for validation edge cases
+- **debug_capture**: Add 27 unit tests covering capture, redaction, prune
+- **telemetry**: Add 25 tests covering spans, emitters, and routing-mismatch path
+- **w3-5**: Add web search quality regression test
+- **integration**: E2 account failover MTTR chaos test
+
+## [Unreleased]
+
+### Bug Fixes
+
 - **routes**: Fast circuit-breaker for `INSUFFICIENT_MODEL_CAPACITY` 429s — fail
   immediately with 503 + `Retry-After: 60` + `X-Kiro-Capacity-Exhausted: <model>`
   header instead of cycling accounts. Cycling accounts doesn't help when the model
