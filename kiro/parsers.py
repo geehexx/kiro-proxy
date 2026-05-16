@@ -296,6 +296,7 @@ class AwsEventStreamParser:
 
             try:
                 data = json.loads(json_str)
+                assert earliest_type is not None  # set when earliest_pos != -1
                 event = self._process_event(data, earliest_type)
                 if event:
                     events.append(event)

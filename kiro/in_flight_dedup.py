@@ -65,6 +65,7 @@ class InFlightDedup:
                 misses_branch = True
 
         if not misses_branch:
+            assert existing_future is not None  # set when misses_branch is False
             return await existing_future
 
         try:

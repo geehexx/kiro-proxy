@@ -425,10 +425,7 @@ FIRST_TOKEN_MAX_RETRIES: int = int(os.getenv("FIRST_TOKEN_MAX_RETRIES", "3"))
 # - rotate: save logs for every request in timestamped subdirectories (corpus collection)
 _DEBUG_MODE_RAW: str = os.getenv("DEBUG_MODE", "").lower()
 
-if _DEBUG_MODE_RAW in ("off", "errors", "all", "rotate"):
-    DEBUG_MODE: str = _DEBUG_MODE_RAW
-else:
-    DEBUG_MODE: str = "off"
+DEBUG_MODE: str = _DEBUG_MODE_RAW if _DEBUG_MODE_RAW in ("off", "errors", "all", "rotate") else "off"
 
 # Directory for debug log files
 DEBUG_DIR: str = os.getenv("DEBUG_DIR", "debug_logs")
@@ -524,10 +521,7 @@ FAKE_REASONING_BUDGET_CAP: int = int(os.getenv("FAKE_REASONING_BUDGET_CAP", "100
 #
 # Default: "as_reasoning_content"
 _FAKE_REASONING_HANDLING_RAW: str = os.getenv("FAKE_REASONING_HANDLING", "as_reasoning_content").lower()
-if _FAKE_REASONING_HANDLING_RAW in ("as_reasoning_content", "remove", "pass", "strip_tags"):
-    FAKE_REASONING_HANDLING: str = _FAKE_REASONING_HANDLING_RAW
-else:
-    FAKE_REASONING_HANDLING: str = "as_reasoning_content"
+FAKE_REASONING_HANDLING: str = _FAKE_REASONING_HANDLING_RAW if _FAKE_REASONING_HANDLING_RAW in ("as_reasoning_content", "remove", "pass", "strip_tags") else "as_reasoning_content"
 
 # List of opening tags to detect thinking blocks.
 # The parser will look for any of these tags at the start of the response.

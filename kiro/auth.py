@@ -425,7 +425,7 @@ class KiroAuthManager:
             # Load clientIdHash and device registration for Enterprise Kiro IDE
             if 'clientIdHash' in data:
                 self._client_id_hash = data['clientIdHash']
-                self._load_enterprise_device_registration(self._client_id_hash)
+                self._load_enterprise_device_registration(self._client_id_hash or "")
 
             # Load AWS SSO OIDC specific fields (if directly in credentials file)
             if 'clientId' in data:
@@ -939,6 +939,7 @@ class KiroAuthManager:
         """
         async with self._lock:
             await self._refresh_token_request()
+            assert self._access_token is not None, "access token not set after refresh"
             return self._access_token
 
     @property
