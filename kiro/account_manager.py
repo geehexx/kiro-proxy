@@ -63,6 +63,37 @@ from kiro.http_client import KiroHttpClient
 from kiro.model_resolver import ModelResolver, normalize_model_name
 
 
+def _short_account_id(account_id: str) -> str:
+    """Return a short but unique-by-default human-readable account id.
+
+    Previously the /health endpoint truncated `account_id[-16:]`. For
+    paths like `~/.aws/sso/cache/kiro-auth-token.json` and
+    `~/.aws/sso/cache/kiro-accounts/<acct>/kiro-auth-token.json` the last
+    16 chars are both `-auth-token.json` — collision.
+
+    Strategy:
+      - For credential files, include the parent directory name so two
+        files named `kiro-auth-token.json` in different folders are
+        disambiguated.
+      - For refresh_token-style ids that already have shape
+        `refresh_token_<hex>`, return as-is (already unique).
+      - Length cap: 40 chars (truncate from the LEFT to preserve the
+        unique tail).
+    """
+    if account_id.startswith("refresh_token_"):
+        return account_id
+
+    parts = account_id.rsplit("/", 2)
+    if len(parts) >= 2:
+        short = "/".join(parts[-2:])
+    else:
+        short = parts[-1]
+
+    if len(short) > 40:
+        short = "…" + short[-39:]
+    return short
+
+
 def _format_duration(seconds: float) -> str:
     """
     Format duration in human-readable format.
@@ -414,7 +445,7 @@ class AccountManager:
                     await self._save_state()
                     self._dirty = False
 
-    async def _initialize_account(self, account_id: str) -> bool:  # noqa: C901, PLR0912, PLR0915
+    async def _initialize_account(self, account_id: str, *, quiet: bool = False) -> bool:  # noqa: C901, PLR0912, PLR0915
         """
         Initialize account (lazy initialization).
 
@@ -422,6 +453,10 @@ class AccountManager:
 
         Args:
             account_id: Account ID to initialize
+            quiet: When True, suppress ERROR-level logs and skip the
+                FALLBACK_MODELS recovery for transient failures. Used by
+                the warm-up loop where DNS-not-ready is expected at boot.
+                Default False — real-request callers keep full behaviour.
 
         Returns:
             True if successful, False otherwise
@@ -509,7 +544,13 @@ class AccountManager:
                     raise Exception(f"HTTP {response.status_code}")
 
             except Exception as e:
-                # All retries exhausted - use fallback
+                # All retries exhausted. In quiet mode (warm-up probe at
+                # boot) this is expected — log DEBUG and bail out so the
+                # warm-up loop tries again later. In normal mode, fall back
+                # to pre-configured models so the proxy stays usable.
+                if quiet:
+                    logger.debug(f"Warm-up probe for {account_id} failed: {e}")
+                    return False
                 logger.error(f"Failed to fetch models for {account_id} after retries: {e}")
                 logger.warning("Using pre-configured fallback models. Models will be refreshed on next TTL cycle when network recovers.")
                 models_list = FALLBACK_MODELS
@@ -552,8 +593,56 @@ class AccountManager:
             return True
 
         except Exception as e:
-            logger.error(f"Failed to initialize account {account_id}: {e}")
+            if quiet:
+                logger.debug(f"Warm-up probe failed for {account_id}: {e}")
+            else:
+                logger.error(f"Failed to initialize account {account_id}: {e}")
             return False
+
+    async def warm_up_uninitialized_accounts(
+        self,
+        *,
+        interval_seconds: float = 30.0,
+        max_attempts: int = 0,
+    ) -> None:
+        """
+        Background warm-up: probe uninitialised accounts every ``interval_seconds``.
+
+        Designed for the gateway boot path: lifespan() schedules this task
+        instead of calling ``_initialize_account`` eagerly. If DNS / AWS SSO
+        is reachable, accounts initialise within the first interval; if not,
+        the loop retries without tripping the circuit breaker (``quiet=True``).
+        The loop exits once every account has ``auth_manager is not None``,
+        so it self-terminates on success.
+
+        Args:
+            interval_seconds: Seconds between probe rounds. Default 30s.
+            max_attempts: 0 = unlimited (default; loop ends naturally when
+                all accounts are initialised). Positive = stop after N rounds.
+        """
+        attempts = 0
+        while True:
+            pending = [
+                aid for aid, account in self._accounts.items()
+                if account.auth_manager is None
+            ]
+            if not pending:
+                logger.info("All accounts initialised; warm-up loop exiting")
+                return
+            for account_id in pending:
+                ok = await self._initialize_account(account_id, quiet=True)
+                if ok:
+                    logger.info(f"Warm-up initialised account: {account_id}")
+                    self._dirty = True
+            attempts += 1
+            if max_attempts and attempts >= max_attempts:
+                logger.warning(
+                    f"Warm-up loop reached max_attempts={max_attempts}; "
+                    f"some accounts still uninitialised — they will "
+                    f"be initialised lazily on first request"
+                )
+                return
+            await asyncio.sleep(interval_seconds)
 
     async def _refresh_account_models(self, account_id: str) -> None:
         """
@@ -868,7 +957,7 @@ class AccountManager:
                         cb_state = "half-open"
 
                 result.append({
-                    "id": account_id[-16:],
+                    "id": _short_account_id(account_id),
                     "cb_state": cb_state,
                     "failures": account.failures,
                     "demoted_remaining_s": round(demoted_remaining),
