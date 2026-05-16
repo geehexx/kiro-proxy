@@ -795,6 +795,11 @@ RE2_MIN_CHARS: int = int(os.getenv("RE2_MIN_CHARS", "32"))
 # Skip re2 when extended thinking is active — arxiv 2512.14982 shows re2 is
 # neutral-to-negative when the model is already in reasoning mode.
 RE2_SKIP_EXTENDED_THINKING: bool = _parse_bool_env("RE2_SKIP_EXTENDED_THINKING", default=True)
+# A/B sampling rate for RE2 injection (0.0–1.0).
+# 1.0 = inject on all eligible requests (default); 0.5 = inject on ~50%.
+# When a request is sampled OUT, re2_applied=False is recorded in baselines
+# so cache-hit-rate impact can be measured across the two arms.
+RE2_AB_SAMPLE_RATE: float = float(os.getenv("RE2_AB_SAMPLE_RATE", "1.0"))
 
 # ==================================================================================================
 # Logfire / OpenTelemetry Observability

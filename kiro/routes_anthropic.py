@@ -36,6 +36,7 @@ from kiro.auth import AuthType
 from kiro.config import (
     GATEWAY_SUBAGENT_STRIP_WEB_SEARCH,
     PROXY_API_KEY,
+    RE2_AB_SAMPLE_RATE,
     RE2_ENABLED,
     RE2_INJECTION,
     RE2_MIN_MESSAGES,
@@ -464,7 +465,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                     modified_messages.append(msg)
                     # Then add synthetic user message about truncation
                     synthetic_user_msg = AnthropicMessage(
-                        role="user", content=[{"type": "text", "text": generate_truncation_user_message()}]
+                        role="user", content=[{"type": "text", "text": generate_truncation_user_message()}]  # type: ignore[arg-type]
                     )
                     modified_messages.append(synthetic_user_msg)
                     content_notices_added += 1
@@ -498,10 +499,18 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
         model=request_data.model,
         messages=[m.model_dump() for m in request_data.messages],
         thinking=request_data.thinking,
-        tool_choice=request_data.tool_choice.model_dump() if hasattr(request_data.tool_choice, "model_dump") else request_data.tool_choice,
+        tool_choice=request_data.tool_choice.model_dump() if hasattr(request_data.tool_choice, "model_dump") else request_data.tool_choice,  # type: ignore[union-attr]
         is_subagent=_is_subagent,
     )
     _re2_active = (RE2_ENABLED or request.headers.get("x-kiro-re2", "").lower() == "true") and _complexity.re2_eligible
+
+    # A/B sampling: down-sample RE2 injection to measure cache-hit-rate impact.
+    # RE2_AB_SAMPLE_RATE=1.0 (default) keeps all eligible requests; 0.5 keeps ~50%.
+    if _re2_active and RE2_AB_SAMPLE_RATE < 1.0:
+        import random as _random
+        if _random.random() >= RE2_AB_SAMPLE_RATE:
+            _re2_active = False
+            logger.debug(f"Re2 A/B sampled out (rate={RE2_AB_SAMPLE_RATE})")
 
     # ==============================================================================
     # Response cache lookup — runs AFTER truncation recovery but BEFORE re2
@@ -513,7 +522,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
         messages_for_cache = [msg.model_dump() for msg in request_data.messages]
         tools_for_cache = [tool.model_dump() for tool in request_data.tools] if request_data.tools else None
         if isinstance(request_data.system, list):
-            system_for_cache = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]
+            system_for_cache = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]  # type: ignore[union-attr]
         else:
             system_for_cache = request_data.system
 
@@ -731,9 +740,9 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                     if _btype == "text":
                         _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
                         if isinstance(_block, dict):
-                            _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
+                            _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}  # type: ignore[assignment, operator]
                         else:
-                            _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
+                            _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})  # type: ignore[operator]
                         break
                 request_data.messages[_re2_target_idx] = _msg.model_copy(update={"content": _new_content})
             # _re2_active stays True — injection was applied (telemetry will record it correctly)
@@ -855,7 +864,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
             messages_for_tokenizer = [msg.model_dump() for msg in request_data.messages]
             tools_for_tokenizer = [tool.model_dump() for tool in request_data.tools] if request_data.tools else None
             if isinstance(request_data.system, list):
-                system_for_tokenizer = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]
+                system_for_tokenizer = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]  # type: ignore[union-attr]
             else:
                 system_for_tokenizer = request_data.system
 
@@ -883,7 +892,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                     return await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
 
                                 async for chunk in stream_with_first_token_retry_anthropic(
-                                    make_request=make_retry_request,
+                                    make_request=make_retry_request,  # type: ignore[misc]
                                     model=_resolved_model,  # use normalized name for stable cache keys
                                     model_cache=model_cache,
                                     auth_manager=auth_manager,
@@ -939,7 +948,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                         if stored:
                                             logger.debug(
                                                 f"stream-cache stored key={cache_key[:8]} "
-                                                f"entries={response_cache.stats()['entries']}"
+                                                f"entries={response_cache.stats()['entries']}"  # type: ignore[union-attr]
                                             )
 
                                 # Emit streaming baseline with token data extracted from SSE events
@@ -971,7 +980,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                         debug_logger.discard_buffers()
 
                         return StreamingResponse(
-                            stream_wrapper(),
+                            stream_wrapper(),  # type: ignore[misc]
                             media_type="text/event-stream",
                             headers={
                                 "Cache-Control": "no-cache",
@@ -982,7 +991,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                     else:
                         # Non-streaming mode
                         if limiter_active:
-                            async with session_limiter.acquire(session_id):
+                            async with session_limiter.acquire(session_id):  # type: ignore[union-attr]
                                 anthropic_response = await collect_anthropic_response(
                                     response,
                                     request_data.model,
@@ -1174,7 +1183,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
             # Single account - return its original error
             # last_error_status and last_error_message are guaranteed to be set
             return JSONResponse(
-                status_code=last_error_status,
+                status_code=last_error_status,  # type: ignore[arg-type]
                 content={"type": "error", "error": {"type": "api_error", "message": last_error_message}},
             )
         else:
@@ -1254,7 +1263,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
     tools_for_tokenizer = [tool.model_dump() for tool in request_data.tools] if request_data.tools else None
     # Serialize system prompt (may be a list of Pydantic objects)
     if isinstance(request_data.system, list):
-        system_for_tokenizer = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]
+        system_for_tokenizer = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]  # type: ignore[union-attr]
     else:
         system_for_tokenizer = request_data.system
 
@@ -1273,7 +1282,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
             if _resp.status_code != 200:
                 return _resp, _ms
             if limiter_active:
-                async with session_limiter.acquire(session_id):
+                async with session_limiter.acquire(session_id):  # type: ignore[union-attr]
                     _body = await collect_anthropic_response(
                         _resp, request_data.model, model_cache, auth_manager,
                         request_messages=messages_for_tokenizer,
@@ -1300,7 +1309,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
         ):
             _dedup_hits_before = in_flight_dedup.hits
             _dedup_result, _upstream_ms_total = await in_flight_dedup.coalesce(
-                cache_key, _do_upstream_non_streaming
+                cache_key, _do_upstream_non_streaming  # type: ignore[misc]
             )
             _was_dedup_hit = in_flight_dedup.hits > _dedup_hits_before
             # If result is an httpx.Response (error), fall through to error handling
@@ -1311,7 +1320,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
             else:
                 # Success — _dedup_result is the anthropic_response dict
                 anthropic_response = _dedup_result
-                await account_manager.report_success(account.id, request_data.model, sticky_key=_sticky_key)
+                await account_manager.report_success(account.id, request_data.model, sticky_key=_sticky_key)  # type: ignore[reportUnboundVariable]
                 logger.info(
                     "HTTP 200 - POST /v1/messages (non-streaming) - completed "
                     f"msg_id={anthropic_response.get('id', 'unknown')} "
@@ -1493,7 +1502,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                             if stored:
                                 logger.debug(
                                     f"stream-cache stored key={cache_key[:8]} "
-                                    f"entries={response_cache.stats()['entries']}"
+                                    f"entries={response_cache.stats()['entries']}"  # type: ignore[union-attr]
                                 )
 
                     # Emit streaming baseline with token data extracted from SSE events
@@ -1536,7 +1545,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
         else:
             # Non-streaming mode - collect entire response
             if limiter_active:
-                async with session_limiter.acquire(session_id):
+                async with session_limiter.acquire(session_id):  # type: ignore[union-attr]
                     anthropic_response = await collect_anthropic_response(
                         response,
                         request_data.model,
@@ -1659,7 +1668,7 @@ async def count_tokens_endpoint(
 
     # Handle system prompt (can be string or list of content blocks)
     if isinstance(request_data.system, list):
-        system_for_tokenizer = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]
+        system_for_tokenizer = [b.model_dump() if hasattr(b, "model_dump") else b for b in request_data.system]  # type: ignore[union-attr]
     else:
         system_for_tokenizer = request_data.system
 
