@@ -382,6 +382,9 @@ class TestLifespanAccountManagerInit:
             async def save_state_periodically(self):
                 await asyncio.sleep(1000)
 
+            async def warm_up_uninitialized_accounts(self, *, interval_seconds=30.0, max_attempts=0):
+                await asyncio.sleep(1000)
+
         with patch("main.AccountManager", MockAccountManager):
             with patch("main.httpx.AsyncClient") as mock_client_class:
                 mock_client = AsyncMock()
@@ -497,119 +500,6 @@ class TestLifespanAccountManagerInit:
                     print(f"✓ app.state.account_system = {app.state.account_system}")
 
     @pytest.mark.asyncio
-    async def test_lifespan_initialize_first_working_account(self, tmp_path, monkeypatch):
-        """
-        Test 100: Initialise the first working account
-
-        What it does: Verifies first working account is initialized at startup
-        Purpose: Ensure at least one account is ready before accepting requests
-        """
-        print("\n=== Test 100: Initialize first working account ===")
-
-        # Arrange: Patch constants
-        monkeypatch.setattr("main.ACCOUNT_SYSTEM", True)
-        monkeypatch.setattr("main.REFRESH_TOKEN", "test_token")
-        monkeypatch.setattr("main.KIRO_CREDS_FILE", None)
-        monkeypatch.setattr("main.KIRO_CLI_DB_FILE", None)
-
-        creds_file = tmp_path / "credentials.json"
-        state_file = tmp_path / "state.json"
-
-        monkeypatch.setattr("main.ACCOUNTS_CONFIG_FILE", str(creds_file))
-        monkeypatch.setattr("main.ACCOUNTS_STATE_FILE", str(state_file))
-
-        initialized_accounts = []
-
-        mock_manager = AsyncMock()
-        mock_manager._accounts = {
-            "account1": MagicMock(),
-            "account2": MagicMock()
-        }
-        mock_manager._sticky_map = {}
-
-        async def track_initialize(account_id):
-            initialized_accounts.append(account_id)
-            return True  # Success on first account
-
-        mock_manager._initialize_account = track_initialize
-        mock_manager._save_state = AsyncMock()
-        mock_manager.save_state_periodically = AsyncMock()
-
-        with patch("main.AccountManager", return_value=mock_manager):
-            with patch("main.httpx.AsyncClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_client_class.return_value = mock_client
-
-                from main import app, lifespan
-
-                async with lifespan(app):
-                    pass
-
-        # Assert: only first account was initialized
-        print(f"Initialized accounts: {initialized_accounts}")
-        assert len(initialized_accounts) == 1
-        assert initialized_accounts[0] == "account1"
-        print("✓ First working account was initialized")
-
-    @pytest.mark.asyncio
-    async def test_lifespan_full_circle_initialization(self, tmp_path, monkeypatch):
-        """
-        Test 101: Attempt initialisation of all accounts in round-robin order
-
-        What it does: Verifies full circle attempt if first accounts fail
-        Purpose: Ensure all accounts are tried before giving up
-        """
-        print("\n=== Test 101: Full circle initialization attempt ===")
-
-        # Arrange: Patch constants
-        monkeypatch.setattr("main.ACCOUNT_SYSTEM", True)
-        monkeypatch.setattr("main.REFRESH_TOKEN", "test_token")
-        monkeypatch.setattr("main.KIRO_CREDS_FILE", None)
-        monkeypatch.setattr("main.KIRO_CLI_DB_FILE", None)
-
-        creds_file = tmp_path / "credentials.json"
-        state_file = tmp_path / "state.json"
-
-        monkeypatch.setattr("main.ACCOUNTS_CONFIG_FILE", str(creds_file))
-        monkeypatch.setattr("main.ACCOUNTS_STATE_FILE", str(state_file))
-
-        initialized_attempts = []
-
-        mock_manager = AsyncMock()
-        mock_manager._accounts = {
-            "account1": MagicMock(),
-            "account2": MagicMock(),
-            "account3": MagicMock()
-        }
-        mock_manager._sticky_map = {}
-
-        async def track_initialize(account_id):
-            initialized_attempts.append(account_id)
-            # First two fail, third succeeds
-            if account_id == "account3":
-                return True
-            return False
-
-        mock_manager._initialize_account = track_initialize
-        mock_manager._save_state = AsyncMock()
-        mock_manager.save_state_periodically = AsyncMock()
-
-        with patch("main.AccountManager", return_value=mock_manager):
-            with patch("main.httpx.AsyncClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_client_class.return_value = mock_client
-
-                from main import app, lifespan
-
-                async with lifespan(app):
-                    pass
-
-        # Assert: all three accounts were tried
-        print(f"Initialization attempts: {initialized_attempts}")
-        assert initialized_attempts == ["account1", "account2", "account3"]
-        print("✓ Full circle initialization was attempted")
-
-    @pytest.mark.asyncio
     async def test_lifespan_exit_if_no_accounts(self, tmp_path, monkeypatch):
         """
         Test 102: RuntimeError when no accounts are present in credentials.json
@@ -650,16 +540,16 @@ class TestLifespanAccountManagerInit:
                 print("✓ RuntimeError was raised for empty accounts")
 
     @pytest.mark.asyncio
-    async def test_lifespan_exit_if_all_failed(self, tmp_path, monkeypatch):
+    async def test_lifespan_no_eager_init(self, tmp_path, monkeypatch):
         """
-        Test 103: RuntimeError when all accounts failed to initialise
+        Test 100b: lifespan() must NOT call _initialize_account eagerly.
 
-        What it does: Verifies application raises RuntimeError if all accounts fail to initialize
-        Purpose: Prevent startup without any working accounts
+        What it does: tracks every _initialize_account call during startup
+        Purpose: lazy-init contract — accounts initialise on first request,
+                 not at boot. Closes the 2026-05-16 boot-DNS-race regression.
         """
-        print("\n=== Test 103: RuntimeError if all accounts failed ===")
+        print("\n=== Test 100b: lifespan() does no eager _initialize_account ===")
 
-        # Arrange: Patch constants
         monkeypatch.setattr("main.ACCOUNT_SYSTEM", True)
         monkeypatch.setattr("main.REFRESH_TOKEN", "test_token")
         monkeypatch.setattr("main.KIRO_CREDS_FILE", None)
@@ -667,31 +557,85 @@ class TestLifespanAccountManagerInit:
 
         creds_file = tmp_path / "credentials.json"
         state_file = tmp_path / "state.json"
-
         monkeypatch.setattr("main.ACCOUNTS_CONFIG_FILE", str(creds_file))
         monkeypatch.setattr("main.ACCOUNTS_STATE_FILE", str(state_file))
 
+        eager_init_calls = []
+
         mock_manager = AsyncMock()
-        mock_manager._accounts = {
-            "account1": MagicMock(),
-            "account2": MagicMock()
-        }
+        mock_manager._accounts = {"a1": MagicMock(), "a2": MagicMock()}
         mock_manager._sticky_map = {}
-        mock_manager._initialize_account = AsyncMock(return_value=False)  # All fail
+
+        async def track_init(account_id, *, quiet=False):
+            eager_init_calls.append((account_id, quiet))
+            return True
+
+        mock_manager._initialize_account = track_init
+        mock_manager._save_state = AsyncMock()
+        mock_manager.save_state_periodically = AsyncMock()
+
+        async def warmup_loop(*args, **kwargs):
+            await asyncio.sleep(1000)
+        mock_manager.warm_up_uninitialized_accounts = warmup_loop
 
         with patch("main.AccountManager", return_value=mock_manager):
             with patch("main.httpx.AsyncClient") as mock_client_class:
-                mock_client = AsyncMock()
-                mock_client_class.return_value = mock_client
-
+                mock_client_class.return_value = AsyncMock()
                 from main import app, lifespan
+                async with lifespan(app):
+                    pass
 
-                # Assert: RuntimeError is raised
-                with pytest.raises(RuntimeError, match="Failed to initialize any account"):
-                    async with lifespan(app):
-                        pass
+        eager = [c for c in eager_init_calls if c[1] is False]
+        print(f"Eager (quiet=False) init calls: {eager}")
+        assert eager == [], f"unexpected eager init calls: {eager}"
+        print("✓ No eager _initialize_account calls during lifespan")
 
-                print("✓ RuntimeError was raised when all accounts failed")
+    @pytest.mark.asyncio
+    async def test_lifespan_warmup_task_started(self, tmp_path, monkeypatch):
+        """
+        Test 100c: lifespan() schedules warm_up_uninitialized_accounts.
+
+        What it does: verifies the warm-up coroutine starts in lifespan()
+        Purpose: lazy-init relies on warm-up to fill the gap between boot and
+                 first request when DNS may be slow at startup.
+        """
+        print("\n=== Test 100c: warm_up_uninitialized_accounts is scheduled ===")
+
+        monkeypatch.setattr("main.ACCOUNT_SYSTEM", True)
+        monkeypatch.setattr("main.REFRESH_TOKEN", "test_token")
+        monkeypatch.setattr("main.KIRO_CREDS_FILE", None)
+        monkeypatch.setattr("main.KIRO_CLI_DB_FILE", None)
+
+        creds_file = tmp_path / "credentials.json"
+        state_file = tmp_path / "state.json"
+        monkeypatch.setattr("main.ACCOUNTS_CONFIG_FILE", str(creds_file))
+        monkeypatch.setattr("main.ACCOUNTS_STATE_FILE", str(state_file))
+
+        warmup_started = False
+
+        mock_manager = AsyncMock()
+        mock_manager._accounts = {"a1": MagicMock()}
+        mock_manager._sticky_map = {}
+        mock_manager._initialize_account = AsyncMock(return_value=True)
+        mock_manager._save_state = AsyncMock()
+        mock_manager.save_state_periodically = AsyncMock()
+
+        async def track_warmup(*args, **kwargs):
+            nonlocal warmup_started
+            warmup_started = True
+            await asyncio.sleep(1000)
+
+        mock_manager.warm_up_uninitialized_accounts = track_warmup
+
+        with patch("main.AccountManager", return_value=mock_manager):
+            with patch("main.httpx.AsyncClient") as mock_client_class:
+                mock_client_class.return_value = AsyncMock()
+                from main import app, lifespan
+                async with lifespan(app):
+                    await asyncio.sleep(0.05)
+                    assert warmup_started is True
+                    print("✓ warm_up_uninitialized_accounts task was started")
+
 
     @pytest.mark.asyncio
     async def test_lifespan_save_initial_state(self, tmp_path, monkeypatch):
