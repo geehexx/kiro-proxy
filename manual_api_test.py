@@ -22,8 +22,8 @@ import os
 import sqlite3
 import sys
 import uuid
-from pathlib import Path
 from enum import Enum
+from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv

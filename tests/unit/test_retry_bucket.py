@@ -14,7 +14,6 @@ import asyncio
 import pytest
 
 from kiro.retry_bucket import (
-    _DEFAULT_CAPACITY,
     _MAX_REFILL_PER_SEC,
     _MIN_REFILL_PER_SEC,
     AdaptiveRetryBucket,

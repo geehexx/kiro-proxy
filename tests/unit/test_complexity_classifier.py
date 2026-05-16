@@ -1,8 +1,6 @@
 """Tests for kiro/complexity_classifier.py"""
 from __future__ import annotations
 
-import pytest
-
 from kiro.complexity_classifier import ComplexityLabel, ComplexityResult, classify_request
 
 

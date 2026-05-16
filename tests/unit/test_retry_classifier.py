@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from kiro.retry_classifier import RetryDecision, RetryKind, classify
+from kiro.retry_classifier import RetryKind, classify
 
 
 def test_status_429_with_no_body_is_throttle():

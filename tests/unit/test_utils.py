@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import uuid
 
-import pytest
-
 from kiro.utils import (
     generate_completion_id,
     generate_conversation_id,
