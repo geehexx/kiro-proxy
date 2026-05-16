@@ -116,3 +116,71 @@ class TestClassifyRequestProperties:
         result = classify_request(model=model, messages=messages)
         assert isinstance(result.reason, str)
         assert len(result.reason) > 0
+
+
+class TestStripNondeterministicProperties:
+    """Property-based tests for the tool_result UUID/timestamp stripping."""
+
+    from kiro.response_cache import _strip_nondeterministic as _strip
+
+    @given(text=_text)
+    @settings(max_examples=200)
+    def test_idempotent(self, text):
+        """Stripping twice produces the same result as stripping once."""
+        from kiro.response_cache import _strip_nondeterministic
+        once = _strip_nondeterministic(text)
+        twice = _strip_nondeterministic(once)
+        assert once == twice
+
+    @given(text=_text)
+    @settings(max_examples=200)
+    def test_no_uuid_in_output(self, text):
+        """Output contains no UUID-shaped strings."""
+        import re
+
+        from kiro.response_cache import _strip_nondeterministic
+        result = _strip_nondeterministic(text)
+        uuid_pattern = re.compile(
+            r'\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b',
+            re.IGNORECASE,
+        )
+        assert not uuid_pattern.search(result), f"UUID found in output: {result[:100]}"
+
+    @given(text=_text)
+    @settings(max_examples=200)
+    def test_output_is_string(self, text):
+        """Output is always a string."""
+        from kiro.response_cache import _strip_nondeterministic
+        result = _strip_nondeterministic(text)
+        assert isinstance(result, str)
+
+    @given(
+        session_id=st.text(min_size=1, max_size=50),
+        model=_model,
+        max_tokens=st.integers(min_value=1, max_value=8192),
+        uuid_val=st.uuids(),
+    )
+    @settings(max_examples=50)
+    def test_tool_result_with_uuid_same_key_as_without(self, session_id, model, max_tokens, uuid_val):
+        """Two requests identical except for UUID in tool_result produce the same cache key."""
+        base_messages = [
+            {"role": "user", "content": "What is the weather?"},
+            {"role": "assistant", "content": [
+                {"type": "tool_use", "id": "tool_1", "name": "get_weather", "input": {"city": "Sydney"}}
+            ]},
+            {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "tool_1", "content": f"Temperature: 22C, request_id: {uuid_val}"}
+            ]},
+        ]
+        variant_messages = [
+            {"role": "user", "content": "What is the weather?"},
+            {"role": "assistant", "content": [
+                {"type": "tool_use", "id": "tool_1", "name": "get_weather", "input": {"city": "Sydney"}}
+            ]},
+            {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "tool_1", "content": "Temperature: 22C, request_id: <uuid>"}
+            ]},
+        ]
+        k1 = make_key(session_id=session_id, system=None, messages=base_messages, model=model, max_tokens=max_tokens)
+        k2 = make_key(session_id=session_id, system=None, messages=variant_messages, model=model, max_tokens=max_tokens)
+        assert k1 == k2, "UUID in tool_result should not affect cache key"
