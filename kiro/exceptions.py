@@ -82,7 +82,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     body_str = body.decode("utf-8", errors="replace")
 
     # Sanitize errors for JSON serialization
-    sanitized_errors = sanitize_validation_errors(exc.errors())
+    sanitized_errors = sanitize_validation_errors(list(exc.errors()))
 
     logger.error(f"Validation error (422): {sanitized_errors}")
     # Log body at DEBUG level to avoid cluttering console with potentially large payloads

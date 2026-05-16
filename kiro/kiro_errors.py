@@ -142,7 +142,7 @@ def enhance_kiro_error(error_json: dict[str, Any]) -> KiroErrorInfo:
             user_message = original_message
 
     return KiroErrorInfo(
-        reason=reason,
+        reason=str(reason) if reason is not None else "UNKNOWN",
         user_message=user_message,
         original_message=original_message,
         retry_after_hint=retry_after_hint,
