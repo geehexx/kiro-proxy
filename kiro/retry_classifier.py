@@ -54,20 +54,24 @@ _THROTTLE_MARKERS: tuple[str, ...] = (
 )
 
 
-def _decode_body(body: bytes | None) -> str:
+def _decode_body(body: bytes | bytearray | None) -> str:
+    """Decode bytes/bytearray. Returns empty string when body is empty/None.
+
+    Strict typing: passing a `str` (or any non-bytes-like) raises TypeError
+    at the `bytes(...)` call below.  This is intentional — see D3 finding:
+    a silent fallthrough on `str` body would misclassify hard-quota errors
+    (MONTHLY_REQUEST_COUNT in a str body) as STANDARD retries.
+    """
     if not body:
         return ""
-    try:
-        return body.decode("utf-8", errors="replace")
-    except (UnicodeDecodeError, AttributeError):
-        return ""
+    return bytes(body).decode("utf-8", errors="replace")
 
 
 def _extract_reason_field(body_str: str) -> str | None:
     """Pull `.reason` out of a JSON body if present, else None."""
     try:
         obj = json.loads(body_str)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, UnicodeDecodeError):
         return None
     if isinstance(obj, dict):
         reason = obj.get("reason")
