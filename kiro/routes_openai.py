@@ -38,6 +38,9 @@ from kiro.auth import AuthType
 from kiro.config import (
     APP_VERSION,
     PROXY_API_KEY,
+    RE2_ENABLED,
+    RE2_INJECTION,
+    RE2_MIN_MESSAGES,
     WEB_SEARCH_ENABLED,
 )
 from kiro.converters_openai import build_kiro_payload
@@ -384,9 +387,71 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
             logger.debug("Auto-injected web_search tool for MCP emulation (Path B)")
     
     # ==============================================================================
+    # RE2 (ReRead) Injection — feature parity with Anthropic route
+    # Opt-in via RE2_ENABLED=true or X-Kiro-Re2: true header.
+    # Uses complexity classifier to determine eligibility.
+    # ==============================================================================
+    from kiro.complexity_classifier import classify_request as _classify_request
+
+    _is_subagent = request.headers.get("x-claude-subagent", "").lower() in ("true", "1", "yes")
+    _messages_for_classifier = [msg.model_dump() for msg in request_data.messages]
+    _complexity = _classify_request(
+        model=request_data.model,
+        messages=_messages_for_classifier,
+        thinking=None,
+        tool_choice=None,
+        is_subagent=_is_subagent,
+    )
+    _re2_active = (
+        (RE2_ENABLED or request.headers.get("x-kiro-re2", "").lower() == "true")
+        and _complexity.re2_eligible
+    )
+
+    if _re2_active and len(request_data.messages) >= RE2_MIN_MESSAGES:
+        _re2_target_idx = None
+        for _i in range(len(request_data.messages) - 1, -1, -1):
+            _msg = request_data.messages[_i]
+            if _msg.role == "user":
+                if isinstance(_msg.content, str) and _msg.content.strip():
+                    _re2_target_idx = _i
+                    break
+                elif isinstance(_msg.content, list):
+                    has_text = any(
+                        (b.get("type") if isinstance(b, dict) else getattr(b, "type", None)) == "text"
+                        for b in _msg.content
+                    )
+                    if has_text:
+                        _re2_target_idx = _i
+                        break
+
+        if _re2_target_idx is not None:
+            _msg = request_data.messages[_re2_target_idx]
+            if isinstance(_msg.content, str):
+                request_data.messages[_re2_target_idx] = _msg.model_copy(
+                    update={"content": _msg.content + RE2_INJECTION}
+                )
+            elif isinstance(_msg.content, list):
+                _new_content = list(_msg.content)
+                for _j in range(len(_new_content) - 1, -1, -1):
+                    _block = _new_content[_j]
+                    _btype = _block.get("type") if isinstance(_block, dict) else getattr(_block, "type", None)
+                    if _btype == "text":
+                        _btext = _block.get("text") if isinstance(_block, dict) else getattr(_block, "text", "")
+                        if isinstance(_block, dict):
+                            _new_content[_j] = {**_block, "text": _btext + RE2_INJECTION}
+                        else:
+                            _new_content[_j] = _block.model_copy(update={"text": _btext + RE2_INJECTION})
+                        break
+                request_data.messages[_re2_target_idx] = _msg.model_copy(update={"content": _new_content})
+            logger.debug(f"Re2 injection applied to user message at index {_re2_target_idx} (OpenAI route)")
+        else:
+            _re2_active = False
+            logger.debug("Re2 skipped: no user message with text content found (OpenAI route)")
+
+    # ==============================================================================
     # Account System: Account System Failover or Legacy Mode
     # ==============================================================================
-    
+
     if request.app.state.account_system:
         # ==============================================================================
         # ACCOUNT SYSTEM ENABLED: Failover Loop
