@@ -1147,6 +1147,36 @@ class TestStreamingOpenaiErrorHandling:
         print("✓ FirstTokenTimeoutError propagated correctly")
 
     @pytest.mark.asyncio
+    async def test_emits_typed_sse_error_on_stalled_stream(self, mock_http_client, mock_response, mock_model_cache, mock_auth_manager):
+        """
+        What it does: Emits a typed SSE error chunk before re-raising StalledStreamError.
+        Goal: Clients see a structured ``stalled_stream`` error rather than a truncated
+        stream with no terminal chunk.  Re-raise is preserved so route layer can log.
+        """
+        from kiro.streaming_core import StalledStreamError
+
+        async def mock_parse_kiro_stream(*args, **kwargs):
+            yield KiroEvent(type="content", content="Hello")
+            raise StalledStreamError("Stream stalled - no chunk in 60s")
+
+        chunks: list[str] = []
+
+        with patch('kiro.streaming_openai.parse_kiro_stream', mock_parse_kiro_stream):
+            with patch('kiro.streaming_openai.parse_bracket_tool_calls', return_value=[]):
+                with pytest.raises(StalledStreamError):
+                    async for chunk in stream_kiro_to_openai(
+                        mock_http_client, mock_response, "claude-sonnet-4",
+                        mock_model_cache, mock_auth_manager
+                    ):
+                        chunks.append(chunk)
+
+        joined = "".join(chunks)
+        assert '"type": "stalled_stream"' in joined
+        assert "Upstream stream stalled" in joined
+        assert chunks[-1] == "data: [DONE]\n\n"
+        print("StalledStreamError yields typed SSE chunk + DONE before re-raise")
+
+    @pytest.mark.asyncio
     async def test_handles_generator_exit_gracefully(self, mock_http_client, mock_response, mock_model_cache, mock_auth_manager):
         """
         What it does: Handles GeneratorExit gracefully without re-raising.

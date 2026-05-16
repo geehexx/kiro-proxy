@@ -889,6 +889,35 @@ class TestStreamingAnthropicErrorHandling:
         print("✓ FirstTokenTimeoutError propagated correctly")
 
     @pytest.mark.asyncio
+    async def test_emits_typed_sse_error_on_stalled_stream(self, mock_response, mock_model_cache, mock_auth_manager):
+        """
+        What it does: Emits a typed SSE error event before re-raising StalledStreamError.
+        Goal: Clients see a structured ``stalled_stream`` error event rather than a
+        silent truncation; re-raise is preserved so route layer can log + alert.
+        """
+        from kiro.streaming_core import StalledStreamError
+
+        async def mock_parse_kiro_stream(*args, **kwargs):
+            yield KiroEvent(type="content", content="Hello")
+            raise StalledStreamError("Stream stalled - no chunk in 60s")
+
+        events: list[str] = []
+
+        with patch('kiro.streaming_anthropic.parse_kiro_stream', mock_parse_kiro_stream):
+            with patch('kiro.streaming_anthropic.parse_bracket_tool_calls', return_value=[]):
+                with pytest.raises(StalledStreamError):
+                    async for event in stream_kiro_to_anthropic(
+                        mock_response, "claude-sonnet-4", mock_model_cache, mock_auth_manager
+                    ):
+                        events.append(event)
+
+        joined = "".join(events)
+        assert '"type": "stalled_stream"' in joined
+        assert "Upstream stream stalled" in joined
+        assert "event: error" in joined
+        print("StalledStreamError yields typed SSE error event before re-raise")
+
+    @pytest.mark.asyncio
     async def test_propagates_generator_exit(self, mock_response, mock_model_cache, mock_auth_manager):
         """
         What it does: Propagates GeneratorExit.
