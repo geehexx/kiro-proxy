@@ -27,14 +27,24 @@ fixed-exponential path; the bucket is gated at the call site.
 from __future__ import annotations
 
 import asyncio
+import logging
 import random
 import time
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_CAPACITY = 10.0
 _DEFAULT_REFILL_PER_SEC = 1.0
 _MIN_REFILL_PER_SEC = 0.1
 _MAX_REFILL_PER_SEC = 1.0
+# Safety bound for the contention loop in acquire().  Real callers exit on
+# the first or (rarely) second iteration; the bound only triggers under
+# pathological conditions - e.g. a frozen test clock that never advances or
+# a buggy caller holding the lock far longer than the refill rate.  Bounded
+# at 100 to prevent infinite loops while sitting well above the real-world
+# worst case under heavy concurrent fan-out.
+_MAX_ACQUIRE_ATTEMPTS = 100
 
 
 @dataclass
@@ -71,33 +81,47 @@ class AdaptiveRetryBucket:
     async def acquire(self, *, jitter: bool = True) -> float:
         """Consume one token, blocking if bucket empty.
 
-        Returns the actual wait time in seconds (>=0). With jitter, the
-        wait gets ±25% randomisation so concurrent callers don't unblock
-        in lockstep when tokens trickle in.
+        Returns the cumulative wait time in seconds (>=0).  With jitter the
+        per-iteration wait gets +/-25% randomisation so concurrent callers
+        don't unblock in lockstep when tokens trickle in.
+
+        Loops internally until a token is consumed (or the safety bound is
+        hit), so a single ``await acquire()`` always corresponds to exactly
+        one consumed token.  Without the loop, contention with a sibling
+        caller could let acquire() return without consuming - the caller
+        would then issue an unpaced retry, defeating the bucket.
         """
-        async with self._lock:
-            self._refill_locked()
-            if self._state.tokens >= 1.0:
-                self._state.tokens -= 1.0
-                return 0.0
-            # Compute wait time to next token.
-            shortfall = 1.0 - self._state.tokens
-            wait = shortfall / max(self._state.refill_per_sec, _MIN_REFILL_PER_SEC)
+        total_wait = 0.0
+        for attempt in range(_MAX_ACQUIRE_ATTEMPTS):
+            async with self._lock:
+                self._refill_locked()
+                if self._state.tokens >= 1.0:
+                    self._state.tokens -= 1.0
+                    return total_wait
+                # Compute wait time to next token under the current refill rate.
+                shortfall = 1.0 - self._state.tokens
+                wait = shortfall / max(self._state.refill_per_sec, _MIN_REFILL_PER_SEC)
 
-        if jitter:
-            wait *= 1.0 + random.uniform(-0.25, 0.25)
-        wait = max(wait, 0.0)
+            if jitter:
+                wait *= 1.0 + random.uniform(-0.25, 0.25)
+            wait = max(wait, 0.0)
 
-        await asyncio.sleep(wait)
+            await asyncio.sleep(wait)
+            total_wait += wait
 
-        async with self._lock:
-            self._refill_locked()
-            # Best-effort: consume now if we can; if still empty due to
-            # contention with another caller, return wait without consume —
-            # caller's retry will hit acquire again.
-            if self._state.tokens >= 1.0:
-                self._state.tokens -= 1.0
-            return wait
+        # Safety bound hit.  This indicates either a frozen test clock that
+        # never advances or a real-world starvation condition we want to
+        # surface rather than spin on forever.  Log + return without consuming
+        # so the caller can retry; in practice the test fixture should mock
+        # the clock advance or the production caller should be diagnosed.
+        logger.warning(
+            "AdaptiveRetryBucket.acquire hit safety bound after "
+            "%d attempts (total_wait=%.2fs); returning without token consume. "
+            "Likely cause: frozen clock in tests or stuck refill loop.",
+            _MAX_ACQUIRE_ATTEMPTS,
+            total_wait,
+        )
+        return total_wait
 
     async def record_success(self) -> None:
         """Successful upstream response — restore refill rate toward normal."""
