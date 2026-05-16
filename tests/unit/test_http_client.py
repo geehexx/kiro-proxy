@@ -509,6 +509,77 @@ class TestKiroHttpClientRequestWithRetry:
         # Only one request — proves no retry attempt.
         assert mock_client.request.call_count == 1
 
+
+    @pytest.mark.asyncio
+    async def test_streaming_429_with_monthly_quota_marker_does_not_retry(self, mock_auth_manager_for_http):
+        """SR#1 regression: a STREAMING 429 carrying MONTHLY_REQUEST_COUNT
+        must NOT retry. Pre-fix, the 429 path called aclose() before aread(),
+        which emptied the streamed body — the classifier saw "" and fell
+        back to status-only THROTTLE, burning the entire retry budget."""
+        from unittest.mock import AsyncMock, patch
+
+        http_client = KiroHttpClient(mock_auth_manager_for_http)
+
+        mock_response_429 = AsyncMock()
+        mock_response_429.status_code = 429
+        mock_response_429.aread = AsyncMock(
+            return_value=b'{"reason": "MONTHLY_REQUEST_COUNT exceeded"}'
+        )
+        mock_response_429.aclose = AsyncMock()
+        mock_response_429.headers = {}
+
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        mock_client.send = AsyncMock(side_effect=[mock_response_429])
+        mock_client.request = AsyncMock(side_effect=[mock_response_429])
+
+        with patch.object(http_client, "_get_client", new=AsyncMock(return_value=mock_client)):
+            with patch("kiro.http_client.get_kiro_headers", return_value={}):
+                with patch("kiro.http_client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+                    response = await http_client.request_with_retry(
+                        "POST",
+                        "https://api.example.com/test",
+                        {"data": "value"},
+                        stream=True,
+                    )
+
+        # No sleep — retry was suppressed.
+        mock_sleep.assert_not_called()
+        # Caller sees the original 429 response.
+        assert response.status_code == 429
+
+    @pytest.mark.asyncio
+    async def test_5xx_with_monthly_quota_marker_does_not_retry(self, mock_auth_manager_for_http):
+        """SR#2 regression: a 5xx carrying MONTHLY_REQUEST_COUNT must NOT
+        retry. Pre-fix, 5xx fell through to STANDARD or THROTTLE retry,
+        ignoring the hard-quota marker."""
+        from unittest.mock import AsyncMock, patch
+
+        http_client = KiroHttpClient(mock_auth_manager_for_http)
+
+        mock_response_500 = AsyncMock()
+        mock_response_500.status_code = 500
+        mock_response_500.aread = AsyncMock(
+            return_value=b'{"reason": "MONTHLY_REQUEST_COUNT exceeded"}'
+        )
+        mock_response_500.headers = {}
+
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        mock_client.request = AsyncMock(side_effect=[mock_response_500])
+
+        with patch.object(http_client, "_get_client", new=AsyncMock(return_value=mock_client)):
+            with patch("kiro.http_client.get_kiro_headers", return_value={}):
+                with patch("kiro.http_client.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+                    response = await http_client.request_with_retry(
+                        "POST",
+                        "https://api.example.com/test",
+                        {"data": "value"},
+                    )
+
+        mock_sleep.assert_not_called()
+        assert response.status_code == 500
+
 class TestKiroHttpClientContextManager:
     """Tests for async context manager."""
 
