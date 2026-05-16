@@ -134,7 +134,8 @@ async def stream_kiro_to_anthropic(  # noqa: C901, PLR0912, PLR0913, PLR0915
     request_messages: Optional[list] = None,
     request_tools: Optional[list] = None,
     request_system: Optional[Any] = None,
-    conversation_id: Optional[str] = None
+    conversation_id: Optional[str] = None,
+    response_model: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """
     Generator for converting Kiro stream to Anthropic SSE format.
@@ -160,6 +161,13 @@ async def stream_kiro_to_anthropic(  # noqa: C901, PLR0912, PLR0913, PLR0915
         FirstTokenTimeoutError: If first token not received within timeout
     """
     message_id = generate_message_id()
+    # Echo the client's original model id in the response when caller provides
+    # ``response_model`` (e.g. ``claude-sonnet-4.6[1m]``).  Falls back to ``model``
+    # (the normalised internal id) when callers don't pass it.  CC's auto-compact
+    # tracker uses the response.model field to look up context_window in
+    # /v1/models — echoing the normalised form would cause CC to use the bare
+    # canonical entry's 200k default rather than the [1m] 1M variant.
+    _echo_model = response_model or model
     input_tokens = 0
     output_tokens = 0
     full_content = ""
@@ -209,7 +217,7 @@ async def stream_kiro_to_anthropic(  # noqa: C901, PLR0912, PLR0913, PLR0915
                 "type": "message",
                 "role": "assistant",
                 "content": [],
-                "model": model,
+                "model": _echo_model,
                 "stop_reason": None,
                 "stop_sequence": None,
                 "usage": {
@@ -753,7 +761,8 @@ async def collect_anthropic_response(  # noqa: C901, PLR0912, PLR0913
     auth_manager: "KiroAuthManager",
     request_messages: Optional[list] = None,
     request_tools: Optional[list] = None,
-    request_system: Optional[Any] = None
+    request_system: Optional[Any] = None,
+    response_model: Optional[str] = None
 ) -> dict:
     """
     Collect full response from Kiro stream in Anthropic format.
@@ -773,6 +782,8 @@ async def collect_anthropic_response(  # noqa: C901, PLR0912, PLR0913
         Dictionary with full response in Anthropic Messages format
     """
     message_id = generate_message_id()
+    # Echo client's original model when caller provides response_model.
+    _echo_model = response_model or model
 
     # Non-streaming uses the same full-request estimation as streaming
     input_tokens = 0
@@ -884,7 +895,7 @@ async def collect_anthropic_response(  # noqa: C901, PLR0912, PLR0913
         "type": "message",
         "role": "assistant",
         "content": content_blocks,
-        "model": model,
+        "model": _echo_model,
         "stop_reason": stop_reason,
         "stop_sequence": None,
         "usage": usage_payload
@@ -901,7 +912,8 @@ async def stream_with_first_token_retry_anthropic(  # noqa: PLR0913
     first_token_timeout: float = FIRST_TOKEN_TIMEOUT,
     request_messages: Optional[list] = None,
     request_tools: Optional[list] = None,
-    request_system: Optional[Any] = None
+    request_system: Optional[Any] = None,
+    response_model: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
     """
     Streaming with automatic retry on first token timeout for Anthropic API.
@@ -962,6 +974,7 @@ async def stream_with_first_token_retry_anthropic(  # noqa: PLR0913
             request_messages=request_messages,
             request_tools=request_tools,
             request_system=request_system,
+            response_model=response_model,
         ):
             yield chunk
 

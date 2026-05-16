@@ -1694,3 +1694,116 @@ class TestStreamingAnthropicTruncationDetection:
         # Should detect truncation and set max_tokens
         assert result["stop_reason"] == "max_tokens"
         print("✓ collect_anthropic_response detects truncation correctly")
+
+
+
+class TestStreamingAnthropicResponseModelEcho:
+    """Regression: when ``response_model`` kwarg is supplied, the SSE
+    message_start and final response body MUST echo that string rather than
+    the (normalised) ``model`` argument.
+
+    Why: kiro-proxy normalises ``claude-sonnet-4.6[1m]`` -> ``claude-sonnet-4.6``
+    for upstream routing.  Without preserving the client's original id in the
+    response, CC's auto-compact tracker looks up the bare canonical entry
+    (200k context_window) rather than the [1m] 1M variant -> spurious
+    auto-compact at ~170k context.
+    """
+
+    @pytest.mark.asyncio
+    async def test_stream_emits_response_model_in_message_start(self, mock_response, mock_model_cache, mock_auth_manager):
+        """Streaming SSE message_start.message.model echoes response_model when provided."""
+        async def mock_parse_kiro_stream(*args, **kwargs):
+            yield KiroEvent(type="content", content="Hi")
+
+        events: list[str] = []
+        with patch('kiro.streaming_anthropic.parse_kiro_stream', mock_parse_kiro_stream):
+            with patch('kiro.streaming_anthropic.parse_bracket_tool_calls', return_value=[]):
+                async for event in stream_kiro_to_anthropic(
+                    mock_response, "claude-sonnet-4.6", mock_model_cache, mock_auth_manager,
+                    response_model="claude-sonnet-4.6[1m]",
+                ):
+                    events.append(event)
+
+        joined = "".join(events)
+        assert '"model": "claude-sonnet-4.6[1m]"' in joined, (
+            f"Expected client-supplied response_model to be echoed; got: {joined[:500]}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_stream_falls_back_to_model_when_response_model_missing(self, mock_response, mock_model_cache, mock_auth_manager):
+        """When response_model is None, the original model arg is echoed (back-compat)."""
+        async def mock_parse_kiro_stream(*args, **kwargs):
+            yield KiroEvent(type="content", content="Hi")
+
+        events: list[str] = []
+        with patch('kiro.streaming_anthropic.parse_kiro_stream', mock_parse_kiro_stream):
+            with patch('kiro.streaming_anthropic.parse_bracket_tool_calls', return_value=[]):
+                async for event in stream_kiro_to_anthropic(
+                    mock_response, "claude-sonnet-4.6", mock_model_cache, mock_auth_manager,
+                ):
+                    events.append(event)
+
+        joined = "".join(events)
+        assert '"model": "claude-sonnet-4.6"' in joined
+        assert '[1m]' not in joined
+
+
+
+@pytest.mark.asyncio
+async def test_collect_anthropic_response_uses_response_model_when_provided(
+    mock_response, mock_model_cache, mock_auth_manager
+):
+    """When the route layer normalises ``request_data.model`` (stripping a
+    bracket suffix like ``[1m]``) and passes the original via the
+    ``response_model`` kwarg, the response body must echo the ORIGINAL
+    client model id - not the normalised internal one.  This is what
+    Claude Code's auto-compact tracker reads to decide which /v1/models
+    entry to consult for context_window."""
+    from kiro.streaming_anthropic import collect_anthropic_response
+    from kiro.streaming_core import StreamResult
+
+    fake_result = StreamResult(content="hi", thinking_content="", tool_calls=[])
+
+    async def _fake_collect(*args, **kwargs):
+        return fake_result
+
+    with patch("kiro.streaming_anthropic.collect_stream_to_result", _fake_collect):
+        with patch("kiro.streaming_anthropic.parse_bracket_tool_calls", return_value=[]):
+            body = await collect_anthropic_response(
+                mock_response,
+                "claude-sonnet-4.6",  # internal normalised
+                mock_model_cache,
+                mock_auth_manager,
+                request_messages=[{"role": "user", "content": "hi"}],
+                response_model="claude-sonnet-4-6[1m]",  # client original
+            )
+
+    assert body["model"] == "claude-sonnet-4-6[1m]"
+
+
+@pytest.mark.asyncio
+async def test_collect_anthropic_response_falls_back_to_model_when_no_response_model(
+    mock_response, mock_model_cache, mock_auth_manager
+):
+    """When response_model is not provided, the response echoes ``model`` -
+    backwards-compatible with existing call sites that don't yet thread the
+    raw model through."""
+    from kiro.streaming_anthropic import collect_anthropic_response
+    from kiro.streaming_core import StreamResult
+
+    fake_result = StreamResult(content="hi", thinking_content="", tool_calls=[])
+
+    async def _fake_collect(*args, **kwargs):
+        return fake_result
+
+    with patch("kiro.streaming_anthropic.collect_stream_to_result", _fake_collect):
+        with patch("kiro.streaming_anthropic.parse_bracket_tool_calls", return_value=[]):
+            body = await collect_anthropic_response(
+                mock_response,
+                "claude-sonnet-4.6",
+                mock_model_cache,
+                mock_auth_manager,
+                request_messages=[{"role": "user", "content": "hi"}],
+            )
+
+    assert body["model"] == "claude-sonnet-4.6"
