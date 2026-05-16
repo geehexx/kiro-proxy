@@ -251,7 +251,7 @@ def emit_upstream_call(
 # Legacy flat emitter — used by _emit_gateway_baseline until routes are refactored
 # ---------------------------------------------------------------------------
 
-def record_request(  # noqa: PLR0913
+def record_request(  # noqa: C901, PLR0913
     *,
     model: str,
     stream: bool,

@@ -1041,8 +1041,10 @@ class TestAnthropicHTTPClientSelection:
         print("✅ Anthropic streaming correctly uses per-request client")
 
     @patch('kiro.routes_anthropic.KiroHttpClient')
+    @patch('kiro.cache_integration.try_cache_lookup', return_value=None)
     def test_non_streaming_uses_shared_client(
         self,
+        mock_cache_lookup,
         mock_kiro_http_client_class,
         test_client,
         valid_proxy_api_key
