@@ -58,6 +58,47 @@ from kiro.tokenizer import estimate_request_tokens
 from kiro.utils import generate_conversation_id
 
 
+def _extract_stream_telemetry_from_chunk(chunk: str) -> dict:
+    """Extract telemetry fields from one Anthropic SSE chunk.
+
+    Handles two event types:
+    - message_start: yields response_model, message_id, input_tokens, and
+      cache_creation_input_tokens / cache_read_input_tokens (only available here).
+    - message_delta: yields output_tokens.
+
+    Returns a flat dict with whichever fields were present; absent fields are
+    omitted so callers can merge multiple calls with dict.update().
+    """
+    result: dict = {}
+    if "data:" not in chunk:
+        return result
+    try:
+        data_str = chunk.split("data:", 1)[1].strip()
+        if not data_str or data_str == "[DONE]":
+            return result
+        evt = json.loads(data_str)
+        evt_type = evt.get("type")
+        if evt_type == "message_start":
+            msg = evt.get("message", {})
+            if msg.get("model") is not None:
+                result["response_model"] = msg["model"]
+            if msg.get("id") is not None:
+                result["message_id"] = msg["id"]
+            msg_usage = msg.get("usage") or {}
+            for field in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"):
+                val = msg_usage.get(field)
+                if val is not None:
+                    result[field] = val
+        elif evt_type == "message_delta":
+            usage = evt.get("usage") or {}
+            val = usage.get("output_tokens")
+            if val is not None:
+                result["output_tokens"] = val
+    except Exception:
+        pass
+    return result
+
+
 async def _emit_gateway_baseline(  # noqa: PLR0913
     request: Request,
     *,
@@ -818,9 +859,8 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                         async def stream_wrapper():  # noqa: C901, PLR0912, PLR0915
                             streaming_error = None
                             client_disconnected = False
-                            # Capture usage from message_delta event for baseline
                             _stream_usage: dict = {}
-                            # Capture upstream model from message_start event for routing audit
+                            _stream_cache_usage: dict = {}
                             _stream_response_model: Optional[str] = None
                             _stream_message_id: Optional[str] = None
                             # Buffer chunks for streaming cache (only when stream_cache_eligible)
@@ -841,25 +881,15 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                     request_system=system_for_tokenizer,
                                     response_model=_raw_model,  # echo client original (with brackets)
                                 ):
-                                    # Extract usage from message_delta SSE event.
-                                    # SSE format: "event: message_delta\ndata: {...}\n\n"
-                                    # chunk starts with "event:", not "data:", so search for "data:" anywhere.
-                                    if "data:" in chunk:
-                                        try:
-                                            data_str = chunk.split("data:", 1)[1].strip()
-                                            if data_str and data_str != "[DONE]":
-                                                evt = json.loads(data_str)
-                                                evt_type = evt.get("type")
-                                                if not _stream_usage and evt_type == "message_delta":
-                                                    usage = evt.get("usage", {})
-                                                    if usage.get("input_tokens") or usage.get("output_tokens"):
-                                                        _stream_usage = usage
-                                                elif evt_type == "message_start" and _stream_response_model is None:
-                                                    msg = evt.get("message", {})
-                                                    _stream_response_model = msg.get("model")
-                                                    _stream_message_id = msg.get("id")
-                                        except Exception:
-                                            pass
+                                    _tel = _extract_stream_telemetry_from_chunk(chunk)
+                                    if _tel.get("output_tokens") is not None and not _stream_usage:
+                                        _stream_usage = {"output_tokens": _tel["output_tokens"]}
+                                    if _tel.get("response_model") is not None and _stream_response_model is None:
+                                        _stream_response_model = _tel["response_model"]
+                                        _stream_message_id = _tel.get("message_id")
+                                        for _f in ("cache_creation_input_tokens", "cache_read_input_tokens"):
+                                            if _tel.get(_f) is not None:
+                                                _stream_cache_usage[_f] = _tel[_f]
                                     # Buffer for streaming cache
                                     if stream_cache_eligible and cache_key:
                                         _stream_chunks.append(chunk.encode("utf-8") if isinstance(chunk, str) else chunk)
@@ -900,10 +930,10 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                                 f"entries={response_cache.stats()['entries']}"
                                             )
 
-                                # Emit streaming baseline with token data extracted from message_delta
+                                # Emit streaming baseline with token data extracted from SSE events
                                 _stream_response_body: dict[str, Any] = {}
                                 if _stream_usage:
-                                    _stream_response_body["usage"] = _stream_usage
+                                    _stream_response_body["usage"] = {**_stream_usage, **_stream_cache_usage}
                                 if _stream_response_model:
                                     _stream_response_body["model"] = _stream_response_model
                                 if _stream_message_id:
@@ -1391,6 +1421,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
 
                     # Use retry wrapper with initial response
                     _stream_usage: dict = {}
+                    _stream_cache_usage: dict = {}
                     _stream_response_model: Optional[str] = None
                     _stream_message_id: Optional[str] = None
                     async for chunk in stream_with_first_token_retry_anthropic(
@@ -1404,25 +1435,15 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                         request_system=system_for_tokenizer,
                         response_model=_raw_model,  # echo client original (with brackets)
                     ):
-                        # Extract usage from message_delta SSE event.
-                        # SSE format: "event: message_delta\ndata: {...}\n\n"
-                        # chunk starts with "event:", not "data:", so search for "data:" anywhere.
-                        if "data:" in chunk:
-                            try:
-                                data_str = chunk.split("data:", 1)[1].strip()
-                                if data_str and data_str != "[DONE]":
-                                    evt = json.loads(data_str)
-                                    evt_type = evt.get("type")
-                                    if not _stream_usage and evt_type == "message_delta":
-                                        usage = evt.get("usage", {})
-                                        if usage.get("input_tokens") or usage.get("output_tokens"):
-                                            _stream_usage = usage
-                                    elif evt_type == "message_start" and _stream_response_model is None:
-                                        msg = evt.get("message", {})
-                                        _stream_response_model = msg.get("model")
-                                        _stream_message_id = msg.get("id")
-                            except Exception:
-                                pass
+                        _tel = _extract_stream_telemetry_from_chunk(chunk)
+                        if _tel.get("output_tokens") is not None and not _stream_usage:
+                            _stream_usage = {"output_tokens": _tel["output_tokens"]}
+                        if _tel.get("response_model") is not None and _stream_response_model is None:
+                            _stream_response_model = _tel["response_model"]
+                            _stream_message_id = _tel.get("message_id")
+                            for _f in ("cache_creation_input_tokens", "cache_read_input_tokens"):
+                                if _tel.get(_f) is not None:
+                                    _stream_cache_usage[_f] = _tel[_f]
                         # Buffer for streaming cache
                         if stream_cache_eligible and cache_key:
                             _stream_chunks.append(chunk.encode("utf-8") if isinstance(chunk, str) else chunk)
@@ -1463,10 +1484,10 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                     f"entries={response_cache.stats()['entries']}"
                                 )
 
-                    # Emit streaming baseline with token data extracted from message_delta
+                    # Emit streaming baseline with token data extracted from SSE events
                     _stream_response_body: dict[str, Any] = {}
                     if _stream_usage:
-                        _stream_response_body["usage"] = _stream_usage
+                        _stream_response_body["usage"] = {**_stream_usage, **_stream_cache_usage}
                     if _stream_response_model:
                         _stream_response_body["model"] = _stream_response_model
                     if _stream_message_id:

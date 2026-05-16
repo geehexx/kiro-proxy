@@ -323,60 +323,21 @@ async def test_routing_mismatch_logged(caplog: pytest.LogCaptureFixture) -> None
 # 1.1 — cache token fields from message_start captured in streaming baseline
 # ---------------------------------------------------------------------------
 
-def _parse_stream_wrapper_sse(chunk: str) -> tuple[dict | None, dict | None]:
-    """Parse one SSE chunk and return (stream_usage, stream_response_model_info).
-
-    Mirrors the inline extraction logic in routes_anthropic.py stream_wrapper.
-    Returns (usage_dict_or_None, message_start_info_or_None).
-    """
-    stream_usage: dict = {}
-    stream_response_model: str | None = None
-    stream_message_id: str | None = None
-    stream_cache_usage: dict = {}
-
-    if "data:" in chunk:
-        try:
-            data_str = chunk.split("data:", 1)[1].strip()
-            if data_str and data_str != "[DONE]":
-                import json as _json
-                evt = _json.loads(data_str)
-                evt_type = evt.get("type")
-                if not stream_usage and evt_type == "message_delta":
-                    usage = evt.get("usage", {})
-                    if usage.get("input_tokens") or usage.get("output_tokens"):
-                        stream_usage = usage
-                elif evt_type == "message_start" and stream_response_model is None:
-                    msg = evt.get("message", {})
-                    stream_response_model = msg.get("model")
-                    stream_message_id = msg.get("id")
-                    # 1.1: extract cache token fields from message_start.message.usage
-                    msg_usage = msg.get("usage", {})
-                    for field in ("cache_creation_input_tokens", "cache_read_input_tokens"):
-                        val = msg_usage.get(field)
-                        if val is not None:
-                            stream_cache_usage[field] = val
-        except Exception:
-            pass
-
-    return stream_usage, stream_cache_usage, stream_response_model, stream_message_id
-
-
 @pytest.mark.asyncio
-async def test_streaming_baseline_captures_cache_tokens_from_message_start() -> None:
-    """cache_creation_input_tokens and cache_read_input_tokens from message_start
-    must appear in the streaming baseline record.
+async def test_extract_stream_telemetry_captures_cache_tokens_from_message_start() -> None:
+    """_extract_stream_telemetry_from_chunk must return cache token fields
+    from message_start.message.usage.
 
-    The stream_wrapper in routes_anthropic.py currently only reads cache token
-    fields from message_delta (which never carries them). This test verifies
-    that the fields are extracted from message_start.message.usage instead.
+    The stream_wrapper in routes_anthropic.py uses this helper to collect
+    telemetry from SSE chunks. Before the fix, cache token fields were never
+    captured because message_delta (the only event previously read) does not
+    carry them — only message_start does.
     """
     import json
 
-    writer = AsyncMock()
-    request = _make_request_with_writer(writer)
+    from kiro.routes_anthropic import _extract_stream_telemetry_from_chunk
 
-    # Simulate what stream_wrapper collects from SSE chunks
-    message_start_chunk = (
+    chunk = (
         "event: message_start\n"
         "data: " + json.dumps({
             "type": "message_start",
@@ -392,51 +353,36 @@ async def test_streaming_baseline_captures_cache_tokens_from_message_start() -> 
             },
         }) + "\n\n"
     )
-    message_delta_chunk = (
+
+    result = _extract_stream_telemetry_from_chunk(chunk)
+
+    assert result["cache_creation_input_tokens"] == 80, (
+        "cache_creation_input_tokens must be extracted from message_start.message.usage"
+    )
+    assert result["cache_read_input_tokens"] == 20, (
+        "cache_read_input_tokens must be extracted from message_start.message.usage"
+    )
+    assert result["message_id"] == "msg_cache_test"
+    assert result["response_model"] == "claude-sonnet-4.6"
+
+
+@pytest.mark.asyncio
+async def test_extract_stream_telemetry_captures_output_tokens_from_message_delta() -> None:
+    """_extract_stream_telemetry_from_chunk must return output_tokens from message_delta."""
+    import json
+
+    from kiro.routes_anthropic import _extract_stream_telemetry_from_chunk
+
+    chunk = (
         "event: message_delta\n"
         "data: " + json.dumps({
             "type": "message_delta",
-            "usage": {"output_tokens": 15},
+            "usage": {"output_tokens": 42},
         }) + "\n\n"
     )
 
-    # Parse both chunks as stream_wrapper would
-    _su1, _cu1, _rm1, _mid1 = _parse_stream_wrapper_sse(message_start_chunk)
-    _su2, _cu2, _rm2, _mid2 = _parse_stream_wrapper_sse(message_delta_chunk)
+    result = _extract_stream_telemetry_from_chunk(chunk)
 
-    # Merge: message_delta wins for output_tokens; cache fields come from message_start
-    stream_usage = _su2 if _su2 else _su1
-    stream_cache_usage = _cu1  # cache fields only in message_start
-    stream_response_model = _rm1
-    stream_message_id = _mid1
-
-    # Build response body as stream_wrapper does in its finally block
-    stream_response_body: dict = {}
-    if stream_usage:
-        stream_response_body["usage"] = {**stream_usage, **stream_cache_usage}
-    if stream_response_model:
-        stream_response_body["model"] = stream_response_model
-    if stream_message_id:
-        stream_response_body["id"] = stream_message_id
-
-    await _emit_gateway_baseline(
-        request,
-        response_body=stream_response_body,
-        request_model="claude-sonnet-4.6",
-        session_id_gw="sess-cache",
-        cache_key=None,
-        upstream_ms=200,
-        gateway_cache="miss",
-        status=200,
-        stream=True,
-    )
-
-    rec = writer.write.call_args.args[1]
-    assert rec["cache_creation_input_tokens"] == 80, (
-        "cache_creation_input_tokens must be captured from message_start.message.usage"
-    )
-    assert rec["cache_read_input_tokens"] == 20, (
-        "cache_read_input_tokens must be captured from message_start.message.usage"
-    )
-    assert rec["output_tokens"] == 15
-    assert rec["stream"] is True
+    assert result["output_tokens"] == 42
+    assert result.get("cache_creation_input_tokens") is None
+    assert result.get("cache_read_input_tokens") is None
