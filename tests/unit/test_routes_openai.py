@@ -38,7 +38,7 @@ class TestVerifyApiKey:
         valid_header = f"Bearer {PROXY_API_KEY}"
 
         print("Action: Calling verify_api_key...")
-        result = await verify_api_key(valid_header)
+        result = await verify_api_key(auth_header=valid_header, x_api_key=None)
 
         print(f"Comparing result: Expected True, Got {result}")
         assert result is True
@@ -54,7 +54,7 @@ class TestVerifyApiKey:
 
         print("Action: Calling verify_api_key with invalid key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key(invalid_header)
+            await verify_api_key(auth_header=invalid_header, x_api_key=None)
 
         print("Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
@@ -70,7 +70,7 @@ class TestVerifyApiKey:
 
         print("Action: Calling verify_api_key with None...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key(None)
+            await verify_api_key(auth_header=None, x_api_key=None)
 
         print("Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
@@ -85,7 +85,7 @@ class TestVerifyApiKey:
 
         print("Action: Calling verify_api_key with empty string...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key("")
+            await verify_api_key(auth_header="", x_api_key=None)
 
         print("Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
@@ -101,7 +101,7 @@ class TestVerifyApiKey:
 
         print("Action: Calling verify_api_key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key(wrong_format)
+            await verify_api_key(auth_header=wrong_format, x_api_key=None)
 
         print("Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
@@ -117,7 +117,7 @@ class TestVerifyApiKey:
 
         print("Action: Calling verify_api_key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key(malformed)
+            await verify_api_key(auth_header=malformed, x_api_key=None)
 
         print("Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
@@ -133,7 +133,7 @@ class TestVerifyApiKey:
 
         print("Action: Calling verify_api_key...")
         with pytest.raises(HTTPException) as exc_info:
-            await verify_api_key(lowercase)
+            await verify_api_key(auth_header=lowercase, x_api_key=None)
 
         print("Checking: HTTPException with status 401...")
         assert exc_info.value.status_code == 401
