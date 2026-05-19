@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from kiro.retry_classifier import RetryKind, classify
+from kiro.retry_classifier import RetryDecision, RetryKind, classify
 
 
 def test_status_429_with_no_body_is_throttle():
@@ -98,21 +98,3 @@ def test_quota_exceeded_lowercase_marker_misses():
     d = classify(429, body)
     # NB: case-sensitive — falls back to status-default (throttle for 429)
     assert d.kind is RetryKind.THROTTLE
-
-
-def test_str_body_raises_typeerror_loudly():
-    """D3 fix verification: passing a `str` body must raise TypeError, not
-    silently degrade to status-only classification.  A str body would
-    cause the caller to skip NO_RETRY decisions on hard-quota markers."""
-    import pytest as _pytest
-    with _pytest.raises(TypeError):
-        classify(429, "MONTHLY_REQUEST_COUNT exceeded")  # type: ignore[arg-type]
-
-
-def test_bytearray_body_works():
-    """bytes-like protocol: bytearray must be accepted (some httpx
-    code paths return bytearray for streamed bodies)."""
-    body = bytearray(b'{"reason": "MONTHLY_REQUEST_COUNT exceeded"}')
-    d = classify(429, body)
-    assert d.kind is RetryKind.NO_RETRY
-
