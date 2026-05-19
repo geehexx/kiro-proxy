@@ -147,7 +147,8 @@ def user_request_span(
 
         with _logfire.span("user_request", **attrs):  # type: ignore[union-attr]
             yield
-    except Exception:
+    except Exception as e:
+        logger.warning(f"telemetry user_request_span failed (model={model}, non-fatal): {e}")
         yield
 
 
@@ -193,7 +194,8 @@ def gateway_request_span(  # noqa: PLR0913
         span_name = f"gateway {'stream' if stream else 'sync'} [{cache_result}]"
         with _logfire.span(span_name, **attrs):  # type: ignore[union-attr]
             yield
-    except Exception:
+    except Exception as e:
+        logger.warning(f"telemetry gateway_request_span failed (model={model}, status={status}, non-fatal): {e}")
         yield
 
 
@@ -219,8 +221,8 @@ def emit_cache_event(
                 "kiro.cache.key": cache_key_prefix or "",
             }
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"telemetry emit_cache_event failed (event={event}, model={model}, non-fatal): {e}")
 
 
 def emit_upstream_call(
@@ -243,8 +245,8 @@ def emit_upstream_call(
             attrs["kiro.upstream.error"] = _trunc(error_reason)
         level = "warning" if status >= 400 else "info"
         getattr(_logfire, level)(f"upstream.call [{status}]", **attrs)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"telemetry emit_upstream_call failed (model={model}, status={status}, non-fatal): {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -349,5 +351,5 @@ def record_model_resolution(
                     "kiro.model.source": resolution_source,
                 }
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"telemetry record_model_resolution failed (raw={raw_model}, resolved={resolved_model}, non-fatal): {e}")
