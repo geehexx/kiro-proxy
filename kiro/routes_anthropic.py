@@ -860,6 +860,13 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                 shared_client = request.app.state.http_client
                 http_client = KiroHttpClient(auth_manager, shared_client=shared_client)
 
+            # Forward attribution headers for telemetry correlation
+            _attribution_headers = {}
+            for _h in ("x-claude-code-agent-id", "x-claude-code-attribution"):
+                _v = request.headers.get(_h)
+                if _v:
+                    _attribution_headers[_h] = _v
+
             # Prepare data for token counting
             messages_for_tokenizer = [msg.model_dump() for msg in request_data.messages]
             tools_for_tokenizer = [tool.model_dump() for tool in request_data.tools] if request_data.tools else None
@@ -871,7 +878,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
             try:
                 # Make request to Kiro API
                 _upstream_start = time.monotonic()
-                response = await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
+                response = await http_client.request_with_retry("POST", url, kiro_payload, stream=True, extra_headers=_attribution_headers or None)
                 _upstream_ms_total = int((time.monotonic() - _upstream_start) * 1000)
 
                 if response.status_code == 200:
@@ -889,7 +896,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                             try:
 
                                 async def make_retry_request():
-                                    return await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
+                                    return await http_client.request_with_retry("POST", url, kiro_payload, stream=True, extra_headers=_attribution_headers or None)
 
                                 async for chunk in stream_with_first_token_retry_anthropic(
                                     make_request=make_retry_request,  # type: ignore[misc]
@@ -1263,6 +1270,13 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
         shared_client = request.app.state.http_client
         http_client = KiroHttpClient(auth_manager, shared_client=shared_client)
 
+    # Forward attribution headers for telemetry correlation
+    _attribution_headers = {}
+    for _h in ("x-claude-code-agent-id", "x-claude-code-attribution"):
+        _v = request.headers.get(_h)
+        if _v:
+            _attribution_headers[_h] = _v
+
     # Prepare data for token counting
     # Convert Pydantic models to dicts for tokenizer
     messages_for_tokenizer = [msg.model_dump() for msg in request_data.messages]
@@ -1283,7 +1297,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
         # The second caller awaits the first's Future and gets the same result.
         async def _do_upstream_non_streaming():
             _start = time.monotonic()
-            _resp = await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
+            _resp = await http_client.request_with_retry("POST", url, kiro_payload, stream=True, extra_headers=_attribution_headers or None)
             _ms = int((time.monotonic() - _start) * 1000)
             if _resp.status_code != 200:
                 return _resp, _ms
@@ -1348,7 +1362,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                 return JSONResponse(content=anthropic_response, headers={"x-kiro-cache": "miss"})
         else:
             _upstream_start = time.monotonic()
-            response = await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
+            response = await http_client.request_with_retry("POST", url, kiro_payload, stream=True, extra_headers=_attribution_headers or None)
             _upstream_ms_total = int((time.monotonic() - _upstream_start) * 1000)
 
         if response.status_code != 200:
@@ -1413,6 +1427,28 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                     complexity_label=_complexity.label.value,
             )
 
+            # Capacity-exhausted fast circuit-breaker (legacy mode mirror of account-system path).
+            # Return 503 + Retry-After + X-Kiro-Capacity-Exhausted so the client gets a clear
+            # signal instead of a raw 429.
+            if response.status_code == 429 and _error_reason == "INSUFFICIENT_MODEL_CAPACITY":
+                return JSONResponse(
+                    status_code=503,
+                    headers={
+                        "Retry-After": "60",
+                        "X-Kiro-Capacity-Exhausted": request_data.model,
+                    },
+                    content={
+                        "type": "error",
+                        "error": {
+                            "type": "capacity_exhausted",
+                            "message": (
+                                f"{request_data.model} capacity exhausted. "
+                                "Retry in 60s or switch model with /model claude-sonnet-4-6"
+                            ),
+                        },
+                    },
+                )
+
             # Return error in Anthropic format
             return JSONResponse(
                 status_code=response.status_code,
@@ -1444,7 +1480,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
 
                     # Create retry request function for retries
                     async def make_retry_request():
-                        return await http_client.request_with_retry("POST", url, kiro_payload, stream=True)
+                        return await http_client.request_with_retry("POST", url, kiro_payload, stream=True, extra_headers=_attribution_headers or None)
 
                     # Use retry wrapper with initial response
                     _stream_usage: dict = {}
