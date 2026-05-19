@@ -1425,6 +1425,70 @@ def build_kiro_history(messages: list[UnifiedMessage], model_id: str) -> list[di
 
 
 # ==================================================================================================
+# Opus 4.7 effort guard
+# ==================================================================================================
+
+# Effort levels that work for Opus 4.7. Per Phase 0 wire test 2026-05-19:
+# values not in this set return 429 INSUFFICIENT_MODEL_CAPACITY upstream.
+# (basic-memory://research/2026-05-19-amf-phase-0-result)
+_OPUS_VALID_EFFORTS = frozenset({"high", "xhigh", "max"})
+
+# Cheapest working effort level for Opus 4.7 — used as the upgrade target
+# when client sends an effort that would 429.
+_OPUS_DEFAULT_EFFORT = "high"
+
+
+def _is_opus_4_7(model_id: str) -> bool:
+    """Return True if model_id is a variant of Opus 4.7 (handles - or . separators)."""
+    if not model_id:
+        return False
+    norm = model_id.lower()
+    return "opus-4.7" in norm or "opus-4-7" in norm
+
+
+def apply_opus_effort_guard(model_id: str, amf: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Force Opus 4.7 effort >= high to avoid 429 INSUFFICIENT_MODEL_CAPACITY.
+
+    Per the Phase 0 wire test (basic-memory://research/2026-05-19-amf-phase-0-result):
+    Opus 4.7 returns 429 on effort=low/medium/disabled/adaptive or unset.
+    Force-upgrade to 'high' (cheapest working level) when proxy detects Opus.
+    Sonnet/Haiku/other models pass through unchanged.
+
+    Args:
+        model_id: Internal Kiro model ID (e.g. "claude-opus-4.7")
+        amf: additionalModelRequestFields dict (or None)
+
+    Returns:
+        New AMF dict with effort upgraded if needed; otherwise returns the
+        input unchanged. The original dict is never mutated.
+    """
+    if not _is_opus_4_7(model_id):
+        return amf if amf is not None else {}
+
+    # Always work on a copy so caller's dict is never mutated.
+    new_amf: dict[str, Any] = dict(amf) if amf else {}
+    output_cfg_orig = new_amf.get("output_config") or {}
+    output_cfg = dict(output_cfg_orig)
+
+    current_effort = output_cfg.get("effort", "")
+    if current_effort in _OPUS_VALID_EFFORTS:
+        return new_amf
+
+    # Upgrade — record old value for the structured log.
+    output_cfg["effort"] = _OPUS_DEFAULT_EFFORT
+    new_amf["output_config"] = output_cfg
+
+    logger.info(
+        "opus_effort_upgraded model=%s before=%r after=%s",
+        model_id,
+        current_effort or None,
+        _OPUS_DEFAULT_EFFORT,
+    )
+    return new_amf
+
+
+
+# ==================================================================================================
 # Main Payload Building
 # ==================================================================================================
 
@@ -1597,6 +1661,14 @@ def build_kiro_payload(  # noqa: C901, PLR0912, PLR0913, PLR0915
     # Add user_input_context if present (contains tools and toolResults only)
     if user_input_context:
         user_input_message["userInputMessageContext"] = user_input_context  # type: ignore[assignment]
+
+    # Apply Opus 4.7 effort guard — forces effort>=high to avoid 429
+    # INSUFFICIENT_MODEL_CAPACITY. No-op for non-Opus models or when
+    # effort is already valid. See apply_opus_effort_guard() docstring.
+    existing_amf = user_input_message.get("additionalModelRequestFields")  # type: ignore[arg-type]
+    guarded_amf = apply_opus_effort_guard(model_id, existing_amf)  # type: ignore[arg-type]
+    if guarded_amf:
+        user_input_message["additionalModelRequestFields"] = guarded_amf  # type: ignore[assignment]
 
     # Assemble final payload
     payload = {
