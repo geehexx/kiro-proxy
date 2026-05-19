@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
+from loguru import logger
 
 
 # Load environment variables
@@ -482,26 +483,15 @@ def _warn_timeout_configuration():
     - STREAMING_READ_TIMEOUT: time to wait BETWEEN chunks during streaming
     """
     if FIRST_TOKEN_TIMEOUT >= STREAMING_READ_TIMEOUT:
-        import sys
-        YELLOW = "\033[93m"
-        RESET = "\033[0m"
-
-        warning_text = f"""
-{YELLOW}⚠️  WARNING: Suboptimal timeout configuration detected.
-
-    FIRST_TOKEN_TIMEOUT ({FIRST_TOKEN_TIMEOUT}s) >= STREAMING_READ_TIMEOUT ({STREAMING_READ_TIMEOUT}s)
-
-    These timeouts serve different purposes:
-      - FIRST_TOKEN_TIMEOUT: time to wait for model to START responding (default: 15s)
-      - STREAMING_READ_TIMEOUT: time to wait BETWEEN chunks during streaming (default: 300s)
-
-    Recommendation: FIRST_TOKEN_TIMEOUT should be LESS than STREAMING_READ_TIMEOUT.
-
-    Example configuration:
-      FIRST_TOKEN_TIMEOUT=15
-      STREAMING_READ_TIMEOUT=300{RESET}
-"""
-        print(warning_text, file=sys.stderr)
+        warning_text = (
+            f"Suboptimal timeout configuration detected: "
+            f"FIRST_TOKEN_TIMEOUT ({FIRST_TOKEN_TIMEOUT}s) >= "
+            f"STREAMING_READ_TIMEOUT ({STREAMING_READ_TIMEOUT}s). "
+            f"FIRST_TOKEN_TIMEOUT (time to wait for model to START responding) "
+            f"should be LESS than STREAMING_READ_TIMEOUT (time to wait BETWEEN chunks). "
+            f"Recommended: FIRST_TOKEN_TIMEOUT=15, STREAMING_READ_TIMEOUT=300."
+        )
+        logger.warning(warning_text)
 
 # ==================================================================================================
 # Fake Reasoning Settings (Extended Thinking via Tag Injection)
