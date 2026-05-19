@@ -6,6 +6,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Bug Fixes
 
+- **routes**: Fast circuit-breaker for `INSUFFICIENT_MODEL_CAPACITY` 429s — fail
+  immediately with 503 + `Retry-After: 60` + `X-Kiro-Capacity-Exhausted: <model>`
+  header instead of cycling accounts. Cycling accounts doesn't help when the model
+  capacity pool is exhausted across all accounts. Silent model substitution is also
+  wrong because CC doesn't update session state on proxy substitution (CC Issues
+  #23497, #44385, #54448). User decides to switch models via `/model claude-sonnet-4-6`.
+
+## [2.3] - 2026-05-14
+
+### Bug Fixes
+
 - **models**: Add tool_reference content block support (#90)
 - Disable AUTO_TRIM_PAYLOAD by default (#73)
 - **anthropic**: Accurate token estimation for Anthropic API path (#135)
@@ -51,11 +62,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **oss**: Make User-Agent configurable, redact personal Logfire URL
 - **oss**: Fix ruff lint issues in complexity_classifier and in_flight_dedup
 - **telemetry**: Suppress test spans, add complexity_label+dedup_hit to Logfire
-- **tests**: Sort imports in test_capacity_circuit_breaker.py (ruff I001) (#3)
-- **lint**: Add missing Any import to routes_anthropic typing imports
-- **tests**: Resolve RuntimeWarning for unawaited coroutine in test_429_triggers_backoff
-- **health**: Disambiguate account ids with parent-dir prefix (#8)
-- **lint**: Auto-fix 7 f-string-missing-placeholders (ruff F541)
 
 ### CI/CD
 
@@ -74,8 +80,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **re2**: Document proxy-level tradeoff vs canonical optillm formulation
 - Add ARCHITECTURE.md, CONTRIBUTING.md, TROUBLESHOOTING.md for OSS readiness
 - **env**: Add KIRO_USER_AGENT to .env.example
-- Generate CHANGELOG.md from git history via git-cliff
-- **claude**: Add CLAUDE.md + .claude/CLAUDE.md for peer-agent bootstrap
 
 ### Features
 
@@ -122,20 +126,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **telemetry**: Add complexity_label to baseline records
 - **telemetry**: Add dedup_hit to baselines, cache key normalization, health stats
 - **ci**: Add GitHub Actions CI workflow + property-based tests
-- **telemetry**: Normalize model names in OpenAI route for consistent baselines
-- **telemetry**: Capture response_model from SSE for routing audit
-- **models**: Add context_window to /v1/models response (#4)
-- **account_manager**: W3-1 multi-account sticky routing + demotion + telemetry (#5)
-- **cache**: Per-type stats — streaming vs non-streaming hits/misses (#10)
-- **retry**: Body-content retry classifier (Pattern 3 backport) (#12)
-- **retry**: Adaptive token-bucket pacing — amazon-q-cli backport (#11)
-- **stream**: Per-chunk stalled-stream protection (Pattern 5 backport) (#13)
-- **routes**: Preserve client model name in response (auto-compact fix) (#16)
-- **retry**: Wire body-content classifier into http_client (replaces #14) (#17)
-- **account_manager**: Defer init to first request, prevent boot-DNS-race trip (#7)
-- **openai**: Add RE2 injection and complexity classification to OpenAI route (#18)
-- **telemetry**: Capture cache token fields from message_start in streaming baseline
-- **cache**: Strip non-deterministic fields from tool_result before hashing
 
 ### Maintenance
 
@@ -165,13 +155,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Add HANDOFF.md to .gitignore
 - Fix HANDOFF.md gitignore pattern (was only matching htmlcov/)
 - **oss**: Bandit nosec annotations, ruff complexity config, import cleanup
-- **release**: Add commitizen config for conventional commit enforcement
-- Add .mcp.json and .claude/settings.json
-- Add CodeRabbit config for PR review automation
-- Add bandit and gitleaks pre-commit hooks to lefthook
-- **ci**: Switch ci.yml + docker.yml to workflow_dispatch only (#15)
-- **lint**: Fix import sort order in 3 test files (ruff I001)
-- **changelog**: Regenerate with git-cliff — add unreleased commits
 
 ### Performance
 
@@ -199,20 +182,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **regression**: Add stream cache format and capacity 429 regression tests
 - **backcompat**: Add complexity_label forward/backward compat tests
 - **emit**: Add complexity_label emit tests
-- **property**: Add 3 more property tests for complexity classifier
-- **telemetry**: Add 19 unit tests for _trunc, _cost_usd, setup_logfire, record_request, record_model_resolution
-- **utils**: Add 14 unit tests for utils.py — fingerprint, IDs, conversation stability
-- **classifier**: Add 7 Layer 2 tests for token count, conversation length, code blocks, keywords
-- **http**: Add 409 retry and VPN proxy tests for http_client.py
-- **routes**: Add 13 error handling tests for validation edge cases
-- **debug_capture**: Add 27 unit tests covering capture, redaction, prune
-- **telemetry**: Add 25 tests covering spans, emitters, and routing-mismatch path
-- **w3-5**: Add web search quality regression test
-- **integration**: E2 account failover MTTR chaos test
-- **property+integration**: Hypothesis strip tests + mock-upstream round-trip
-- **mutation**: Add mutation-killing and property-based tests for cache and classifier
 
-## [2.3] - 2026-02-03
+## [2.3] - 2026-05-14
 
 ### Bug Fixes
 
