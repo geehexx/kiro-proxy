@@ -37,7 +37,7 @@ import httpx
 from fastapi import HTTPException
 from loguru import logger
 
-from kiro.auth import KiroAuthManager
+from kiro.auth import InvalidGrantError, KiroAuthManager
 from kiro.config import (
     ADAPTIVE_RETRY_ENABLED,
     BASE_RETRY_DELAY,
@@ -256,7 +256,13 @@ class KiroHttpClient:
                     logger.warning(f"Received 403, refreshing token (attempt {attempt + 1}/{MAX_RETRIES})")
                     if stream:
                         await response.aclose()
-                    await self.auth_manager.force_refresh()
+                    try:
+                        await self.auth_manager.force_refresh()
+                    except InvalidGrantError as e:
+                        # Permanent auth failure — stop retrying immediately.
+                        # The account needs re-authentication via Kiro IDE.
+                        logger.error(f"Token refresh permanently failed, not retrying: {e}")
+                        break
                     continue
 
                 # 429 - rate limit, wait and retry.  Body-content classifier
