@@ -666,6 +666,11 @@ async def stream_kiro_to_anthropic(  # noqa: C901, PLR0912, PLR0913, PLR0915  # 
             "output_tokens": output_tokens,
         }
         usage_payload.update(upstream_cache_usage)
+        # Forward Kiro's contextUsageEvent percentage so clients (e.g. Claude
+        # Code) can display real context-window usage. Kiro emits this as the
+        # last event in the stream; only forward when we actually saw it.
+        if context_usage_percentage is not None:
+            usage_payload["context_usage_percentage"] = round(context_usage_percentage, 2)
 
         yield format_sse_event("message_delta", {
             "type": "message_delta",
@@ -889,6 +894,11 @@ async def collect_anthropic_response(  # noqa: C901, PLR0912, PLR0913
         "output_tokens": output_tokens
     }
     usage_payload.update(upstream_cache_usage)
+    # Forward Kiro's contextUsageEvent percentage to non-streaming clients
+    # the same way streaming does, so Claude Code's context-window display
+    # works regardless of stream/non-stream.
+    if result.context_usage_percentage is not None:
+        usage_payload["context_usage_percentage"] = round(result.context_usage_percentage, 2)
 
     return {
         "id": message_id,
