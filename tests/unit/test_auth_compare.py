@@ -27,21 +27,25 @@ class TestVerifyApiKeyTimingSafe:
     @pytest.mark.asyncio
     async def test_correct_token_returns_true(self):
         """Valid Bearer token passes."""
-        result = await verify_api_key(f"Bearer {PROXY_API_KEY}")
+        result = await verify_api_key(
+            auth_header=f"Bearer {PROXY_API_KEY}", x_api_key=None
+        )
         assert result is True
 
     @pytest.mark.asyncio
     async def test_wrong_token_returns_401(self):
         """Wrong token raises 401, no timing-side-channel."""
         with pytest.raises(HTTPException) as exc:
-            await verify_api_key("Bearer definitely_not_the_key")
+            await verify_api_key(
+                auth_header="Bearer definitely_not_the_key", x_api_key=None
+            )
         assert exc.value.status_code == 401
 
     @pytest.mark.asyncio
     async def test_empty_token_returns_401(self):
         """Empty string is rejected without crashing on hmac.compare_digest."""
         with pytest.raises(HTTPException) as exc:
-            await verify_api_key("")
+            await verify_api_key(auth_header="", x_api_key=None)
         assert exc.value.status_code == 401
 
     @pytest.mark.asyncio
@@ -49,18 +53,20 @@ class TestVerifyApiKeyTimingSafe:
         """None auth header is rejected — guarded before hmac.compare_digest
         (which would raise TypeError on None)."""
         with pytest.raises(HTTPException) as exc:
-            await verify_api_key(None)
+            await verify_api_key(auth_header=None, x_api_key=None)
         assert exc.value.status_code == 401
 
     @pytest.mark.asyncio
     async def test_token_length_mismatch_returns_401(self):
         """Length-mismatched tokens — hmac.compare_digest still safe (no crash)."""
         with pytest.raises(HTTPException) as exc:
-            await verify_api_key("Bearer x")  # very short
+            await verify_api_key(auth_header="Bearer x", x_api_key=None)  # very short
         assert exc.value.status_code == 401
 
         with pytest.raises(HTTPException) as exc:
-            await verify_api_key("Bearer " + "x" * 1000)  # very long
+            await verify_api_key(
+                auth_header="Bearer " + "x" * 1000, x_api_key=None
+            )  # very long
         assert exc.value.status_code == 401
 
 
@@ -121,3 +127,57 @@ class TestPlaceholderConstantExposed:
         kiro.config imports — this guards against accidental regressions
         where conftest stops setting it and the import-time guard fires."""
         assert PROXY_API_KEY != _PLACEHOLDER_PROXY_API_KEY
+
+
+class TestVerifyApiKeyAcceptsXApiKey:
+    """Fix 5 — verify_api_key (OpenAI route) accepts x-api-key alongside Bearer.
+
+    Claude Code's model-discovery flow sends ``x-api-key`` even when hitting
+    the OpenAI-flavoured /v1/models surface. Before Fix 5 those requests
+    returned 401 and produced ~4 WARNINGs/hr. After: both header shapes
+    succeed.
+    """
+
+    @pytest.mark.asyncio
+    async def test_correct_x_api_key_returns_true(self):
+        """Valid x-api-key alone passes (no Authorization header)."""
+        result = await verify_api_key(auth_header=None, x_api_key=PROXY_API_KEY)
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_wrong_x_api_key_returns_401(self):
+        """Wrong x-api-key with no Authorization → 401."""
+        with pytest.raises(HTTPException) as exc:
+            await verify_api_key(auth_header=None, x_api_key="wrong_key")
+        assert exc.value.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_x_api_key_takes_precedence_when_both_present(self):
+        """When both headers carry the right key, request passes."""
+        result = await verify_api_key(
+            auth_header=f"Bearer {PROXY_API_KEY}", x_api_key=PROXY_API_KEY
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_x_api_key_wrong_but_bearer_correct_passes(self):
+        """A bad x-api-key does NOT poison a valid Bearer fallback."""
+        result = await verify_api_key(
+            auth_header=f"Bearer {PROXY_API_KEY}", x_api_key="garbage"
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_empty_x_api_key_falls_through_to_bearer(self):
+        """Empty x-api-key is treated as 'not present' — Bearer is consulted."""
+        result = await verify_api_key(
+            auth_header=f"Bearer {PROXY_API_KEY}", x_api_key=""
+        )
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_both_missing_returns_401(self):
+        """No headers at all → 401."""
+        with pytest.raises(HTTPException) as exc:
+            await verify_api_key(auth_header=None, x_api_key=None)
+        assert exc.value.status_code == 401

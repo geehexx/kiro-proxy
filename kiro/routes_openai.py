@@ -64,6 +64,11 @@ except ImportError:
 
 # --- Security scheme ---
 api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
+# Some clients (notably Claude Code's model-discovery flow) send credentials
+# via x-api-key on /v1/models even when hitting the OpenAI-flavoured surface.
+# Accept both header shapes — composes with the Anthropic route which has
+# done the same since W18.
+x_api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 
 # Base context-window alias overrides — module-level so tests can import directly.
 # auto / auto-kiro route to the best available model (currently sonnet-4.6 1M).
@@ -78,29 +83,44 @@ _ALIAS_CW_DEFAULTS: dict[str, int] = {
 }
 
 
-async def verify_api_key(auth_header: str = Security(api_key_header)) -> bool:
+async def verify_api_key(
+    auth_header: str | None = Security(api_key_header),
+    x_api_key: str | None = Security(x_api_key_header),
+) -> bool:
     """
-    Verify API key in Authorization header.
-    
-    Expects format: "Bearer {PROXY_API_KEY}"
-    
+    Verify API key in Authorization or x-api-key header.
+
+    Accepts:
+      - Authorization: Bearer <key>   (OpenAI convention)
+      - x-api-key: <key>              (Anthropic convention; CC model discovery)
+
+    Constant-time comparison via hmac.compare_digest avoids the early-exit
+    timing leak that == has on byte-by-byte string comparison. compare_digest
+    raises TypeError on None, so we guard up-front.
+
     Args:
-        auth_header: Authorization header value
-    
+        auth_header: Value of the Authorization header (or None)
+        x_api_key: Value of the x-api-key header (or None)
+
     Returns:
-        True if key is valid
-    
+        True if either header carries a valid key
+
     Raises:
-        HTTPException: 401 if key is invalid or missing
+        HTTPException: 401 if both headers are missing or invalid
     """
-    expected = f"Bearer {PROXY_API_KEY}"
-    # Constant-time comparison: hmac.compare_digest avoids the early-exit
-    # timing leak that == has on byte-by-byte string comparison. It raises
-    # TypeError on None, so we guard up-front.
-    if not auth_header or not hmac.compare_digest(auth_header.encode("utf-8"), expected.encode("utf-8")):
-        logger.warning("Access attempt with invalid API key.")
-        raise HTTPException(status_code=401, detail="Invalid or missing API Key")
-    return True
+    expected_bearer = f"Bearer {PROXY_API_KEY}".encode("utf-8")
+    expected_raw = PROXY_API_KEY.encode("utf-8")
+
+    # Try x-api-key first (Anthropic native; what Claude Code's model-discovery sends).
+    if x_api_key and hmac.compare_digest(x_api_key.encode("utf-8"), expected_raw):
+        return True
+
+    # Fallback to Authorization: Bearer.
+    if auth_header and hmac.compare_digest(auth_header.encode("utf-8"), expected_bearer):
+        return True
+
+    logger.warning("Access attempt with invalid API key.")
+    raise HTTPException(status_code=401, detail="Invalid or missing API Key")
 
 
 # --- Router ---
