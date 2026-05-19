@@ -6,6 +6,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Bug Fixes
 
+- **models**: `auto` and `auto-kiro` now report 1M context window — previously
+  defaulted to 200k, causing premature compaction and bare "Continue" loops in
+  Claude Code sessions.
+- **logging**: Suppress uvicorn access logs; route-level structured logs are
+  sufficient and less noisy.
+- **auth**: Stop retrying on `invalid_grant` — permanent auth failure is not
+  retryable; fast-fail avoids burning retry budget on a dead credential.
 - **routes**: Fast circuit-breaker for `INSUFFICIENT_MODEL_CAPACITY` 429s — fail
   immediately with 503 + `Retry-After: 60` + `X-Kiro-Capacity-Exhausted: <model>`
   header instead of cycling accounts. Cycling accounts doesn't help when the model
