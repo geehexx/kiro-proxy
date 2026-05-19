@@ -1,4 +1,4 @@
-# lefthook.yml — git hooks for kiro-gateway (geehexx/kiro-gateway fork)
+# lefthook.yml — git hooks for kiro-proxy (geehexx/kiro-proxy fork)
 #
 # Runs pre-commit against staged files only so commits stay fast. Hooks
 # use the in-venv binaries directly (no uv dependency because this
