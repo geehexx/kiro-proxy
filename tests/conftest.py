@@ -6,6 +6,14 @@ Provides test isolation from external services and global state.
 All tests MUST be completely isolated from the network.
 """
 
+import os
+
+# CRITICAL: set PROXY_API_KEY before any kiro.* import. kiro.config raises
+# RuntimeError at import time when the key is unset or matches the .env.example
+# placeholder ("my-super-secret-password-123"). Tests need a non-default value
+# pre-set so the guard does not fire during collection.
+os.environ.setdefault("PROXY_API_KEY", "test_proxy_key_12345")
+
 import asyncio
 import json
 import time

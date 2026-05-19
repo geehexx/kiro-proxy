@@ -118,8 +118,36 @@ SERVER_PORT: int = int(os.getenv("SERVER_PORT", str(DEFAULT_SERVER_PORT)))
 # Proxy Server Settings
 # ==================================================================================================
 
-# API key for proxy access (clients must pass it in Authorization header)
-PROXY_API_KEY: str = os.getenv("PROXY_API_KEY", "my-super-secret-password-123")
+# API key for proxy access (clients must pass it in Authorization header).
+#
+# _PLACEHOLDER_PROXY_API_KEY is the well-known default that ships in .env.example.
+# Any deployment that runs with PROXY_API_KEY equal to this value (or empty) is
+# trivially compromised — the gateway refuses to start in that case (see below).
+_PLACEHOLDER_PROXY_API_KEY: str = "my-super-secret-password-123"  # nosec B105 — placeholder, not a real secret
+PROXY_API_KEY: str = os.getenv("PROXY_API_KEY", _PLACEHOLDER_PROXY_API_KEY)
+
+# Startup guard: refuse to import (and therefore refuse to serve a single
+# request) when PROXY_API_KEY is unset or still the placeholder. This fires
+# at import time so a misconfigured deployment fails immediately on launch
+# rather than authenticating every caller with the public default.
+#
+# Tests opt out by setting PROXY_API_KEY in the test environment (see
+# tests/conftest.py top-level). The CI workflow sets it via env: too.
+#
+# Escape hatch for local exploration: set PROXY_API_KEY_ALLOW_DEFAULT=1
+# (truthy) to bypass. NEVER set this in production. Documented for the
+# rare local docker-run-quickstart case where users want to test before
+# generating a key.
+_ALLOW_DEFAULT_PROXY_KEY: bool = _parse_bool_env("PROXY_API_KEY_ALLOW_DEFAULT", False)
+if not _ALLOW_DEFAULT_PROXY_KEY and (not PROXY_API_KEY or PROXY_API_KEY == _PLACEHOLDER_PROXY_API_KEY):
+    raise RuntimeError(
+        "PROXY_API_KEY is unset or matches the .env.example placeholder "
+        f"({_PLACEHOLDER_PROXY_API_KEY!r}). The gateway refuses to start with "
+        "the default key because it would authenticate any caller. "
+        "Set PROXY_API_KEY in your .env to a unique value before launching. "
+        "Generate one with: python3 -c 'import secrets; print(secrets.token_hex(16))' "
+        "(set PROXY_API_KEY_ALLOW_DEFAULT=1 to bypass for local exploration only)."
+    )
 
 # ==================================================================================================
 # VPN/Proxy Settings for Kiro API Access
