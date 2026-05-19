@@ -82,11 +82,18 @@ def setup_test_environment(tmp_path_factory):
 
     # Patch config paths to use temporary files
     import kiro.config
+    import main as main_module
     original_creds_file = kiro.config.ACCOUNTS_CONFIG_FILE
     original_state_file = kiro.config.ACCOUNTS_STATE_FILE
+    original_main_creds_file = main_module.ACCOUNTS_CONFIG_FILE
+    original_main_state_file = main_module.ACCOUNTS_STATE_FILE
 
     kiro.config.ACCOUNTS_CONFIG_FILE = str(creds_file)
     kiro.config.ACCOUNTS_STATE_FILE = str(tmp_dir / "state.json")
+    # Also patch main module's module-level bindings (imported via `from kiro.config import ...`
+    # at module load time, so they don't see later changes to kiro.config attributes)
+    main_module.ACCOUNTS_CONFIG_FILE = str(creds_file)
+    main_module.ACCOUNTS_STATE_FILE = str(tmp_dir / "state.json")
 
     print(f"✅ Test credentials: {creds_file}")
     print(f"✅ Test state: {tmp_dir / 'state.json'}")
@@ -96,6 +103,8 @@ def setup_test_environment(tmp_path_factory):
     # Restore original paths
     kiro.config.ACCOUNTS_CONFIG_FILE = original_creds_file
     kiro.config.ACCOUNTS_STATE_FILE = original_state_file
+    main_module.ACCOUNTS_CONFIG_FILE = original_main_creds_file
+    main_module.ACCOUNTS_STATE_FILE = original_main_state_file
 
     print("🧹 Test environment cleaned up")
 
