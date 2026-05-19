@@ -285,7 +285,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
     Raises:
         HTTPException: On validation or API errors
     """
-    logger.info(f"Request to /v1/messages (model={request_data.model}, stream={request_data.stream})")
+    _request_start = time.monotonic()
 
     if anthropic_version:
         logger.debug(f"Anthropic-Version header: {anthropic_version}")
@@ -941,7 +941,11 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                                 else:
                                     # Body finished cleanly — safe to record success
                                     await account_manager.report_success(account.id, request_data.model, sticky_key=_sticky_key)
-                                    logger.info("HTTP 200 - POST /v1/messages (streaming) - completed")
+                                    _elapsed_ms = int((time.monotonic() - _request_start) * 1000)
+                                    logger.info(
+                                        f"HTTP 200 POST /v1/messages model={_resolved_model} "
+                                        f"stream=true ms={_elapsed_ms}"
+                                    )
                                     # Store in streaming cache on clean completion
                                     if stream_cache_eligible and cache_key and _stream_chunks:
                                         stored = store_stream_cache(response_cache, cache_key, _stream_chunks)
@@ -1017,8 +1021,10 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                         await http_client.close()
                         # Body collected cleanly — safe to record success
                         await account_manager.report_success(account.id, request_data.model, sticky_key=_sticky_key)
+                        _elapsed_ms = int((time.monotonic() - _request_start) * 1000)
                         logger.info(
-                            "HTTP 200 - POST /v1/messages (non-streaming) - completed "
+                            f"HTTP 200 POST /v1/messages model={_resolved_model} "
+                            f"stream=false ms={_elapsed_ms} "
                             f"msg_id={anthropic_response.get('id', 'unknown')} "
                             f"response_model={anthropic_response.get('model', 'unknown')}"
                         )

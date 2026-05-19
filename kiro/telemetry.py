@@ -60,7 +60,7 @@ def setup_logfire() -> bool:
         return False
 
     # Skip telemetry in test environments to avoid polluting Logfire with test spans.
-    if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("CI"):
+    if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("CI") or any("pytest" in a for a in __import__("sys").argv):
         logger.info("test/CI environment detected — Logfire telemetry disabled")
         return False
 

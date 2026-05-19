@@ -830,19 +830,13 @@ class KiroAuthManager:
 
             # Log response details for debugging (especially on errors)
             if response.status_code != 200:
-                error_body = response.text
-                logger.error(f"AWS SSO OIDC refresh failed: status={response.status_code}, "
-                             f"body={error_body}")
-                # Try to parse AWS error for more details
+                # Consolidate into one log line: status + error_code + description
+                error_code = "unknown"
+                error_desc = response.text[:200]
                 try:
                     error_json = response.json()
                     error_code = error_json.get("error", "unknown")
-                    error_desc = error_json.get("error_description", "no description")
-                    logger.error(f"AWS SSO OIDC error details: error={error_code}, "
-                                 f"description={error_desc}")
-                    # invalid_grant is a permanent failure — the token cannot be refreshed.
-                    # Raise a distinct exception so callers can stop retrying immediately
-                    # rather than burning 3 retry attempts every ~33 seconds.
+                    error_desc = error_json.get("error_description", error_desc)
                     if error_code == "invalid_grant":
                         raise InvalidGrantError(
                             f"Token refresh permanently failed (invalid_grant): {error_desc}. "
@@ -851,7 +845,11 @@ class KiroAuthManager:
                 except InvalidGrantError:
                     raise
                 except Exception:
-                    pass  # Body wasn't JSON, already logged as text
+                    pass
+                logger.error(
+                    f"AWS SSO OIDC refresh failed: status={response.status_code} "
+                    f"error={error_code} description={error_desc}"
+                )
                 response.raise_for_status()
 
             result = response.json()
