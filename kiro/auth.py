@@ -63,6 +63,14 @@ SQLITE_REGISTRATION_KEYS = [
 ]
 
 
+class InvalidGrantError(Exception):
+    """Raised when AWS SSO OIDC returns invalid_grant during token refresh.
+
+    This is a permanent failure — the token cannot be refreshed programmatically.
+    The account must be re-authenticated via Kiro IDE.
+    """
+
+
 class AuthType(Enum):
     """
     Type of authentication mechanism.
@@ -832,6 +840,16 @@ class KiroAuthManager:
                     error_desc = error_json.get("error_description", "no description")
                     logger.error(f"AWS SSO OIDC error details: error={error_code}, "
                                  f"description={error_desc}")
+                    # invalid_grant is a permanent failure — the token cannot be refreshed.
+                    # Raise a distinct exception so callers can stop retrying immediately
+                    # rather than burning 3 retry attempts every ~33 seconds.
+                    if error_code == "invalid_grant":
+                        raise InvalidGrantError(
+                            f"Token refresh permanently failed (invalid_grant): {error_desc}. "
+                            "Re-authenticate via Kiro IDE to restore this account."
+                        )
+                except InvalidGrantError:
+                    raise
                 except Exception:
                     pass  # Body wasn't JSON, already logged as text
                 response.raise_for_status()

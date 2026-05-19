@@ -243,6 +243,42 @@ class TestKiroHttpClientRequestWithRetry:
         assert response.status_code == 200
 
     @pytest.mark.asyncio
+    async def test_403_invalid_grant_stops_retry(self, mock_auth_manager_for_http):
+        """When force_refresh() raises InvalidGrantError, retry loop stops immediately."""
+        import pytest
+
+        from kiro.auth import InvalidGrantError
+
+        http_client = KiroHttpClient(mock_auth_manager_for_http)
+
+        mock_response_403 = AsyncMock()
+        mock_response_403.status_code = 403
+
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        mock_client.request = AsyncMock(return_value=mock_response_403)
+
+        mock_auth_manager_for_http.force_refresh = AsyncMock(
+            side_effect=InvalidGrantError("invalid_grant: test")
+        )
+
+        from fastapi import HTTPException
+
+        with patch.object(http_client, '_get_client', new=AsyncMock(return_value=mock_client)):
+            with patch('kiro.http_client.get_kiro_headers', return_value={}):
+                # InvalidGrantError breaks the retry loop; gateway raises 502 (no success response)
+                with pytest.raises(HTTPException) as exc_info:
+                    await http_client.request_with_retry(
+                        "POST",
+                        "https://api.example.com/test",
+                        {"data": "value"}
+                    )
+        assert exc_info.value.status_code == 502
+
+        # force_refresh called once, then stopped — not 3 times
+        mock_auth_manager_for_http.force_refresh.assert_called_once()
+
+    @pytest.mark.asyncio
     async def test_429_triggers_backoff(self, mock_auth_manager_for_http):
         """
         What it does: Verifies exponential backoff on 429.
