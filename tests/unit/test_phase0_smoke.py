@@ -23,7 +23,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Probe 1 — x-claude-code-agent-id / x-claude-code-parent-agent-id
 # ---------------------------------------------------------------------------
@@ -48,8 +47,9 @@ class TestAgentIdHeaderForwarding:
     )
     def test_agent_id_header_is_forwarded_to_upstream(self) -> None:
         """x-claude-code-agent-id must appear in the upstream request headers."""
-        from kiro.utils import get_kiro_headers
         import inspect
+
+        from kiro.utils import get_kiro_headers
 
         sig = inspect.signature(get_kiro_headers)
         param_names = list(sig.parameters.keys())
@@ -66,8 +66,9 @@ class TestAgentIdHeaderForwarding:
 
     def test_agent_id_gap_is_documented(self) -> None:
         """Confirms the gap exists so CI stays green until the fix lands."""
-        from kiro.utils import get_kiro_headers
         import inspect
+
+        from kiro.utils import get_kiro_headers
 
         sig = inspect.signature(get_kiro_headers)
         param_names = list(sig.parameters.keys())
@@ -129,8 +130,9 @@ class TestOutputFormatJsonSchemaPassThrough:
 
     def test_output_format_gap_is_documented(self) -> None:
         """Confirms the gap exists so CI stays green until the fix lands."""
-        from kiro import converters_openai
         import inspect
+
+        from kiro import converters_openai
 
         src = inspect.getsource(converters_openai)
         assert "output_format" not in src, (
