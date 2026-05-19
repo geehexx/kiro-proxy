@@ -2615,7 +2615,7 @@ class TestMessagesErrorHandling:
         assert response.status_code in [200, 400, 422]
 
     def test_messages_invalid_model_format(self, test_client, valid_proxy_api_key):
-        """Test invalid model name format returns 503 (model not found)."""
+        """Test invalid model name format returns 503 or forwards to upstream."""
         response = test_client.post(
             "/v1/messages",
             headers={"x-api-key": valid_proxy_api_key},
@@ -2625,8 +2625,9 @@ class TestMessagesErrorHandling:
                 "max_tokens": 100
             }
         )
-        # Invalid model returns 503 (service unavailable / model not found)
-        assert response.status_code in [400, 422, 503]
+        # Gateway forwards unknown models to Kiro (which may accept or reject them).
+        # Returns 503 when no account is available, or 200/4xx when Kiro responds.
+        assert response.status_code in [200, 400, 422, 503]
 
     def test_messages_temperature_out_of_range(self, test_client, valid_proxy_api_key):
         """Test temperature > 1.0 returns 422."""
