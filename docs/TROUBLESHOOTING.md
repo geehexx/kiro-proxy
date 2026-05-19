@@ -98,10 +98,10 @@ curl -X POST http://localhost:8765/v1/messages \
 
 ```bash
 # View live logs (systemd)
-journalctl --user -u kiro-gateway -f
+journalctl --user -u kiro-proxy -f
 
 # View recent errors
-journalctl --user -u kiro-gateway --since "1 hour ago" | grep ERROR
+journalctl --user -u kiro-proxy --since "1 hour ago" | grep ERROR
 ```
 
 ## Multi-Account Issues

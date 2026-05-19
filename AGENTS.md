@@ -194,15 +194,15 @@ pip install -r requirements.txt
 
 ```bash
 # Build Docker image
-docker build -t kiro-gateway .
+docker build -t kiro-proxy .
 
 # Run with Docker (using environment variables)
 docker run -d \
   -p 8000:8000 \
   -e PROXY_API_KEY="your-secret-key" \
   -e REFRESH_TOKEN="your-refresh-token" \
-  --name kiro-gateway \
-  kiro-gateway
+  --name kiro-proxy \
+  kiro-proxy
 
 # Run with docker-compose (recommended)
 docker-compose up -d
@@ -225,8 +225,8 @@ docker run -d \
   -v ~/.aws/sso/cache:/home/kiro/.aws/sso/cache:ro \
   -e KIRO_CREDS_FILE=/home/kiro/.aws/sso/cache/kiro-auth-token.json \
   -e PROXY_API_KEY="your-secret-key" \
-  --name kiro-gateway \
-  kiro-gateway
+  --name kiro-proxy \
+  kiro-proxy
 
 # Mount kiro-cli database
 docker run -d \
@@ -234,8 +234,8 @@ docker run -d \
   -v ~/.local/share/kiro-cli:/home/kiro/.local/share/kiro-cli \
   -e KIRO_CLI_DB_FILE=/home/kiro/.local/share/kiro-cli/data.sqlite3 \
   -e PROXY_API_KEY="your-secret-key" \
-  --name kiro-gateway \
-  kiro-gateway
+  --name kiro-proxy \
+  kiro-proxy
 ```
 
 **Docker Features:**
@@ -257,7 +257,7 @@ docker run -d \
 ## Project Structure
 
 ```
-kiro-gateway/
+kiro-proxy/
 ├── main.py                          # Application entry point
 ├── kiro/                            # Main package
 │   ├── __init__.py                  # Package exports
