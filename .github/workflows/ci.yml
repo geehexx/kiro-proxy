@@ -39,6 +39,9 @@ jobs:
           CAPACITY_BACKOFF_BASE: "5.0"
           CAPACITY_MAX_RETRIES: "2"
           KIRO_CREDENTIALS_PATH: "/dev/null"
+          # Required: kiro.config raises at import time if PROXY_API_KEY is the
+          # .env.example placeholder. Tests use a unique non-default value.
+          PROXY_API_KEY: "ci_test_proxy_key_unique_value_not_default"
         run: uv run pytest tests/unit/ -q --no-header -x
 
   security:

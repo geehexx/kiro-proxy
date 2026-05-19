@@ -26,6 +26,7 @@ Contains all API endpoints:
 - /v1/chat/completions: Chat completions
 """
 
+import hmac
 import json
 from datetime import datetime, timezone
 
@@ -92,7 +93,11 @@ async def verify_api_key(auth_header: str = Security(api_key_header)) -> bool:
     Raises:
         HTTPException: 401 if key is invalid or missing
     """
-    if not auth_header or auth_header != f"Bearer {PROXY_API_KEY}":
+    expected = f"Bearer {PROXY_API_KEY}"
+    # Constant-time comparison: hmac.compare_digest avoids the early-exit
+    # timing leak that == has on byte-by-byte string comparison. It raises
+    # TypeError on None, so we guard up-front.
+    if not auth_header or not hmac.compare_digest(auth_header.encode("utf-8"), expected.encode("utf-8")):
         logger.warning("Access attempt with invalid API key.")
         raise HTTPException(status_code=401, detail="Invalid or missing API Key")
     return True
