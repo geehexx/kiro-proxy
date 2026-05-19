@@ -64,6 +64,18 @@ except ImportError:
 # --- Security scheme ---
 api_key_header = APIKeyHeader(name="Authorization", auto_error=False)
 
+# Base context-window alias overrides — module-level so tests can import directly.
+# auto / auto-kiro route to the best available model (currently sonnet-4.6 1M).
+# Without this, CC defaults to 200k and compacts at 170k, causing the premature-
+# compaction / "Continue" loop bug (research/2026-05-15-lessons-compaction-bug.md).
+_ALIAS_CW_DEFAULTS: dict[str, int] = {
+    "sonnet[1m]": 1_000_000,
+    "opus[1m]": 1_000_000,
+    "haiku[1m]": 1_000_000,
+    "auto": 1_000_000,
+    "auto-kiro": 1_000_000,
+}
+
 
 async def verify_api_key(auth_header: str = Security(api_key_header)) -> bool:
     """
@@ -217,12 +229,8 @@ async def get_models(request: Request):  # noqa: C901
         "claude-sonnet-4-6",
     }
 
-    # Alias overrides: [1m] suffix means 1M context window.
-    _ALIAS_CW: dict[str, int] = {
-        "sonnet[1m]": 1_000_000,
-        "opus[1m]": 1_000_000,
-        "haiku[1m]": 1_000_000,
-    }
+    # Alias overrides: start from module-level defaults (includes auto/auto-kiro).
+    _ALIAS_CW: dict[str, int] = _ALIAS_CW_DEFAULTS.copy()
     for _canon in _CANONICAL_1M_CAPABLE:
         _ALIAS_CW[f"{_canon}[1m]"] = 1_000_000
     for _dash in _DASH_BRACKET_ALIASES:
