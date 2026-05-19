@@ -183,7 +183,8 @@ class KiroHttpClient:
         url: str,
         json_data: Optional[dict] = None,
         params: Optional[dict] = None,
-        stream: bool = False
+        stream: bool = False,
+        extra_headers: Optional[dict] = None,
     ) -> httpx.Response:
         """
         Executes an HTTP request with retry logic.
@@ -203,6 +204,8 @@ class KiroHttpClient:
             json_data: Optional JSON body (for POST/PUT/PATCH)
             params: Optional query parameters (for GET)
             stream: Use streaming (default False)
+            extra_headers: Optional additional headers to merge into the request
+                (e.g. x-claude-code-agent-id for telemetry correlation)
 
         Returns:
             httpx.Response with successful response
@@ -223,6 +226,8 @@ class KiroHttpClient:
                 # Get current token
                 token = await self.auth_manager.get_access_token()
                 headers = get_kiro_headers(self.auth_manager, token)
+                if extra_headers:
+                    headers.update(extra_headers)
 
                 # Build request kwargs based on parameters
                 request_kwargs = {"headers": headers}

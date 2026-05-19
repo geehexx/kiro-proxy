@@ -546,14 +546,22 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
             else:
                 shared_client = request.app.state.http_client
                 http_client = KiroHttpClient(auth_manager, shared_client=shared_client)
-            
+
+            # Forward attribution headers for telemetry correlation
+            _attribution_headers = {}
+            for _h in ("x-claude-code-agent-id", "x-claude-code-attribution"):
+                _v = request.headers.get(_h)
+                if _v:
+                    _attribution_headers[_h] = _v
+
             try:
                 # Make request to Kiro API
                 response = await http_client.request_with_retry(
                     "POST",
                     url,
                     kiro_payload,
-                    stream=True
+                    stream=True,
+                    extra_headers=_attribution_headers or None,
                 )
                 
                 if response.status_code == 200:
@@ -802,6 +810,14 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
         # Non-streaming mode: shared client for efficient connection reuse
         shared_client = request.app.state.http_client
         http_client = KiroHttpClient(auth_manager, shared_client=shared_client)
+
+    # Forward attribution headers for telemetry correlation
+    _attribution_headers = {}
+    for _h in ("x-claude-code-agent-id", "x-claude-code-attribution"):
+        _v = request.headers.get(_h)
+        if _v:
+            _attribution_headers[_h] = _v
+
     try:
         # Make request to Kiro API (for both streaming and non-streaming modes)
         # Important: we wait for Kiro response BEFORE returning StreamingResponse,
@@ -810,7 +826,8 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
             "POST",
             url,
             kiro_payload,
-            stream=True
+            stream=True,
+            extra_headers=_attribution_headers or None,
         )
         
         if response.status_code != 200:
@@ -870,7 +887,8 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                     # Create retry request function for retries
                     async def make_retry_request():
                         return await http_client.request_with_retry(
-                            "POST", url, kiro_payload, stream=True
+                            "POST", url, kiro_payload, stream=True,
+                            extra_headers=_attribution_headers or None,
                         )
                     
                     # Use retry wrapper with initial response

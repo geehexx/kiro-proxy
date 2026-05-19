@@ -1437,3 +1437,137 @@ class TestKiroHttpClientVpnProxy:
             http_client = KiroHttpClient(auth_manager=mock_auth_manager_for_http)
             # Should not raise
             assert http_client is not None
+
+
+class TestAttributionHeaderForwarding:
+    """Tests for extra_headers / attribution header forwarding in request_with_retry."""
+
+    @pytest.mark.asyncio
+    async def test_agent_id_header_forwarded_to_upstream(self, mock_auth_manager_for_http):
+        """
+        What it does: Verifies x-claude-code-agent-id is forwarded to the upstream request.
+        Purpose: Ensure Phase 2 emitter can correlate requests by agent.
+        """
+        http_client = KiroHttpClient(mock_auth_manager_for_http)
+
+        mock_200 = Mock(spec=httpx.Response)
+        mock_200.status_code = 200
+
+        captured_headers = {}
+
+        async def capture_request(method, url, **kwargs):
+            captured_headers.update(kwargs.get("headers", {}))
+            return mock_200
+
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        mock_client.request = AsyncMock(side_effect=capture_request)
+
+        base_headers = {"Authorization": "Bearer test", "Content-Type": "application/json"}
+        with patch.object(http_client, '_get_client', new=AsyncMock(return_value=mock_client)), \
+             patch('kiro.http_client.get_kiro_headers', return_value=base_headers):
+            await http_client.request_with_retry(
+                "POST",
+                "https://api.example.com/test",
+                json_data={},
+                extra_headers={"x-claude-code-agent-id": "agent-abc123"},
+            )
+
+        assert captured_headers.get("x-claude-code-agent-id") == "agent-abc123"
+
+    @pytest.mark.asyncio
+    async def test_attribution_header_forwarded_to_upstream(self, mock_auth_manager_for_http):
+        """
+        What it does: Verifies x-claude-code-attribution is forwarded to the upstream request.
+        Purpose: Ensure attribution metadata reaches Kiro for telemetry.
+        """
+        http_client = KiroHttpClient(mock_auth_manager_for_http)
+
+        mock_200 = Mock(spec=httpx.Response)
+        mock_200.status_code = 200
+
+        captured_headers = {}
+
+        async def capture_request(method, url, **kwargs):
+            captured_headers.update(kwargs.get("headers", {}))
+            return mock_200
+
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        mock_client.request = AsyncMock(side_effect=capture_request)
+
+        base_headers = {"Authorization": "Bearer test", "Content-Type": "application/json"}
+        with patch.object(http_client, '_get_client', new=AsyncMock(return_value=mock_client)), \
+             patch('kiro.http_client.get_kiro_headers', return_value=base_headers):
+            await http_client.request_with_retry(
+                "POST",
+                "https://api.example.com/test",
+                json_data={},
+                extra_headers={"x-claude-code-attribution": "session-xyz"},
+            )
+
+        assert captured_headers.get("x-claude-code-attribution") == "session-xyz"
+
+    @pytest.mark.asyncio
+    async def test_no_extra_headers_does_not_break_request(self, mock_auth_manager_for_http):
+        """
+        What it does: Verifies request_with_retry works normally when extra_headers is None.
+        Purpose: Ensure backward compatibility — callers that don't pass extra_headers are unaffected.
+        """
+        http_client = KiroHttpClient(mock_auth_manager_for_http)
+
+        mock_200 = Mock(spec=httpx.Response)
+        mock_200.status_code = 200
+
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        mock_client.request = AsyncMock(return_value=mock_200)
+
+        base_headers = {"Authorization": "Bearer test", "Content-Type": "application/json"}
+        with patch.object(http_client, '_get_client', new=AsyncMock(return_value=mock_client)), \
+             patch('kiro.http_client.get_kiro_headers', return_value=base_headers):
+            response = await http_client.request_with_retry(
+                "POST",
+                "https://api.example.com/test",
+                json_data={},
+            )
+
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_both_attribution_headers_forwarded_together(self, mock_auth_manager_for_http):
+        """
+        What it does: Verifies both x-claude-code-agent-id and x-claude-code-attribution
+                      are forwarded when both are present.
+        Purpose: Ensure full telemetry context is available upstream.
+        """
+        http_client = KiroHttpClient(mock_auth_manager_for_http)
+
+        mock_200 = Mock(spec=httpx.Response)
+        mock_200.status_code = 200
+
+        captured_headers = {}
+
+        async def capture_request(method, url, **kwargs):
+            captured_headers.update(kwargs.get("headers", {}))
+            return mock_200
+
+        mock_client = AsyncMock()
+        mock_client.is_closed = False
+        mock_client.request = AsyncMock(side_effect=capture_request)
+
+        base_headers = {"Authorization": "Bearer test", "Content-Type": "application/json"}
+        with patch.object(http_client, '_get_client', new=AsyncMock(return_value=mock_client)), \
+             patch('kiro.http_client.get_kiro_headers', return_value=base_headers):
+            await http_client.request_with_retry(
+                "POST",
+                "https://api.example.com/test",
+                json_data={},
+                extra_headers={
+                    "x-claude-code-agent-id": "agent-abc123",
+                    "x-claude-code-attribution": "session-xyz",
+                },
+            )
+
+        assert captured_headers.get("x-claude-code-agent-id") == "agent-abc123"
+        assert captured_headers.get("x-claude-code-attribution") == "session-xyz"
