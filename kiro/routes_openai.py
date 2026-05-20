@@ -707,6 +707,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                             """Stream Kiro SSE to the client via session-limiter path, handling retries and telemetry."""
                             streaming_error = None
                             client_disconnected = False
+                            _stream_usage: dict = {}
                             try:
                                 async def make_retry_request():
                                     """Issue a fresh upstream POST for first-token-timeout retry."""
@@ -724,6 +725,15 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                                     request_messages=messages_for_tokenizer,
                                     request_tools=tools_for_tokenizer
                                 ):
+                                    # Capture usage from final SSE chunk (data: {...,"usage":{...}})
+                                    if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                                        try:
+                                            import json as _json
+                                            chunk_data = _json.loads(chunk[6:])
+                                            if "usage" in chunk_data:
+                                                _stream_usage = chunk_data["usage"]
+                                        except Exception:
+                                            pass
                                     yield chunk
                             except GeneratorExit:
                                 client_disconnected = True
@@ -758,7 +768,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                                     re2_applied=_re2_active,
                                     upstream_ms=None,
                                     status=500 if streaming_error else 200,
-                                    usage={},
+                                    usage=_stream_usage,
                                     session_id_gw=None,
                                     complexity_label=_complexity.label if _complexity else None,
                                 )
@@ -1064,6 +1074,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                 """Stream Kiro SSE to the client, handling retries and telemetry."""
                 streaming_error = None
                 client_disconnected = False
+                _stream_usage: dict = {}
                 try:
                     # Create retry request function for retries
                     async def make_retry_request():
@@ -1084,6 +1095,15 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                         request_messages=messages_for_tokenizer,
                         request_tools=tools_for_tokenizer
                     ):
+                        # Capture usage from final SSE chunk
+                        if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                            try:
+                                import json as _json
+                                chunk_data = _json.loads(chunk[6:])
+                                if "usage" in chunk_data:
+                                    _stream_usage = chunk_data["usage"]
+                            except Exception:
+                                pass
                         yield chunk
                 except GeneratorExit:
                     # Client disconnected - this is normal
@@ -1123,7 +1143,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                         re2_applied=_re2_active,
                         upstream_ms=None,
                         status=500 if streaming_error else 200,
-                        usage={},
+                        usage=_stream_usage,
                         session_id_gw=None,
                         complexity_label=_complexity.label if _complexity else None,
                     )
