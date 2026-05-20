@@ -33,6 +33,19 @@ def test_monthly_request_count_inline_text_is_no_retry():
     assert d.kind is RetryKind.NO_RETRY
 
 
+def test_overage_request_limit_exceeded_is_no_retry():
+    body = json.dumps({"reason": "OVERAGE_REQUEST_LIMIT_EXCEEDED"}).encode()
+    d = classify(402, body)
+    assert d.kind is RetryKind.NO_RETRY
+    assert "OVERAGE_REQUEST_LIMIT_EXCEEDED" in d.reason
+
+
+def test_overage_request_limit_exceeded_inline_text_is_no_retry():
+    body = b"OVERAGE_REQUEST_LIMIT_EXCEEDED: account has exceeded overage cap"
+    d = classify(402, body)
+    assert d.kind is RetryKind.NO_RETRY
+
+
 def test_high_load_500_is_throttle_not_standard():
     body = b"Encountered unexpectedly high load -- please retry"
     d = classify(500, body)

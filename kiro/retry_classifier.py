@@ -45,6 +45,7 @@ class RetryDecision:
 _NO_RETRY_MARKERS: tuple[str, ...] = (
     "MONTHLY_REQUEST_COUNT",
     "MONTHLY_TOKEN_COUNT",
+    "OVERAGE_REQUEST_LIMIT_EXCEEDED",  # hard overage cap — retrying wastes a slot
     "request quota exceeded",
 )
 
