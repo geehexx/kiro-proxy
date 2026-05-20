@@ -56,6 +56,7 @@ from kiro.streaming_anthropic import (
     stream_with_first_token_retry_anthropic,
 )
 from kiro.tokenizer import estimate_request_tokens
+from kiro.telemetry import emit_cache_event
 from kiro.utils import generate_conversation_id
 
 
@@ -550,6 +551,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                 )
                 if debug_logger:
                     debug_logger.discard_buffers()
+                emit_cache_event(event="hit", model=_resolved_model, cache_key_prefix=cache_key[:8], layer="response")
                 await _emit_gateway_baseline(
                     request,
                     response_body=hit_body,
@@ -576,6 +578,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                 )
                 if debug_logger:
                     debug_logger.discard_buffers()
+                emit_cache_event(event="hit", model=_resolved_model, cache_key_prefix=cache_key[:8], layer="stream")
                 await _emit_gateway_baseline(
                     request,
                     response_body={},

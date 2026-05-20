@@ -208,8 +208,18 @@ def emit_cache_event(
     event: str,
     model: str,
     cache_key_prefix: Optional[str] = None,
+    layer: str = "response",
+    key_hash_prefix: str = "",
 ) -> None:
-    """Emit cache.hit / cache.miss / cache.bypass as a log event."""
+    """Emit cache.hit / cache.miss / cache.bypass as a log event.
+
+    Args:
+        event: "hit", "miss", or "bypass"
+        model: resolved model ID
+        cache_key_prefix: first 8 chars of cache key (for correlation, not full key)
+        layer: cache layer — "response" (full response cache) or "stream" (stream cache)
+        key_hash_prefix: first 8 chars of the hash key (alias for cache_key_prefix)
+    """
     if not _configured or not _LOGFIRE_AVAILABLE:
         return
     try:
@@ -217,8 +227,10 @@ def emit_cache_event(
             f"cache.{event}",
             **{  # type: ignore[arg-type]
                 "kiro.cache.event": event,
+                "kiro.cache.hit": event == "hit",
+                "kiro.cache.layer": layer,
                 "kiro.cache.model": model,
-                "kiro.cache.key": cache_key_prefix or "",
+                "kiro.cache.key": cache_key_prefix or key_hash_prefix or "",
             }
         )
     except Exception as e:
