@@ -483,7 +483,7 @@ class TestEnhanceImproperlyFormedRequest:
         error_info = enhance_kiro_error(error_json)
 
         assert "problem persists" in error_info.user_message
-        assert "jwadow/kiro-gateway" in error_info.user_message
+        assert "geehexx/kiro-proxy" in error_info.user_message
         assert error_info.original_message == "Improperly formed request."
 
     def test_enhance_improperly_formed_request_unknown_reason(self):

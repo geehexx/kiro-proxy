@@ -1,7 +1,7 @@
 """Unit tests for the Opus 4.7 effort guard.
 
 Background: per the Phase 0 wire test 2026-05-19
-(basic-memory://research/2026-05-19-amf-phase-0-result), Opus 4.7 returns
+(internal research notes), Opus 4.7 returns
 429 INSUFFICIENT_MODEL_CAPACITY when `effort` is `low`/`medium`/`disabled`/
 `adaptive` or unset. Only `high`/`xhigh`/`max` actually flow.
 
