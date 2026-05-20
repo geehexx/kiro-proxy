@@ -712,7 +712,8 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                                 async def make_retry_request():
                                     """Issue a fresh upstream POST for first-token-timeout retry."""
                                     return await http_client.request_with_retry(
-                                        "POST", url, kiro_payload, stream=True
+                                        "POST", url, kiro_payload, stream=True,
+                                        extra_headers=_attribution_headers or None,
                                     )
                                 
                                 async for chunk in stream_with_first_token_retry(
@@ -1178,6 +1179,8 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                 usage=openai_response.get("usage") or {},
                 session_id_gw=None,
                 complexity_label=_complexity.label if _complexity else None,
+                message_id=openai_response.get("id"),
+                response_model=openai_response.get("model"),
             )
             # Write debug logs after non-streaming request completes
             if debug_logger:
