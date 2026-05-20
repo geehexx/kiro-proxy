@@ -48,6 +48,11 @@ pre-commit:
       glob: "*.md"
       run: markdownlint-cli2 {staged_files} || true
 
+    check-internal-refs:
+      # Block internal tooling refs that should never appear in a public repo.
+      # Script in claude-config; copied here so kiro-proxy is self-contained.
+      run: python3 scripts/pre-commit/check-internal-refs.py {staged_files}
+
     gitleaks:
       run: gitleaks protect --staged --redact --no-banner
 
