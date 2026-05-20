@@ -1523,8 +1523,8 @@ class TestGetAccountStats:
         endpoint must show distinct ids.
         """
         manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
-        a1 = "/home/u/.aws/sso/cache/kiro-auth-token.json"
-        a2 = "/home/u/.aws/sso/cache/kiro-accounts/foo/kiro-auth-token.json"
+        a1 = "/home/u/.aws/sso/cache/kiro-auth-token.json"  # internal-ref-allow
+        a2 = "/home/u/.aws/sso/cache/kiro-accounts/foo/kiro-auth-token.json"  # internal-ref-allow
         manager._accounts = {
             a1: _make_initialized_account(a1),
             a2: _make_initialized_account(a2),
@@ -1558,3 +1558,46 @@ class TestGetAccountStats:
         result = await manager.get_account_stats()
 
         assert result == []
+
+class TestResetFailures:
+    """Tests for reset_failures() admin endpoint helper."""
+
+    @pytest.mark.asyncio
+    async def test_reset_failures_clears_failure_counters(self, tmp_path):
+        """reset_failures() zeroes failures and last_failure_time on all accounts."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        acc = _make_initialized_account("/acc/a.json")
+        acc.failures = 3
+        acc.last_failure_time = time.time() - 10
+        manager._accounts = {"/acc/a.json": acc}
+
+        result = await manager.reset_failures()
+
+        assert acc.failures == 0
+        assert acc.last_failure_time == 0.0
+        assert result[0]["failures_before"] == 3
+
+    @pytest.mark.asyncio
+    async def test_reset_failures_clears_demotion(self, tmp_path):
+        """reset_failures() also clears _demoted_until so demoted accounts become available."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        acc = _make_initialized_account("/acc/a.json")
+        manager._accounts = {"/acc/a.json": acc}
+        manager._demoted_until["/acc/a.json"] = time.time() + 300  # demoted for 5 min
+
+        result = await manager.reset_failures()
+
+        assert "/acc/a.json" not in manager._demoted_until
+        assert result[0]["demoted_cleared"] is True
+
+    @pytest.mark.asyncio
+    async def test_reset_failures_not_demoted_reports_false(self, tmp_path):
+        """reset_failures() reports demoted_cleared=False when account was not demoted."""
+        manager = AccountManager(str(tmp_path / "c.json"), str(tmp_path / "s.json"))
+        acc = _make_initialized_account("/acc/a.json")
+        manager._accounts = {"/acc/a.json": acc}
+
+        result = await manager.reset_failures()
+
+        assert result[0]["demoted_cleared"] is False
+

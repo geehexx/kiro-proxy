@@ -969,11 +969,14 @@ class AccountManager:
             result = []
             for account_id, account in self._accounts.items():
                 failures_before = account.failures
+                demoted_before = self._demoted_until.get(account_id, 0.0) > time.time()
                 account.failures = 0
                 account.last_failure_time = 0.0
+                self._demoted_until.pop(account_id, None)
                 result.append({
                     "id": _short_account_id(account_id),
                     "failures_before": failures_before,
+                    "demoted_cleared": demoted_before,
                 })
             await self._save_state()
         return result
