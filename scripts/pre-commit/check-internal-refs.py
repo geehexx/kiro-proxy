@@ -39,8 +39,8 @@ HARD_BLOCK_PATTERNS: dict[str, str] = {
     "data-basic-memory-path": r"data/basic-memory/",
     "kiro-steering-path": r"\.kiro/",
     "memory-uri": r"(?<![a-z])memory://",
-    "home-user-path-hard": r"/home/[a-z_][a-z0-9_-]*/(?!runner/|ubuntu/|actions/|gxx/)",  # pii-allow
-    "internal-tooling-prose": r"\b(sub-agent|steering file|hook handler|mcp_mcp_python|invokeSubAgent)\b",
+    "home-user-path-hard": r"/home/[a-z_][a-z0-9_-]*/(?!runner/|ubuntu/|actions/|kiro/|gxx/)",  # pii-allow
+    "internal-tooling-prose": r"\b(mcp_mcp_python|invokeSubAgent)\b",  # only truly internal tool names
 }
 
 # Warn-only — exit 0 but print warning

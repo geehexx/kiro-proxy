@@ -71,6 +71,8 @@ async def _emit_gateway_baseline_openai(  # noqa: PLR0913
     session_id_gw=None,
     complexity_label=None,
     dedup_hit: bool = False,
+    message_id: str | None = None,
+    response_model: str | None = None,
 ) -> None:
     """Emit one gateway-baseline record for an OpenAI-format request.
 
@@ -88,15 +90,17 @@ async def _emit_gateway_baseline_openai(  # noqa: PLR0913
     try:
         input_tokens = usage.get("prompt_tokens")
         output_tokens = usage.get("completion_tokens")
-        response_model = usage.get("_response_model")  # injected by collect_stream_response when available
+        # Prefer explicit params; fall back to underscore-injected keys in usage dict
+        _response_model = response_model or usage.get("_response_model") or usage.get("model")
+        _message_id = message_id or usage.get("_message_id") or usage.get("id")
         record = {
             "ts": __import__("time").time(),
             "source": "gateway-requests",
-            "message_id": usage.get("_message_id"),
+            "message_id": _message_id,
             "session_id_gw": session_id_gw,
             "cache_key": None,
             "model": request_model,
-            "response_model": response_model,
+            "response_model": _response_model,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "cache_read_input_tokens": None,
@@ -786,6 +790,8 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                             usage=openai_response.get("usage") or {},
                             session_id_gw=None,
                             complexity_label=_complexity.label if _complexity else None,
+                            message_id=openai_response.get("id"),
+                            response_model=openai_response.get("model"),
                         )
                         if debug_logger:
                             debug_logger.discard_buffers()
