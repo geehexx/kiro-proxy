@@ -1,10 +1,10 @@
-# AGENTS.md - Guide for AI Agents Working in Kiro Gateway
+# AGENTS.md - Guide for AI Agents Working in kiro-proxy
 
-This document provides essential information for AI agents (Claude, GPT, etc.) working in the Kiro Gateway codebase.
+This document provides essential information for AI agents (Claude, GPT, etc.) working in the kiro-proxy codebase.
 
 ## Project Philosophy
 
-**Kiro Gateway is a transparent proxy with minimal, purposeful modifications.**
+**kiro-proxy is a transparent proxy with minimal, purposeful modifications.**
 
 This is a **reverse engineering project** for Kiro API (Amazon Q Developer). We expose undocumented functionality and work around API quirks. Transparency means being clear about what we add, not refusing to add anything.
 
@@ -113,7 +113,7 @@ When debugging this error, systematic testing is required to identify the actual
 
 ## Project Overview
 
-**Kiro Gateway** is a Python FastAPI proxy server that provides OpenAI-compatible and Anthropic-compatible APIs for Kiro (Amazon Q Developer / AWS CodeWhisperer). It translates requests between different API formats and handles authentication, streaming, model resolution, and error handling.
+**kiro-proxy** is a Python FastAPI proxy server that provides OpenAI-compatible and Anthropic-compatible APIs for Kiro (Amazon Q Developer / AWS CodeWhisperer). It translates requests between different API formats and handles authentication, streaming, model resolution, and error handling.
 
 - **Language**: Python 3.10+
 - **Framework**: FastAPI with uvicorn
@@ -853,11 +853,11 @@ DEBUG_MODE="errors" python main.py
 - **README.md**: User-facing documentation
 - **tests/README.md**: Testing documentation
 - **.env.example**: Configuration template
-- **GitHub Issues**: https://github.com/jwadow/kiro-gateway/issues
+- **GitHub Issues**: https://github.com/geehexx/kiro-proxy/issues
 
 ## Summary
 
-Kiro Gateway is a well-architected Python FastAPI application with:
+kiro-proxy is a well-architected Python FastAPI application with:
 
 - ✅ Modular design with clear separation of concerns
 - ✅ Comprehensive test suite with complete network isolation

@@ -1,4 +1,4 @@
-# Architectural Overview: Kiro Gateway
+# Architectural Overview: kiro-proxy
 
 ## 1. System Purpose and Goals
 
@@ -27,7 +27,7 @@ The main goal of the system is to provide transparent compatibility between mult
               │                              │
               ▼                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                      Kiro Gateway                               │
+│                      kiro-proxy                               │
 │  ┌─────────────────────┐       ┌─────────────────────┐         │
 │  │  OpenAI Adapter     │       │  Anthropic Adapter  │         │
 │  │  /v1/chat/...       │       │  /v1/messages       │         │
@@ -56,7 +56,7 @@ The system acts as a "translator", allowing the use of any tools, libraries, and
 The project is organized as a modular Python package `kiro/`:
 
 ```
-kiro-gateway/
+kiro-proxy/
 ├── main.py                    # Entry point, FastAPI application creation
 ├── requirements.txt           # Python dependencies
 ├── .env.example               # Environment configuration example

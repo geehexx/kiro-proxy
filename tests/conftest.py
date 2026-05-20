@@ -26,6 +26,78 @@ import pytest
 from fastapi.testclient import TestClient
 
 # =============================================================================
+# Hypothesis profiles
+# =============================================================================
+# Register profiles so tests can be tuned per environment:
+#   dev   (default) — fast feedback, 100 examples, 500ms deadline
+#   ci              — thorough, 300 examples, 2s deadline
+#   quick           — smoke-only, 20 examples, no deadline
+#
+# Select at runtime:
+#   HYPOTHESIS_PROFILE=ci pytest tests/unit/
+#   pytest --hypothesis-profile=ci tests/unit/
+from hypothesis import HealthCheck
+from hypothesis import settings as _h_settings
+
+_h_settings.register_profile(
+    "dev",
+    max_examples=100,
+    deadline=500,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+_h_settings.register_profile(
+    "ci",
+    max_examples=300,
+    deadline=2000,
+    suppress_health_check=[HealthCheck.too_slow],
+)
+_h_settings.register_profile(
+    "quick",
+    max_examples=20,
+    deadline=None,
+    suppress_health_check=[HealthCheck.too_slow, HealthCheck.differing_executors],
+)
+
+_h_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "dev"))
+
+
+# =============================================================================
+# Loguru sink suppression for tests
+# =============================================================================
+# loguru installs a default stderr sink at import time that emits every
+# log line during pytest collection + execution. This drowns the test
+# runner output ("08:11:14.393   tests/unit/...") and obscures real test
+# failures.
+#
+# Set LOGURU_TEST_LEVEL=ERROR (default) to silence INFO/DEBUG/WARNING.
+# Set LOGURU_TEST_LEVEL=DEBUG to opt back in for a specific debug session.
+# Set LOGURU_TEST_DISABLED=1 to remove the sink entirely (no log output at
+# all — useful when grepping pytest output).
+#
+# Per the 2026-05-20 logging+caching+telemetry research bundle (F1):
+# https://anthropic.com — confirmed loguru, not logfire, is the source of
+# pytest verbosity (logfire is already gated on PYTEST_CURRENT_TEST).
+
+@pytest.fixture(autouse=True, scope="session")
+def _silence_loguru_in_tests():
+    """Reduce loguru output to ERROR-only (or remove) during tests."""
+    try:
+        from loguru import logger
+    except ImportError:
+        yield
+        return
+
+    if os.environ.get("LOGURU_TEST_DISABLED") == "1":
+        logger.remove()
+    else:
+        logger.remove()
+        level = os.environ.get("LOGURU_TEST_LEVEL", "ERROR").upper()
+        import sys as _sys
+        logger.add(_sys.stderr, level=level, format="{level} | {message}")
+    yield
+
+
+# =============================================================================
 # Event Loop Fixtures
 # =============================================================================
 

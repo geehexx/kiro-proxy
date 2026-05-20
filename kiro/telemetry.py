@@ -1,5 +1,4 @@
-"""
-Logfire / OpenTelemetry telemetry for kiro-gateway.
+"""Logfire / OpenTelemetry telemetry for kiro-proxy.
 
 Design principles:
 - Hierarchy: user_request → gateway.request → (cache.hit | upstream.call)
@@ -69,10 +68,11 @@ def setup_logfire() -> bool:
         logger.info("LOGFIRE_TOKEN not set — telemetry disabled")
         return False
 
+    service_name = os.getenv("LOGFIRE_SERVICE_NAME", "kiro-gateway")  # TODO(rebrand): defer; changing default would create a new Logfire project/dashboard
     try:
         _logfire.configure(  # type: ignore[union-attr]
             token=token,
-            service_name=os.getenv("LOGFIRE_SERVICE_NAME", "kiro-gateway"),
+            service_name=service_name,
             service_version=os.getenv("APP_VERSION", "2.4-dev"),
             environment=os.getenv("LOGFIRE_ENVIRONMENT", "production"),
             send_to_logfire=True,
@@ -85,7 +85,7 @@ def setup_logfire() -> bool:
             ) if hasattr(_logfire, "ScrubbingOptions") else None,
         )
         _configured = True
-        logger.info("Logfire telemetry configured (project: kiro-gateway)")
+        logger.info(f"Logfire telemetry configured (project: {service_name})")
         return True
     except Exception as e:
         logger.warning(f"Logfire setup failed (non-fatal): {e}")
@@ -134,7 +134,7 @@ def user_request_span(
         return
     try:
         attrs: dict[str, Any] = {
-            "gen_ai.system": "kiro-gateway",
+            "gen_ai.system": "kiro-proxy",
             "gen_ai.request.model": model,
             "gen_ai.operation.name": "chat",
             "kiro.request.stream": stream,

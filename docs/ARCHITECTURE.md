@@ -2,7 +2,7 @@
 
 ## Overview
 
-Kiro Gateway is a proxy server that translates between the Anthropic Messages API (and OpenAI Chat Completions API) and the AWS Q Developer / CodeWhisperer API. It allows Claude Code, Cursor, Cline, and other AI tools to use Claude models via a Kiro subscription.
+kiro-proxy is a proxy server that translates between the Anthropic Messages API (and OpenAI Chat Completions API) and the AWS Q Developer / CodeWhisperer API. It allows Claude Code, Cursor, Cline, and other AI tools to use Claude models via a Kiro subscription.
 
 ## Request Flow
 
@@ -13,7 +13,7 @@ Client (Claude Code / Cursor / etc.)
     │  POST /v1/chat/completions  (OpenAI format)
     ▼
 ┌─────────────────────────────────────────┐
-│           Kiro Gateway (port 8765)       │
+│           kiro-proxy (port 8765)       │
 │                                         │
 │  1. Auth verification (PROXY_API_KEY)   │
 │  2. Beta stripping (unsupported betas)  │
@@ -35,7 +35,7 @@ Claude models (Sonnet, Opus, Haiku, etc.)
     │
     ▼
 ┌─────────────────────────────────────────┐
-│           Kiro Gateway                   │
+│           kiro-proxy                   │
 │                                         │
 │  1. Stream parsing (AWS→Anthropic SSE)  │
 │  2. Thinking block extraction           │

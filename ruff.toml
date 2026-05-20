@@ -23,10 +23,15 @@ extend-exclude = [
 ]
 
 [lint]
-# Start with the standard pyflakes + pycodestyle warnings and expand
-# from there. W293 (blank line contains whitespace) is surfaced as a
-# warning but not enforced at commit time.
-select = ["F", "E4", "E7", "E9", "W", "I"]
+# Rule sets:
+#   F   — pyflakes (undefined names, unused imports)
+#   E4/E7/E9 — pycodestyle errors (syntax, indentation, runtime)
+#   W   — pycodestyle warnings
+#   I   — isort (import ordering)
+#   S   — flake8-bandit security rules (subset; complements bandit SAST)
+#   B   — flake8-bugbear (likely bugs and design issues)
+#   D2xx — pydocstyle formatting rules (minimal opinionated subset)
+select = ["F", "E4", "E7", "E9", "W", "I", "S", "B", "D2"]
 ignore = [
     "W293",  # pre-existing in legacy upstream code; cleaned opportunistically
     "E501",  # line-length drift in legacy files; the critical rule is logic, not layout
@@ -39,9 +44,39 @@ ignore = [
     "PLR0912", # too many branches
     "PLR0913", # too many arguments
     "PLR0915", # too many statements
+
+    # S rules — intentional patterns with justified rationale:
+    "S101",  # assert used — internal invariant guards, not access-control checks
+    "S104",  # binding to all interfaces — intentional for a proxy server (0.0.0.0)
+    "S110",  # try/except/pass — deliberate best-effort cleanup in streaming finally blocks
+    "S311",  # standard pseudo-random — non-cryptographic use (probabilistic retry, A/B sampling)
+    "S301",  # pickle — local cache file written by this process, not untrusted input (nosec annotated)
+    "S403",  # pickle import — same rationale as S301
+
+    # B rules — intentional patterns:
+    "B904",  # raise without from — some exception chains are intentionally opaque to callers
+    "B023",  # function-in-loop not binding loop variable — retry closure pattern in routes;
+             # fixing requires architectural change (capture via default arg). Tracked as tech-debt.
+
+    # D2 rules — suppress the two incompatible-pair warnings by picking one side:
+    "D203",  # one-blank-line-before-class (conflicts with D211 — we use D211)
+    "D213",  # multi-line-summary-second-line (conflicts with D212 — we use D212)
+    # D205 requires blank line between summary and description — too noisy on existing code
+    "D205",
+    # D200 requires one-line docstrings on one line — auto-fixable but noisy on existing code
+    "D200",
 ]
 
 [lint.per-file-ignores]
 "tests/**/*.py" = [
     "F841",  # unused locals are common in tests (assertion placeholders)
+    "S",     # security rules not applicable in test code
+    "D",     # docstring rules not enforced in tests
+    "B007",  # unused loop variables (chunk, event, i) — intentional in async-for drain patterns
+    "B011",  # assert False — acceptable in test helpers
+    "B017",  # blind exception assert — acceptable in test error-path checks
+    "B023",  # function-in-loop — acceptable in test mock capture patterns
+]
+"main.py" = [
+    "D",     # entry-point file; docstring rules not enforced
 ]

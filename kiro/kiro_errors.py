@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Kiro API error enhancement and user-friendly message formatting.
+"""Kiro API error enhancement and user-friendly message formatting.
 
 This module provides a centralized system for enhancing cryptic Kiro API errors
 with clear, actionable, user-friendly messages.
@@ -40,8 +39,7 @@ from typing import Any, Optional
 
 @dataclass
 class KiroErrorInfo:
-    """
-    Structured information about a Kiro API error.
+    """Structured information about a Kiro API error.
 
     Contains both the enhanced user-friendly message and the original
     error details for logging and debugging.
@@ -54,6 +52,7 @@ class KiroErrorInfo:
             Set for capacity-exhaustion errors (INSUFFICIENT_MODEL_CAPACITY) to
             signal the caller that a longer backoff is warranted.
     """
+
     reason: str
     user_message: str
     original_message: str
@@ -61,8 +60,7 @@ class KiroErrorInfo:
 
 
 def enhance_kiro_error(error_json: dict[str, Any]) -> KiroErrorInfo:
-    """
-    Enhances Kiro API error with user-friendly message.
+    """Enhances Kiro API error with user-friendly message.
 
     Takes raw error JSON from Kiro API and returns structured information
     with enhanced, user-friendly messages that help users understand what
@@ -124,7 +122,7 @@ def enhance_kiro_error(error_json: dict[str, Any]) -> KiroErrorInfo:
         # Generic 400 error
         user_message = (
             "Kiro API rejected the request. If problem persists, open issue with info and attached debug logs at:"
-            "https://github.com/jwadow/kiro-gateway/issues"
+            "https://github.com/geehexx/kiro-proxy/issues"
         )
 
     # Future error enhancements can be added here:
