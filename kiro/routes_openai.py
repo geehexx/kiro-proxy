@@ -746,6 +746,18 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                                         debug_logger.flush_on_error(500, str(streaming_error))
                                     else:
                                         debug_logger.discard_buffers()
+                                await _emit_gateway_baseline_openai(
+                                    request,
+                                    request_model=_resolved_model,
+                                    stream=True,
+                                    gateway_cache="miss",
+                                    re2_applied=_re2_active,
+                                    upstream_ms=None,
+                                    status=500 if streaming_error else 200,
+                                    usage={},
+                                    session_id_gw=None,
+                                    complexity_label=_complexity.label if _complexity else None,
+                                )
                         
                         return StreamingResponse(stream_wrapper(), media_type="text/event-stream")
                     
@@ -1097,6 +1109,18 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                             debug_logger.flush_on_error(500, str(streaming_error))
                         else:
                             debug_logger.discard_buffers()
+                    await _emit_gateway_baseline_openai(
+                        request,
+                        request_model=_resolved_model,
+                        stream=True,
+                        gateway_cache="miss",
+                        re2_applied=_re2_active,
+                        upstream_ms=None,
+                        status=500 if streaming_error else 200,
+                        usage={},
+                        session_id_gw=None,
+                        complexity_label=_complexity.label if _complexity else None,
+                    )
             
             return StreamingResponse(stream_wrapper(), media_type="text/event-stream")
         
