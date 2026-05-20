@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Model metadata cache for Kiro Gateway.
+"""Model metadata cache for Kiro Gateway.
 
 Thread-safe storage for available model information
 with TTL and lazy loading support.
@@ -33,8 +32,7 @@ from kiro.config import DEFAULT_MAX_INPUT_TOKENS, MODEL_CACHE_TTL
 
 
 class ModelInfoCache:
-    """
-    Thread-safe cache for storing model metadata.
+    """Thread-safe cache for storing model metadata.
 
     Uses Lazy Loading for population - data is loaded
     only on first access or when cache is stale.
@@ -50,8 +48,7 @@ class ModelInfoCache:
     """
 
     def __init__(self, cache_ttl: int = MODEL_CACHE_TTL):
-        """
-        Initializes the model cache.
+        """Initializes the model cache.
 
         Args:
             cache_ttl: Cache time-to-live in seconds (default from config)
@@ -62,8 +59,7 @@ class ModelInfoCache:
         self._cache_ttl = cache_ttl
 
     async def update(self, models_data: list[dict[str, Any]]) -> None:
-        """
-        Updates the model cache.
+        """Updates the model cache.
 
         Thread-safely replaces cache contents with new data.
 
@@ -77,8 +73,7 @@ class ModelInfoCache:
             self._last_update = time.time()
 
     def get(self, model_id: str) -> Optional[dict[str, Any]]:
-        """
-        Returns model information.
+        """Returns model information.
 
         Args:
             model_id: Model ID
@@ -89,8 +84,7 @@ class ModelInfoCache:
         return self._cache.get(model_id)
 
     def is_valid_model(self, model_id: str) -> bool:
-        """
-        Check if model exists in dynamic cache.
+        """Check if model exists in dynamic cache.
 
         Used by ModelResolver to verify if a model is available.
 
@@ -103,8 +97,7 @@ class ModelInfoCache:
         return model_id in self._cache
 
     def add_hidden_model(self, display_name: str, internal_id: str) -> None:
-        """
-        Add a hidden model to the cache.
+        """Add a hidden model to the cache.
 
         Hidden models are not returned by Kiro /ListAvailableModels API
         but are still functional. They are added to the cache so they
@@ -126,8 +119,7 @@ class ModelInfoCache:
             logger.debug(f"Added hidden model: {display_name} → {internal_id}")
 
     def get_max_input_tokens(self, model_id: str) -> int:
-        """
-        Returns maxInputTokens for the model.
+        """Returns maxInputTokens for the model.
 
         Args:
             model_id: Model ID
@@ -141,8 +133,7 @@ class ModelInfoCache:
         return DEFAULT_MAX_INPUT_TOKENS
 
     def is_empty(self) -> bool:
-        """
-        Checks if the cache is empty.
+        """Checks if the cache is empty.
 
         Returns:
             True if cache is empty
@@ -150,8 +141,7 @@ class ModelInfoCache:
         return not self._cache
 
     def is_stale(self) -> bool:
-        """
-        Checks if the cache is stale.
+        """Checks if the cache is stale.
 
         Returns:
             True if cache is stale (more than cache_ttl seconds have passed)
@@ -162,8 +152,7 @@ class ModelInfoCache:
         return time.time() - self._last_update > self._cache_ttl
 
     def get_all_model_ids(self) -> list[str]:
-        """
-        Returns a list of all model IDs in the cache.
+        """Returns a list of all model IDs in the cache.
 
         Returns:
             List of model IDs

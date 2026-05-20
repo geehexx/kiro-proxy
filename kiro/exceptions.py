@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Exception handlers for Kiro Gateway.
+"""Exception handlers for Kiro Gateway.
 
 Contains functions for handling validation errors and other exceptions
 in a JSON-serialization compatible format.
@@ -32,8 +31,7 @@ from loguru import logger
 
 
 def sanitize_validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Converts validation errors to JSON-serializable format.
+    """Converts validation errors to JSON-serializable format.
 
     Pydantic may include bytes objects in the 'input' field, which
     are not JSON-serializable. This function converts them to strings.
@@ -64,8 +62,7 @@ def sanitize_validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, A
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    """
-    Pydantic validation error handler.
+    """Pydantic validation error handler.
 
     Logs error details and returns an informative response.
     Correctly handles bytes objects in errors by converting them to strings.

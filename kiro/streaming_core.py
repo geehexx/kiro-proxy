@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Core streaming logic for parsing Kiro API responses.
+"""Core streaming logic for parsing Kiro API responses.
 
 This module contains shared logic used by both OpenAI and Anthropic streaming:
 - KiroEvent dataclass for unified events
@@ -63,8 +62,7 @@ except ImportError:
 
 @dataclass
 class KiroEvent:
-    """
-    Unified event from Kiro API stream.
+    """Unified event from Kiro API stream.
 
     This format is API-agnostic and can be converted to both OpenAI and Anthropic formats.
 
@@ -78,6 +76,7 @@ class KiroEvent:
         is_first_thinking_chunk: Whether this is the first thinking chunk
         is_last_thinking_chunk: Whether this is the last thinking chunk
     """
+
     type: str
     content: Optional[str] = None
     thinking_content: Optional[str] = None
@@ -90,8 +89,7 @@ class KiroEvent:
 
 @dataclass
 class StreamResult:
-    """
-    Result of collecting a complete stream response.
+    """Result of collecting a complete stream response.
 
     Attributes:
         content: Full text content
@@ -100,6 +98,7 @@ class StreamResult:
         usage: Usage information
         context_usage_percentage: Context usage percentage from Kiro API
     """
+
     content: str = ""
     thinking_content: str = ""
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
@@ -109,6 +108,7 @@ class StreamResult:
 
 class FirstTokenTimeoutError(Exception):
     """Exception raised when first token timeout occurs."""
+
     pass
 
 
@@ -120,6 +120,7 @@ class StalledStreamError(Exception):
     arrive within STREAMING_READ_TIMEOUT (or the per-call override).  Backport of
     aws-sdk-rust ``StalledStreamProtectionConfig`` (5min grace by default).
     """
+
     pass
 
 
@@ -132,8 +133,7 @@ async def parse_kiro_stream(  # noqa: C901, PLR0912
     first_token_timeout: float = FIRST_TOKEN_TIMEOUT,
     enable_thinking_parser: bool = True
 ) -> AsyncGenerator[KiroEvent, None]:
-    """
-    Parses Kiro SSE stream and yields unified events.
+    """Parses Kiro SSE stream and yields unified events.
 
     This is the core parsing function that converts Kiro's AWS SSE format
     into unified KiroEvent objects that can be formatted for any API.
@@ -261,8 +261,7 @@ async def _process_chunk(
     chunk: bytes,
     thinking_parser: Optional[ThinkingParser]
 ) -> AsyncGenerator[KiroEvent, None]:
-    """
-    Process a single chunk from Kiro stream.
+    """Process a single chunk from Kiro stream.
 
     Args:
         parser: AWS event stream parser
@@ -320,8 +319,7 @@ async def collect_stream_to_result(
     first_token_timeout: float = FIRST_TOKEN_TIMEOUT,
     enable_thinking_parser: bool = True
 ) -> StreamResult:
-    """
-    Collects full response from Kiro stream.
+    """Collects full response from Kiro stream.
 
     This function consumes the entire stream and returns a StreamResult
     with all accumulated data.
@@ -369,8 +367,7 @@ def calculate_tokens_from_context_usage(
     model_cache: "ModelInfoCache",
     model: str
 ) -> tuple[int, int, str, str]:
-    """
-    Calculate token counts from Kiro's context usage percentage.
+    """Calculate token counts from Kiro's context usage percentage.
 
     Args:
         context_usage_percentage: Context usage percentage from Kiro API
@@ -404,8 +401,7 @@ async def stream_with_first_token_retry(  # noqa: C901, PLR0912, PLR0913
     on_http_error: Optional[Callable[[int, str], Exception]] = None,
     on_all_retries_failed: Optional[Callable[[int, float], Exception]] = None,
 ) -> AsyncGenerator[str, None]:
-    """
-    Generic streaming with automatic retry on first token timeout.
+    """Generic streaming with automatic retry on first token timeout.
 
     If model doesn't respond within first_token_timeout seconds,
     request is cancelled and a new one is made. Maximum max_retries attempts.
@@ -446,7 +442,6 @@ async def stream_with_first_token_retry(  # noqa: C901, PLR0912, PLR0913
         >>> async for chunk in stream_with_first_token_retry(make_req, process, initial_response=response):
         ...     print(chunk)
     """
-
     for attempt in range(max_retries):
         response: Optional[httpx.Response] = None
         try:

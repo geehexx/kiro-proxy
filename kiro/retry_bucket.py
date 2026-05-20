@@ -12,7 +12,7 @@ backoff causes a thundering herd — every request retries at exactly t+1s,
 empty, requests wait, with the wait time growing as throttling persists.
 
 This is a backport of the pattern described in
-``data/basic-memory/research/2026-05-16-restart-recovery-and-tier1-hardening
+``internal research notes
 /B-amazon-q-cli-backport-patterns.md`` §Pattern 2 (source:
 ``crates/chat-cli/src/api_client/mod.rs:679-683`` in aws/amazon-q-developer-cli
 v1.19.7).
@@ -49,6 +49,8 @@ _MAX_ACQUIRE_ATTEMPTS = 100
 
 @dataclass
 class BucketState:
+    """Mutable state for AdaptiveRetryBucket — token count, refill rate, and last refill timestamp."""
+
     tokens: float
     refill_per_sec: float
     last_refill_at: float
@@ -92,7 +94,7 @@ class AdaptiveRetryBucket:
         would then issue an unpaced retry, defeating the bucket.
         """
         total_wait = 0.0
-        for attempt in range(_MAX_ACQUIRE_ATTEMPTS):
+        for _attempt in range(_MAX_ACQUIRE_ATTEMPTS):
             async with self._lock:
                 self._refill_locked()
                 if self._state.tokens >= 1.0:
@@ -138,6 +140,7 @@ class AdaptiveRetryBucket:
             )
 
     async def stats(self) -> dict:
+        """Return a snapshot of bucket state (tokens, refill_per_sec, capacity)."""
         async with self._lock:
             self._refill_locked()
             return {

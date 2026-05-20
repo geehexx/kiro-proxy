@@ -1,0 +1,42 @@
+# bandit.yaml — security scan configuration for kiro-proxy
+#
+# Run: .venv/bin/python -m bandit -r kiro/ -c bandit.yaml
+# Lefthook runs: bandit -r {staged_files} -c bandit.yaml --severity-level medium -q
+#
+# Severity policy:
+#   HIGH   — must fix before merge
+#   MEDIUM — must review; fix or add justified #nosec comment
+#   LOW    — informational; not blocking
+#
+# Current baseline (2026-05-20): 30 LOW, 0 MEDIUM, 0 HIGH
+# All LOW findings are intentional patterns (see notes below):
+#   B101 assert_used     — internal invariant assertions, not user-facing
+#   B110 try_except_pass — deliberate best-effort cleanup in streaming finally blocks
+#   B311 random          — non-cryptographic use (probabilistic retry, A/B sampling)
+
+skips:
+  # B101: assert used — internal invariant checks in auth/routing code, not
+  # security-relevant. Python asserts are stripped in -O mode but these are
+  # developer-facing invariant guards, not access-control checks.
+  - B101
+
+  # B311: standard pseudo-random — all uses are non-cryptographic:
+  #   account_manager.py: probabilistic retry (10% chance sampling)
+  #   routes_openai.py: A/B test sampling rate
+  # Neither is used for tokens, keys, or session IDs.
+  - B311
+
+  # B110: try/except/pass — all instances are deliberate best-effort cleanup:
+  #   streaming finally blocks: suppress errors when client already disconnected
+  #   response.aclose(): suppress errors on already-closed connections
+  # These are correct patterns for async streaming cleanup.
+  - B110
+
+exclude_dirs:
+  - tests
+  - .venv
+  - __pycache__
+  - .pytest_cache
+  - old
+  - _notes
+  - docs

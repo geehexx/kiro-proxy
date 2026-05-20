@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Upstream error capture (follow-up #1 from 4.7 error surfacing plan).
+"""Upstream error capture (follow-up #1 from 4.7 error surfacing plan).
 
 When DEBUG_CAPTURE_UPSTREAM_ERRORS is enabled, persists non-2xx upstream
 response bodies to disk so the next incident produces evidence rather

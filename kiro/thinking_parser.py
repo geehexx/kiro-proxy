@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Thinking block parser for streaming responses.
+"""Thinking block parser for streaming responses.
 
 Implements a finite state machine (FSM) for reliable parsing of thinking blocks
 (<thinking>, <think>, <reasoning>, etc.) that may be split across multiple
@@ -44,13 +43,13 @@ from kiro.config import (
 
 
 class ParserState(IntEnum):
-    """
-    States of the thinking block parser FSM.
+    """States of the thinking block parser FSM.
 
     PRE_CONTENT: Initial state, buffering to detect opening tag
     IN_THINKING: Inside thinking block, buffering until closing tag
     STREAMING: Regular streaming, no more thinking block detection
     """
+
     PRE_CONTENT = 0
     IN_THINKING = 1
     STREAMING = 2
@@ -58,8 +57,7 @@ class ParserState(IntEnum):
 
 @dataclass
 class ThinkingParseResult:
-    """
-    Result of processing a content chunk through the parser.
+    """Result of processing a content chunk through the parser.
 
     Attributes:
         thinking_content: Content to be sent as reasoning_content (or processed per mode)
@@ -68,6 +66,7 @@ class ThinkingParseResult:
         is_last_thinking_chunk: True if thinking block just closed
         state_changed: True if parser state changed during this feed
     """
+
     thinking_content: Optional[str] = None
     regular_content: Optional[str] = None
     is_first_thinking_chunk: bool = False
@@ -76,8 +75,7 @@ class ThinkingParseResult:
 
 
 class ThinkingParser:
-    """
-    Finite state machine parser for thinking blocks in streaming responses.
+    """Finite state machine parser for thinking blocks in streaming responses.
 
     The parser detects thinking tags ONLY at the start of the response.
     Once a thinking block is found and closed, all subsequent content
@@ -104,8 +102,7 @@ class ThinkingParser:
         open_tags: Optional[list[str]] = None,
         initial_buffer_size: int = FAKE_REASONING_INITIAL_BUFFER_SIZE,
     ):
-        """
-        Initialize the thinking parser.
+        """Initialize the thinking parser.
 
         Args:
             handling_mode: How to handle thinking blocks. One of:
@@ -135,8 +132,7 @@ class ThinkingParser:
         self._thinking_block_found = False
 
     def feed(self, content: str) -> ThinkingParseResult:
-        """
-        Process a chunk of content through the parser.
+        """Process a chunk of content through the parser.
 
         Args:
             content: New content from delta.content
@@ -167,8 +163,7 @@ class ThinkingParser:
         return result
 
     def _handle_pre_content(self, content: str) -> ThinkingParseResult:
-        """
-        Handle content in PRE_CONTENT state.
+        """Handle content in PRE_CONTENT state.
 
         Buffers content and looks for opening tag at the start.
         """
@@ -239,8 +234,7 @@ class ThinkingParser:
         return False
 
     def _handle_in_thinking(self, content: str) -> ThinkingParseResult:
-        """
-        Handle content in IN_THINKING state.
+        """Handle content in IN_THINKING state.
 
         Buffers content and looks for closing tag.
         Uses "cautious" sending to avoid splitting the closing tag.
@@ -249,8 +243,7 @@ class ThinkingParser:
         return self._process_thinking_buffer()
 
     def _process_thinking_buffer(self) -> ThinkingParseResult:
-        """
-        Process the thinking buffer, looking for closing tag.
+        """Process the thinking buffer, looking for closing tag.
 
         Implements "cautious" sending - keeps last max_tag_length chars
         in buffer to avoid splitting the closing tag across chunks.
@@ -304,8 +297,7 @@ class ThinkingParser:
         return result
 
     def finalize(self) -> ThinkingParseResult:
-        """
-        Finalize parsing when stream ends.
+        """Finalize parsing when stream ends.
 
         Flushes any remaining buffered content.
 
@@ -353,8 +345,7 @@ class ThinkingParser:
         is_first: bool,
         is_last: bool,
     ) -> Optional[str]:
-        """
-        Process thinking content according to handling mode.
+        """Process thinking content according to handling mode.
 
         Args:
             thinking_content: Raw thinking content

@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-HTTP client for Kiro API with retry logic support.
+"""HTTP client for Kiro API with retry logic support.
 
 Handles:
 - 403: automatic token refresh and retry
@@ -55,8 +54,7 @@ from kiro.utils import get_kiro_headers
 
 
 class KiroHttpClient:
-    """
-    HTTP client for Kiro API with retry logic support.
+    """HTTP client for Kiro API with retry logic support.
 
     Automatically handles errors and retries requests:
     - 403: refreshes token and retries
@@ -91,8 +89,7 @@ class KiroHttpClient:
         auth_manager: KiroAuthManager,
         shared_client: Optional[httpx.AsyncClient] = None
     ):
-        """
-        Initializes the HTTP client.
+        """Initializes the HTTP client.
 
         Args:
             auth_manager: Authentication manager
@@ -106,8 +103,7 @@ class KiroHttpClient:
         self.client: Optional[httpx.AsyncClient] = shared_client
 
     async def _get_client(self, stream: bool = False) -> httpx.AsyncClient:
-        """
-        Returns or creates an HTTP client with proper timeouts.
+        """Returns or creates an HTTP client with proper timeouts.
 
         If a shared client was provided at initialization, it is returned as-is.
         Otherwise, creates a new client with appropriate timeout configuration.
@@ -156,8 +152,7 @@ class KiroHttpClient:
         return self.client
 
     async def close(self) -> None:
-        """
-        Closes the HTTP client if this instance owns it.
+        """Closes the HTTP client if this instance owns it.
 
         If using a shared client, this method does nothing - the shared client
         should be closed by the application lifecycle manager.
@@ -186,8 +181,7 @@ class KiroHttpClient:
         stream: bool = False,
         extra_headers: Optional[dict] = None,
     ) -> httpx.Response:
-        """
-        Executes an HTTP request with retry logic.
+        """Executes an HTTP request with retry logic.
 
         Automatically handles various error types:
         - 403: refreshes token via auth_manager.force_refresh() and retries

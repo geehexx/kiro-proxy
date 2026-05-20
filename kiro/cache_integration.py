@@ -1,6 +1,5 @@
 
-"""
-Cache-integration helpers for the Anthropic /v1/messages route.
+"""Cache-integration helpers for the Anthropic /v1/messages route.
 
 This module owns the contract between the ResponseCache singleton and
 the request-handling path. Route code should call only the three helpers

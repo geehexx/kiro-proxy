@@ -17,8 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-FastAPI routes for Kiro Gateway.
+"""FastAPI routes for Kiro Gateway.
 
 Contains all API endpoints:
 - / and /health: Health check
@@ -28,6 +27,7 @@ Contains all API endpoints:
 
 import hmac
 import json
+import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Security
@@ -54,6 +54,95 @@ from kiro.models_openai import (
 )
 from kiro.streaming_openai import collect_stream_response, stream_with_first_token_retry
 from kiro.utils import generate_conversation_id
+
+
+async def _emit_gateway_baseline_openai(  # noqa: PLR0913
+    request,
+    *,
+    request_model: str,
+    stream: bool,
+    gateway_cache: str,
+    re2_applied: bool,
+    upstream_ms,
+    status: int,
+    usage: dict,
+    error_reason=None,
+    retry_count=None,
+    session_id_gw=None,
+    complexity_label=None,
+    dedup_hit: bool = False,
+    message_id: str | None = None,
+    response_model: str | None = None,
+) -> None:
+    """Emit one gateway-baseline record for an OpenAI-format request.
+
+    Mirrors _emit_gateway_baseline() from routes_anthropic.py but translates
+    OpenAI usage keys (prompt_tokens / completion_tokens) to the Anthropic
+    convention (input_tokens / output_tokens) used by the baselines schema.
+    cache_read_input_tokens / cache_creation_input_tokens are not available
+    on the OpenAI response shape — passed as None.
+
+    Failures are swallowed — telemetry must never break the hot path.
+    """
+    writer = getattr(request.app.state, "baselines_writer", None)
+    if writer is None:
+        return
+    try:
+        input_tokens = usage.get("prompt_tokens")
+        output_tokens = usage.get("completion_tokens")
+        # Prefer explicit params; fall back to underscore-injected keys in usage dict
+        _response_model = response_model or usage.get("_response_model") or usage.get("model")
+        _message_id = message_id or usage.get("_message_id") or usage.get("id")
+        record = {
+            "ts": __import__("time").time(),
+            "source": "gateway-requests",
+            "message_id": _message_id,
+            "session_id_gw": session_id_gw,
+            "cache_key": None,
+            "model": request_model,
+            "response_model": _response_model,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cache_read_input_tokens": None,
+            "cache_creation_input_tokens": None,
+            "upstream_ms_total": upstream_ms,
+            "gateway_cache": gateway_cache,
+            "stream": stream,
+            "status": status,
+            "error_reason": error_reason,
+            "retry_count": retry_count,
+            "retry_after_applied_ms": None,
+            "re2_applied": re2_applied,
+            "complexity_label": complexity_label,
+            "dedup_hit": dedup_hit,
+        }
+        await writer.write("gateway-requests", record)
+
+        try:
+            from kiro.telemetry import record_request
+            record_request(
+                model=request_model,
+                stream=stream,
+                gateway_cache=gateway_cache,
+                re2_applied=re2_applied,
+                upstream_ms=upstream_ms,
+                status=status,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cache_read_input_tokens=None,
+                cache_creation_input_tokens=None,
+                error_reason=error_reason,
+                retry_count=retry_count,
+                session_id=session_id_gw,
+                complexity_label=complexity_label,
+                dedup_hit=dedup_hit,
+                response_model=response_model,
+            )
+        except Exception:
+            pass
+    except Exception as exc:
+        from loguru import logger as _log
+        _log.warning(f"openai baseline emit failed: {exc}")
 
 # Import debug_logger
 try:
@@ -87,8 +176,7 @@ async def verify_api_key(
     auth_header: str | None = Security(api_key_header),
     x_api_key: str | None = Security(x_api_key_header),
 ) -> bool:
-    """
-    Verify API key in Authorization or x-api-key header.
+    """Verify API key in Authorization or x-api-key header.
 
     Accepts:
       - Authorization: Bearer <key>   (OpenAI convention)
@@ -129,15 +217,14 @@ router = APIRouter()
 
 @router.get("/")
 async def root():
-    """
-    Health check endpoint.
+    """Health check endpoint.
     
     Returns:
         Status and application version
     """
     return {
         "status": "ok",
-        "message": "Kiro Gateway is running",
+        "message": "Kiro Proxy is running",
         "version": APP_VERSION
     }
 
@@ -190,10 +277,28 @@ async def health(request: Request):
         "accounts": accounts_stats,
     }
 
+@router.post("/admin/reset-circuit-breaker", dependencies=[Depends(verify_api_key)])
+async def reset_circuit_breaker(request: Request):
+    """Reset circuit breaker for all accounts (clear failures counter).
+
+    Call when proxy shows cb_state=open due to transient connection errors
+    (e.g. after MITM/network-capture session or WSL network blip).
+
+    POST /admin/reset-circuit-breaker
+    x-api-key: <PROXY_API_KEY>
+    """
+    account_manager = getattr(request.app.state, "account_manager", None)
+    if account_manager is None:
+        return {"reset": False, "reason": "account_system not enabled"}
+
+    reset = await account_manager.reset_failures()
+    logger.info(f"Circuit breaker reset via admin endpoint: {reset}")
+    return {"reset": True, "accounts": reset}
+
+
 @router.get("/v1/models", response_model=ModelList, dependencies=[Depends(verify_api_key)])
 async def get_models(request: Request):  # noqa: C901
-    """
-    Return list of available models.
+    """Return list of available models.
     
     Models are loaded at startup (blocking) and cached.
     This endpoint returns the cached list.
@@ -304,8 +409,7 @@ async def get_models(request: Request):  # noqa: C901
 
 @router.post("/v1/chat/completions", dependencies=[Depends(verify_api_key)])
 async def chat_completions(request: Request, request_data: ChatCompletionRequest):  # noqa: C901, PLR0912, PLR0915
-    """
-    Chat completions endpoint - compatible with OpenAI API.
+    """Chat completions endpoint - compatible with OpenAI API.
     
     Accepts requests in OpenAI format and translates them to Kiro API.
     Supports streaming and non-streaming modes.
@@ -507,7 +611,7 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
         last_error_status = None
         tried_accounts = set()  # Track tried accounts in current failover loop
         
-        for attempt in range(MAX_ATTEMPTS):
+        for _attempt in range(MAX_ATTEMPTS):
             # Get next available account (excluding already tried)
             account = await account_manager.get_next_account(
                 request_data.model,
@@ -600,12 +704,16 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                     if request_data.stream:
                         # Streaming mode
                         async def stream_wrapper():
+                            """Stream Kiro SSE to the client via session-limiter path, handling retries and telemetry."""
                             streaming_error = None
                             client_disconnected = False
+                            _stream_usage: dict = {}
                             try:
                                 async def make_retry_request():
+                                    """Issue a fresh upstream POST for first-token-timeout retry."""
                                     return await http_client.request_with_retry(
-                                        "POST", url, kiro_payload, stream=True
+                                        "POST", url, kiro_payload, stream=True,
+                                        extra_headers=_attribution_headers or None,
                                     )
                                 
                                 async for chunk in stream_with_first_token_retry(
@@ -618,6 +726,15 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                                     request_messages=messages_for_tokenizer,
                                     request_tools=tools_for_tokenizer
                                 ):
+                                    # Capture usage from final SSE chunk (data: {...,"usage":{...}})
+                                    if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                                        try:
+                                            import json as _json
+                                            chunk_data = _json.loads(chunk[6:])
+                                            if "usage" in chunk_data:
+                                                _stream_usage = chunk_data["usage"]
+                                        except Exception:
+                                            pass
                                     yield chunk
                             except GeneratorExit:
                                 client_disconnected = True
@@ -644,6 +761,18 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                                         debug_logger.flush_on_error(500, str(streaming_error))
                                     else:
                                         debug_logger.discard_buffers()
+                                await _emit_gateway_baseline_openai(
+                                    request,
+                                    request_model=_resolved_model,
+                                    stream=True,
+                                    gateway_cache="miss",
+                                    re2_applied=_re2_active,
+                                    upstream_ms=None,
+                                    status=500 if streaming_error else 200,
+                                    usage=_stream_usage,
+                                    session_id_gw=None,
+                                    complexity_label=_complexity.label if _complexity else None,
+                                )
                         
                         return StreamingResponse(stream_wrapper(), media_type="text/event-stream")
                     
@@ -661,7 +790,20 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                         
                         await http_client.close()
                         logger.info("HTTP 200 - POST /v1/chat/completions (non-streaming) - completed")
-                        
+                        await _emit_gateway_baseline_openai(
+                            request,
+                            request_model=_resolved_model,
+                            stream=False,
+                            gateway_cache="miss",
+                            re2_applied=_re2_active,
+                            upstream_ms=None,
+                            status=200,
+                            usage=openai_response.get("usage") or {},
+                            session_id_gw=None,
+                            complexity_label=_complexity.label if _complexity else None,
+                            message_id=openai_response.get("id"),
+                            response_model=openai_response.get("model"),
+                        )
                         if debug_logger:
                             debug_logger.discard_buffers()
                         
@@ -705,7 +847,19 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                         
                         if debug_logger:
                             debug_logger.flush_on_error(response.status_code, last_error_message)
-                        
+                        await _emit_gateway_baseline_openai(
+                            request,
+                            request_model=_resolved_model,
+                            stream=request_data.stream,
+                            gateway_cache="miss",
+                            re2_applied=_re2_active,
+                            upstream_ms=None,
+                            status=response.status_code,
+                            usage={},
+                            error_reason=error_reason,
+                            session_id_gw=None,
+                            complexity_label=_complexity.label if _complexity else None,
+                        )
                         return JSONResponse(
                             status_code=response.status_code,
                             content={
@@ -885,7 +1039,19 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
             # Flush debug logs on error ("errors" mode)
             if debug_logger:
                 debug_logger.flush_on_error(response.status_code, error_message)
-            
+            await _emit_gateway_baseline_openai(
+                request,
+                request_model=_resolved_model,
+                stream=request_data.stream,
+                gateway_cache="miss",
+                re2_applied=_re2_active,
+                upstream_ms=None,
+                status=response.status_code,
+                usage={},
+                error_reason=error_message[:120] if error_message else None,
+                session_id_gw=None,
+                complexity_label=_complexity.label if _complexity else None,
+            )
             # Return error in OpenAI API format
             return JSONResponse(
                 status_code=response.status_code,
@@ -906,11 +1072,14 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
         if request_data.stream:
             # Streaming mode with first token retry
             async def stream_wrapper():
+                """Stream Kiro SSE to the client, handling retries and telemetry."""
                 streaming_error = None
                 client_disconnected = False
+                _stream_usage: dict = {}
                 try:
                     # Create retry request function for retries
                     async def make_retry_request():
+                        """Issue a fresh upstream POST for first-token-timeout retry."""
                         return await http_client.request_with_retry(
                             "POST", url, kiro_payload, stream=True,
                             extra_headers=_attribution_headers or None,
@@ -927,6 +1096,15 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                         request_messages=messages_for_tokenizer,
                         request_tools=tools_for_tokenizer
                     ):
+                        # Capture usage from final SSE chunk
+                        if chunk.startswith("data: ") and chunk.strip() != "data: [DONE]":
+                            try:
+                                import json as _json
+                                chunk_data = _json.loads(chunk[6:])
+                                if "usage" in chunk_data:
+                                    _stream_usage = chunk_data["usage"]
+                            except Exception:
+                                pass
                         yield chunk
                 except GeneratorExit:
                     # Client disconnected - this is normal
@@ -958,6 +1136,18 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
                             debug_logger.flush_on_error(500, str(streaming_error))
                         else:
                             debug_logger.discard_buffers()
+                    await _emit_gateway_baseline_openai(
+                        request,
+                        request_model=_resolved_model,
+                        stream=True,
+                        gateway_cache="miss",
+                        re2_applied=_re2_active,
+                        upstream_ms=None,
+                        status=500 if streaming_error else 200,
+                        usage=_stream_usage,
+                        session_id_gw=None,
+                        complexity_label=_complexity.label if _complexity else None,
+                    )
             
             return StreamingResponse(stream_wrapper(), media_type="text/event-stream")
         
@@ -978,7 +1168,20 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
             
             # Log access log for non-streaming success
             logger.info("HTTP 200 - POST /v1/chat/completions (non-streaming) - completed")
-            
+            await _emit_gateway_baseline_openai(
+                request,
+                request_model=_resolved_model,
+                stream=False,
+                gateway_cache="miss",
+                re2_applied=_re2_active,
+                upstream_ms=None,
+                status=200,
+                usage=openai_response.get("usage") or {},
+                session_id_gw=None,
+                complexity_label=_complexity.label if _complexity else None,
+                message_id=openai_response.get("id"),
+                response_model=openai_response.get("model"),
+            )
             # Write debug logs after non-streaming request completes
             if debug_logger:
                 debug_logger.discard_buffers()
@@ -1013,8 +1216,8 @@ async def chat_completions(request: Request, request_data: ChatCompletionRequest
 async def get_organizations(request: Request):
     """Mock Claude.ai organizations endpoint for Claude Code CLI subscription check."""
     return JSONResponse([{
-        "id": "org-kiro-gateway",
-        "name": "Kiro Gateway",
+        "id": "org-kiro-proxy",
+        "name": "Kiro Proxy",
         "capabilities": {
             "claude": {
                 "models": ["claude-opus-4.7", "claude-opus-4.6", "claude-sonnet-4.6", "claude-haiku-4.5"]

@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Authentication manager for Kiro API.
+"""Authentication manager for Kiro API.
 
 Manages the lifecycle of access tokens:
 - Loading credentials from .env or JSON file
@@ -72,8 +71,7 @@ class InvalidGrantError(Exception):
 
 
 class AuthType(Enum):
-    """
-    Type of authentication mechanism.
+    """Type of authentication mechanism.
 
     KIRO_DESKTOP: Kiro IDE credentials (default)
         - Uses https://prod.{region}.auth.desktop.kiro.dev/refreshToken
@@ -84,13 +82,13 @@ class AuthType(Enum):
         - Form body: grant_type=refresh_token&client_id=...&client_secret=...&refresh_token=...
         - Requires clientId and clientSecret from credentials file
     """
+
     KIRO_DESKTOP = "kiro_desktop"
     AWS_SSO_OIDC = "aws_sso_oidc"
 
 
 class KiroAuthManager:
-    """
-    Manages the token lifecycle for accessing Kiro API.
+    """Manages the token lifecycle for accessing Kiro API.
 
     Supports:
     - Loading credentials from .env or JSON file
@@ -133,8 +131,7 @@ class KiroAuthManager:
         sqlite_db: Optional[str] = None,
         api_region: Optional[str] = None,
     ):
-        """
-        Initializes the authentication manager.
+        """Initializes the authentication manager.
 
         Args:
             refresh_token: Refresh token for obtaining access token
@@ -238,8 +235,7 @@ class KiroAuthManager:
         )
 
     def _detect_auth_type(self) -> None:
-        """
-        Detects authentication type based on available credentials.
+        """Detects authentication type based on available credentials.
 
         AWS SSO OIDC credentials contain clientId and clientSecret.
         Kiro Desktop credentials do not contain these fields.
@@ -252,8 +248,7 @@ class KiroAuthManager:
             logger.info("Detected auth type: Kiro Desktop")
 
     def _load_credentials_from_sqlite(self, db_path: str) -> None:  # noqa: C901, PLR0912, PLR0915
-        """
-        Loads credentials from kiro-cli SQLite database.
+        """Loads credentials from kiro-cli SQLite database.
 
         The database contains an auth_kv table with key-value pairs.
         Supports multiple authentication types:
@@ -385,8 +380,7 @@ class KiroAuthManager:
             logger.error(f"Error loading credentials from SQLite: {e}")
 
     def _load_credentials_from_file(self, file_path: str) -> None:  # noqa: C901, PLR0912
-        """
-        Loads credentials from a JSON file.
+        """Loads credentials from a JSON file.
 
         Supported JSON fields (Kiro Desktop):
         - refreshToken: Refresh token
@@ -459,8 +453,7 @@ class KiroAuthManager:
             logger.error(f"Error loading credentials from file: {e}")
 
     def _load_enterprise_device_registration(self, client_id_hash: str) -> None:
-        """
-        Loads clientId and clientSecret from Enterprise Kiro IDE device registration file.
+        """Loads clientId and clientSecret from Enterprise Kiro IDE device registration file.
 
         Enterprise Kiro IDE uses AWS SSO OIDC authentication. Device registration is stored at:
         ~/.aws/sso/cache/{clientIdHash}.json
@@ -490,8 +483,7 @@ class KiroAuthManager:
             logger.error(f"Error loading enterprise device registration: {e}")
 
     def _save_credentials_to_file(self) -> None:
-        """
-        Saves updated credentials to a JSON file.
+        """Saves updated credentials to a JSON file.
 
         Updates the existing file while preserving other fields.
         """
@@ -525,8 +517,7 @@ class KiroAuthManager:
             logger.error(f"Error saving credentials: {e}")
 
     def _save_credentials_to_sqlite(self) -> None:
-        """
-        Saves updated credentials back to SQLite database.
+        """Saves updated credentials back to SQLite database.
 
         Strategy: Read-Merge-Write (Issue #131 fix)
         1. Read existing JSON from SQLite
@@ -585,8 +576,7 @@ class KiroAuthManager:
             logger.error(f"Error saving credentials to SQLite: {e}")
 
     def _try_save_to_key(self, cursor: sqlite3.Cursor, key: str) -> bool:
-        """
-        Attempts to save credentials to a specific SQLite key using read-merge-write.
+        """Attempts to save credentials to a specific SQLite key using read-merge-write.
 
         Args:
             cursor: SQLite cursor
@@ -635,8 +625,7 @@ class KiroAuthManager:
             return False
 
     def is_token_expiring_soon(self) -> bool:
-        """
-        Checks if the token is expiring soon.
+        """Checks if the token is expiring soon.
 
         Returns:
             True if the token expires within TOKEN_REFRESH_THRESHOLD seconds
@@ -651,8 +640,7 @@ class KiroAuthManager:
         return self._expires_at.timestamp() <= threshold
 
     def is_token_expired(self) -> bool:
-        """
-        Checks if the token is actually expired (not just expiring soon).
+        """Checks if the token is actually expired (not just expiring soon).
 
         This is used for graceful degradation when refresh fails but
         the access token might still be valid for a short time.
@@ -668,8 +656,7 @@ class KiroAuthManager:
         return now >= self._expires_at
 
     async def _refresh_token_request(self) -> None:
-        """
-        Performs a token refresh request.
+        """Performs a token refresh request.
 
         Routes to appropriate refresh method based on auth type:
         - KIRO_DESKTOP: Uses Kiro Desktop Auth endpoint
@@ -685,8 +672,7 @@ class KiroAuthManager:
             await self._refresh_token_kiro_desktop()
 
     async def _refresh_token_kiro_desktop(self) -> None:
-        """
-        Refreshes token using Kiro Desktop Auth endpoint.
+        """Refreshes token using Kiro Desktop Auth endpoint.
 
         Endpoint: https://prod.{region}.auth.desktop.kiro.dev/refreshToken
         Method: POST
@@ -744,8 +730,7 @@ class KiroAuthManager:
             self._save_credentials_to_file()
 
     async def _refresh_token_aws_sso_oidc(self) -> None:
-        """
-        Refreshes token using AWS SSO OIDC endpoint.
+        """Refreshes token using AWS SSO OIDC endpoint.
 
         Used by kiro-cli which authenticates via AWS IAM Identity Center.
 
@@ -778,8 +763,7 @@ class KiroAuthManager:
                 raise
 
     async def _do_aws_sso_oidc_refresh(self) -> None:
-        """
-        Performs the actual AWS SSO OIDC token refresh.
+        """Performs the actual AWS SSO OIDC token refresh.
 
         This is the internal implementation called by _refresh_token_aws_sso_oidc().
         It performs a single refresh attempt with current in-memory credentials.
@@ -879,8 +863,7 @@ class KiroAuthManager:
             self._save_credentials_to_file()
 
     async def get_access_token(self) -> str:
-        """
-        Returns a valid access_token, refreshing it if necessary.
+        """Returns a valid access_token, refreshing it if necessary.
 
         Thread-safe method using asyncio.Lock.
         Automatically refreshes the token if it has expired or is about to expire.
@@ -945,8 +928,7 @@ class KiroAuthManager:
             return self._access_token
 
     async def force_refresh(self) -> str:
-        """
-        Forces a token refresh.
+        """Forces a token refresh.
 
         Used when receiving a 403 error from the API.
 

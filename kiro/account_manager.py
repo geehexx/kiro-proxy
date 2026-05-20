@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Unified Account System for Kiro Gateway.
+"""Unified Account System for Kiro Gateway.
 
 Manages multiple Kiro accounts with intelligent failover, sticky behavior,
 and circuit breaker pattern for reliability.
@@ -95,8 +94,7 @@ def _short_account_id(account_id: str) -> str:
 
 
 def _format_duration(seconds: float) -> str:
-    """
-    Format duration in human-readable format.
+    """Format duration in human-readable format.
 
     Args:
         seconds: Duration in seconds
@@ -126,11 +124,11 @@ def _format_duration(seconds: float) -> str:
 
 @dataclass
 class AccountStats:
-    """
-    Statistics for account usage.
+    """Statistics for account usage.
 
     Tracks request counts for monitoring and future web UI.
     """
+
     total_requests: int = 0
     successful_requests: int = 0
     failed_requests: int = 0
@@ -139,8 +137,7 @@ class AccountStats:
 
 @dataclass
 class Account:
-    """
-    Complete account entity with all dependencies.
+    """Complete account entity with all dependencies.
 
     Represents a single Kiro account with its authentication,
     model cache, resolver, and runtime state.
@@ -155,6 +152,7 @@ class Account:
         models_cached_at: Timestamp of last model cache update
         stats: Usage statistics
     """
+
     id: str
     auth_manager: Optional[KiroAuthManager] = None
     model_cache: Optional[ModelInfoCache] = None
@@ -167,20 +165,19 @@ class Account:
 
 @dataclass
 class ModelAccountList:
-    """
-    List of accounts for a specific model.
+    """List of accounts for a specific model.
 
     Attributes:
         accounts: List of account IDs that have this model
 
     Note: next_index removed - now using global _current_account_index
     """
+
     accounts: list[str] = field(default_factory=list)
 
 
 class AccountManager:
-    """
-    Manages multiple Kiro accounts with intelligent failover.
+    """Manages multiple Kiro accounts with intelligent failover.
 
     Responsibilities:
     - Load credentials from credentials.json
@@ -198,8 +195,7 @@ class AccountManager:
     """
 
     def __init__(self, credentials_file: str, state_file: str) -> None:
-        """
-        Initialize AccountManager.
+        """Initialize AccountManager.
 
         Args:
             credentials_file: Path to credentials.json
@@ -219,8 +215,7 @@ class AccountManager:
         self._demoted_until: dict[str, float] = {}
 
     async def load_credentials(self) -> None:  # noqa: C901, PLR0912, PLR0915
-        """
-        Load credentials from credentials.json.
+        """Load credentials from credentials.json.
 
         Validates each entry and creates Account objects.
         Invalid entries are skipped with warnings.
@@ -334,8 +329,7 @@ class AccountManager:
         logger.info(f"Loaded {len(self._accounts)} account(s) from credentials")
 
     async def load_state(self) -> None:
-        """
-        Load runtime state from state.json.
+        """Load runtime state from state.json.
 
         Restores model_to_accounts mapping and account runtime state.
         Creates empty state if file doesn't exist.
@@ -378,8 +372,7 @@ class AccountManager:
             logger.error(f"Failed to load state: {e}")
 
     async def _save_state(self) -> None:
-        """
-        Save runtime state to state.json atomically.
+        """Save runtime state to state.json atomically.
 
         Uses tmp file + rename for atomic write.
         """
@@ -432,8 +425,7 @@ class AccountManager:
                 tmp_path.unlink()
 
     async def save_state_periodically(self) -> None:
-        """
-        Background task for periodic state saving.
+        """Background task for periodic state saving.
 
         Saves state every STATE_SAVE_INTERVAL_SECONDS if dirty flag is set.
         """
@@ -446,8 +438,7 @@ class AccountManager:
                     self._dirty = False
 
     async def _initialize_account(self, account_id: str, *, quiet: bool = False) -> bool:  # noqa: C901, PLR0912, PLR0915
-        """
-        Initialize account (lazy initialization).
+        """Initialize account (lazy initialization).
 
         Creates auth_manager, fetches models, creates cache and resolver.
 
@@ -605,8 +596,7 @@ class AccountManager:
         interval_seconds: float = 30.0,
         max_attempts: int = 0,
     ) -> None:
-        """
-        Background warm-up: probe uninitialised accounts every ``interval_seconds``.
+        """Background warm-up: probe uninitialised accounts every ``interval_seconds``.
 
         Designed for the gateway boot path: lifespan() schedules this task
         instead of calling ``_initialize_account`` eagerly. If DNS / AWS SSO
@@ -645,8 +635,7 @@ class AccountManager:
             await asyncio.sleep(interval_seconds)
 
     async def _refresh_account_models(self, account_id: str) -> None:
-        """
-        Refresh model cache for account (TTL refresh).
+        """Refresh model cache for account (TTL refresh).
 
         Args:
             account_id: Account ID to refresh
@@ -703,8 +692,7 @@ class AccountManager:
             await http_client.close()
 
     async def get_next_account(self, model: str, exclude_accounts: Optional[set] = None, sticky_key: Optional[str] = None) -> Optional[Account]:  # noqa: C901, PLR0912, PLR0915
-        """
-        Get next available account for model (Circuit Breaker + Sticky).
+        """Get next available account for model (Circuit Breaker + Sticky).
 
         Implements:
         - Sticky behavior per (session_id, model_family) key
@@ -836,8 +824,7 @@ class AccountManager:
             return None
 
     async def report_success(self, account_id: str, model: str, sticky_key: Optional[str] = None) -> None:
-        """
-        Report successful request (reset failures, update stats, sticky).
+        """Report successful request (reset failures, update stats, sticky).
 
         Args:
             account_id: Account ID
@@ -871,8 +858,7 @@ class AccountManager:
         status_code: int,
         reason: Optional[str]
     ) -> None:
-        """
-        Report failed request (update failures, stats, failover).
+        """Report failed request (update failures, stats, failover).
 
         Args:
             account_id: Account ID
@@ -909,8 +895,7 @@ class AccountManager:
             # Failover happens through exclude_accounts in get_next_account()
 
     async def demote_account(self, account_id: str) -> None:
-        """
-        Apply fast 5-minute demotion to an account.
+        """Apply fast 5-minute demotion to an account.
 
         Called by the failover loop when 60s wall-clock + 2 retries on same
         account are exceeded. Separate from the exponential circuit breaker —
@@ -932,8 +917,7 @@ class AccountManager:
             )
 
     async def get_account_stats(self) -> list[dict]:
-        """
-        Return per-account stats for /health endpoint.
+        """Return per-account stats for /health endpoint.
 
         Returns:
             List of dicts with account id (last 16 chars), stats, circuit breaker state,
@@ -968,9 +952,37 @@ class AccountManager:
                 })
             return result
 
-    def get_first_account(self) -> Account:
+    async def reset_failures(self) -> list[dict]:
+        """Reset circuit breaker state for all accounts.
+
+        Clears the failure counter and last_failure_time for every account,
+        then persists the updated state. Intended for the admin
+        /admin/reset-circuit-breaker endpoint to recover from transient
+        network errors (e.g. after a MITM capture session or WSL blip)
+        without waiting for the exponential backoff to expire.
+
+        Returns:
+            List of dicts with keys id (short account id) and
+            failures_before (failure count prior to reset).
         """
-        Get first initialized account (for legacy mode).
+        async with self._lock:
+            result = []
+            for account_id, account in self._accounts.items():
+                failures_before = account.failures
+                demoted_before = self._demoted_until.get(account_id, 0.0) > time.time()
+                account.failures = 0
+                account.last_failure_time = 0.0
+                self._demoted_until.pop(account_id, None)
+                result.append({
+                    "id": _short_account_id(account_id),
+                    "failures_before": failures_before,
+                    "demoted_cleared": demoted_before,
+                })
+            await self._save_state()
+        return result
+
+    def get_first_account(self) -> Account:
+        """Get first initialized account (for legacy mode).
 
         Returns:
             First initialized account
@@ -984,8 +996,7 @@ class AccountManager:
         raise RuntimeError("No initialized accounts available")
 
     def get_all_available_models(self) -> list[str]:
-        """
-        Collect unique models from all initialized accounts.
+        """Collect unique models from all initialized accounts.
 
         Used by /v1/models endpoint in account system to show
         all available models across all accounts.

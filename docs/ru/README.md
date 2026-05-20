@@ -1,6 +1,6 @@
 <div align="center">
 
-# 👻 Kiro Gateway
+# kiro-proxy
 
 **Прокси-шлюз для Kiro API (Amazon Q Developer / AWS CodeWhisperer)**
 
@@ -11,11 +11,10 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
-[![Sponsor](https://img.shields.io/badge/💖_Sponsor-Поддержать_разработку-ff69b4)](#-поддержать-проект)
 
 *Используйте модели Claude из Kiro с Claude Code, OpenCode, OpenClaw, Claw Code, Codex app, Cursor, Cline, Roo Code, Kilo Code, Obsidian, OpenAI SDK, LangChain, Continue и другими инструментами, совместимыми с OpenAI или Anthropic*
 
-[Модели](#-поддерживаемые-модели) • [Возможности](#-возможности) • [Быстрый старт](#-быстрый-старт) • [Конфигурация](#%EF%B8%8F-конфигурация) • [💖 Поддержать](#-поддержать-проект)
+[Модели](#-поддерживаемые-модели) • [Возможности](#-возможности) • [Быстрый старт](#-быстрый-старт) • [Конфигурация](#%EF%B8%8F-конфигурация)
 
 </div>
 
@@ -86,10 +85,10 @@
 
 ```bash
 # Клонируйте репозиторий (требуется Git)
-git clone https://github.com/Jwadow/kiro-gateway.git
-cd kiro-gateway
+git clone https://github.com/geehexx/kiro-proxy.git
+cd kiro-proxy
 
-# Или скачайте ZIP: Code → Download ZIP → распакуйте → откройте папку kiro-gateway
+# Или скачайте ZIP: Code → Download ZIP → распакуйте → откройте папку kiro-proxy
 
 # Установите зависимости
 pip install -r requirements.txt
@@ -351,8 +350,8 @@ ACCOUNT_SYSTEM=true
 
 ```bash
 # 1. Клонируйте и настройте
-git clone https://github.com/Jwadow/kiro-gateway.git
-cd kiro-gateway
+git clone https://github.com/geehexx/kiro-proxy.git
+cd kiro-proxy
 cp .env.example .env
 # Отредактируйте .env с вашими учётными данными
 
@@ -374,8 +373,8 @@ docker run -d \
   -p 8000:8000 \
   -e PROXY_API_KEY="my-super-secret-password-123" \
   -e REFRESH_TOKEN="your_refresh_token" \
-  --name kiro-gateway \
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy \
+  kiro-proxy:local
 ```
 
 </details>
@@ -390,8 +389,8 @@ docker run -d \
   -v ~/.aws/sso/cache:/home/kiro/.aws/sso/cache:ro \
   -e KIRO_CREDS_FILE=/home/kiro/.aws/sso/cache/kiro-auth-token.json \
   -e PROXY_API_KEY="my-super-secret-password-123" \
-  --name kiro-gateway \
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy \
+  kiro-proxy:local
 ```
 
 **Windows (PowerShell):**
@@ -401,8 +400,8 @@ docker run -d `
   -v ${HOME}/.aws/sso/cache:/home/kiro/.aws/sso/cache:ro `
   -e KIRO_CREDS_FILE=/home/kiro/.aws/sso/cache/kiro-auth-token.json `
   -e PROXY_API_KEY="my-super-secret-password-123" `
-  --name kiro-gateway `
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy `
+  kiro-proxy:local
 ```
 
 </details>
@@ -411,7 +410,7 @@ docker run -d `
 <summary>🔹 Использование файла .env</summary>
 
 ```bash
-docker run -d -p 8000:8000 --env-file .env --name kiro-gateway ghcr.io/jwadow/kiro-gateway:latest
+docker run -d -p 8000:8000 --env-file .env --name kiro-proxy kiro-proxy:local
 ```
 
 </details>
@@ -447,8 +446,8 @@ docker-compose pull && docker-compose up -d  # Обновление
 <summary>🔧 Сборка из исходников</summary>
 
 ```bash
-docker build -t kiro-gateway .
-docker run -d -p 8000:8000 --env-file .env kiro-gateway
+docker build -t kiro-proxy .
+docker run -d -p 8000:8000 --env-file .env kiro-proxy
 ```
 
 </details>
@@ -790,35 +789,9 @@ AGPL-3.0 гарантирует, что улучшения этого прогр
 
 ---
 
-## 💖 Поддержать проект
+## Поддержка
 
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Smiling%20Face%20with%20Hearts.png" alt="Love" width="80" />
-
-**Если этот проект сэкономил вам время или деньги, рассмотрите возможность его поддержки!**
-
-Каждый вклад помогает поддерживать жизнь и развитие этого проекта
-
-<br>
-
-### 🤑 Пожертвовать
-
-[**☕ Разовая поддержка**](https://app.lava.top/products/b4e34d12-3b6b-49b7-be50-50b6a20ed262/f3ea941f-de73-4ad1-bbb6-f82042ef8132)
-
-<br>
-
-### 🪙 Или отправьте криптовалюту
-
-| Валюта | Сеть | Адрес |
-|:------:|:----:|:------|
-| **USDT** | TRC20 | `TSVtgRc9pkC1UgcbVeijBHjFmpkYHDRu26` |
-| **BTC** | Bitcoin | `12GZqxqpcBsqJ4Vf1YreLqwoMGvzBPgJq6` |
-| **ETH** | Ethereum | `0xc86eab3bba3bbaf4eb5b5fff8586f1460f1fd395` |
-| **SOL** | Solana | `9amykF7KibZmdaw66a1oqYJyi75fRqgdsqnG66AK3jvh` |
-| **TON** | TON | `UQBVh8T1H3GI7gd7b-_PPNnxHYYxptrcCVf3qQk5v41h3QTM` |
-
-</div>
+Это личный форк. Если основной шлюз полезен — поддержите оригинальный проект [Jwadow/kiro-gateway](https://github.com/Jwadow/kiro-gateway).
 
 ---
 
@@ -830,6 +803,6 @@ AGPL-3.0 гарантирует, что улучшения этого прогр
 
 <div align="center">
 
-**[⬆ Вернуться наверх](#-kiro-gateway)**
+**[⬆ Вернуться наверх](#kiro-proxy)**
 
 </div>

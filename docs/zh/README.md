@@ -1,6 +1,6 @@
 <div align="center">
 
-# 👻 Kiro Gateway
+# kiro-proxy
 
 **Kiro API (Amazon Q Developer / AWS CodeWhisperer) 代理网关**
 
@@ -11,11 +11,10 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
-[![Sponsor](https://img.shields.io/badge/💖_Sponsor-支持开发-ff69b4)](#-支持项目)
 
 *通过 Claude Code、OpenCode、OpenClaw、Claw Code、Codex app、Cursor、Cline、Roo Code、Kilo Code、Obsidian、OpenAI SDK、LangChain、Continue 和其他兼容 OpenAI 或 Anthropic 的工具使用 Kiro 的 Claude 模型*
 
-[模型](#-支持的模型) • [功能](#-功能特性) • [快速开始](#-快速开始) • [配置](#%EF%B8%8F-配置) • [💖 支持](#-支持项目)
+[模型](#-支持的模型) • [功能](#-功能特性) • [快速开始](#-快速开始) • [配置](#%EF%B8%8F-配置)
 
 </div>
 
@@ -86,10 +85,10 @@
 
 ```bash
 # 克隆仓库（需要 Git）
-git clone https://github.com/Jwadow/kiro-gateway.git
-cd kiro-gateway
+git clone https://github.com/geehexx/kiro-proxy.git
+cd kiro-proxy
 
-# 或下载 ZIP：Code → Download ZIP → 解压 → 打开 kiro-gateway 文件夹
+# 或下载 ZIP：Code → Download ZIP → 解压 → 打开 kiro-proxy 文件夹
 
 # 安装依赖
 pip install -r requirements.txt
@@ -351,8 +350,8 @@ ACCOUNT_SYSTEM=true
 
 ```bash
 # 1. 克隆并配置
-git clone https://github.com/Jwadow/kiro-gateway.git
-cd kiro-gateway
+git clone https://github.com/geehexx/kiro-proxy.git
+cd kiro-proxy
 cp .env.example .env
 # 使用您的凭据编辑 .env
 
@@ -374,8 +373,8 @@ docker run -d \
   -p 8000:8000 \
   -e PROXY_API_KEY="my-super-secret-password-123" \
   -e REFRESH_TOKEN="your_refresh_token" \
-  --name kiro-gateway \
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy \
+  kiro-proxy:local
 ```
 
 </details>
@@ -390,8 +389,8 @@ docker run -d \
   -v ~/.aws/sso/cache:/home/kiro/.aws/sso/cache:ro \
   -e KIRO_CREDS_FILE=/home/kiro/.aws/sso/cache/kiro-auth-token.json \
   -e PROXY_API_KEY="my-super-secret-password-123" \
-  --name kiro-gateway \
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy \
+  kiro-proxy:local
 ```
 
 **Windows (PowerShell):**
@@ -401,8 +400,8 @@ docker run -d `
   -v ${HOME}/.aws/sso/cache:/home/kiro/.aws/sso/cache:ro `
   -e KIRO_CREDS_FILE=/home/kiro/.aws/sso/cache/kiro-auth-token.json `
   -e PROXY_API_KEY="my-super-secret-password-123" `
-  --name kiro-gateway `
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy `
+  kiro-proxy:local
 ```
 
 </details>
@@ -411,7 +410,7 @@ docker run -d `
 <summary>🔹 使用 .env 文件</summary>
 
 ```bash
-docker run -d -p 8000:8000 --env-file .env --name kiro-gateway ghcr.io/jwadow/kiro-gateway:latest
+docker run -d -p 8000:8000 --env-file .env --name kiro-proxy kiro-proxy:local
 ```
 
 </details>
@@ -447,8 +446,8 @@ docker-compose pull && docker-compose up -d  # 更新
 <summary>🔧 从源代码构建</summary>
 
 ```bash
-docker build -t kiro-gateway .
-docker run -d -p 8000:8000 --env-file .env kiro-gateway
+docker build -t kiro-proxy .
+docker run -d -p 8000:8000 --env-file .env kiro-proxy
 ```
 
 </details>
@@ -790,35 +789,9 @@ AGPL-3.0 确保对此软件的改进惠及整个社区。如果您修改此网�
 
 ---
 
-## 💖 支持项目
+## 支持
 
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Smiling%20Face%20with%20Hearts.png" alt="Love" width="80" />
-
-**如果这个项目为您节省了时间或金钱，请考虑支持它！**
-
-每一份贡献都有助于保持这个项目的活力和发展
-
-<br>
-
-### 🤑 捐赠
-
-[**☕ 一次性支持**](https://app.lava.top/products/b4e34d12-3b6b-49b7-be50-50b6a20ed262/f3ea941f-de73-4ad1-bbb6-f82042ef8132)
-
-<br>
-
-### 🪙 或发送加密货币
-
-| 货币 | 网络 | 地址 |
-|:----:|:----:|:-----|
-| **USDT** | TRC20 | `TSVtgRc9pkC1UgcbVeijBHjFmpkYHDRu26` |
-| **BTC** | Bitcoin | `12GZqxqpcBsqJ4Vf1YreLqwoMGvzBPgJq6` |
-| **ETH** | Ethereum | `0xc86eab3bba3bbaf4eb5b5fff8586f1460f1fd395` |
-| **SOL** | Solana | `9amykF7KibZmdaw66a1oqYJyi75fRqgdsqnG66AK3jvh` |
-| **TON** | TON | `UQBVh8T1H3GI7gd7b-_PPNnxHYYxptrcCVf3qQk5v41h3QTM` |
-
-</div>
+这是个人 fork。如基础 gateway 对你有用，可考虑支持原始项目 [Jwadow/kiro-gateway](https://github.com/Jwadow/kiro-gateway)。
 
 ---
 
@@ -830,6 +803,6 @@ AGPL-3.0 确保对此软件的改进惠及整个社区。如果您修改此网�
 
 <div align="center">
 
-**[⬆ 返回顶部](#-kiro-gateway)**
+**[⬆ 返回顶部](#kiro-proxy)**
 
 </div>

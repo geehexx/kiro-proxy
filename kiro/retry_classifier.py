@@ -12,7 +12,7 @@ Status code alone is wrong both ways:
 This classifier reads the response body and returns a RetryDecision
 the route handler uses to pick the right backoff strategy.
 
-Source spec: data/basic-memory/research/2026-05-16-restart-recovery-and-tier1-hardening/
+Source spec: internal research notes
 B-amazon-q-cli-backport-patterns.md §Pattern 3
 (amazon-q-developer-cli crates/chat-cli/src/api_client/retry_classifier.rs)
 """
@@ -33,6 +33,8 @@ class RetryKind(str, Enum):
 
 @dataclass(frozen=True)
 class RetryDecision:
+    """Structured result from classify() — kind, human-readable reason, and capacity flag."""
+
     kind: RetryKind
     reason: str
     is_capacity: bool = False  # SR#3: structured marker — caller checks this
@@ -43,6 +45,7 @@ class RetryDecision:
 _NO_RETRY_MARKERS: tuple[str, ...] = (
     "MONTHLY_REQUEST_COUNT",
     "MONTHLY_TOKEN_COUNT",
+    "OVERAGE_REQUEST_LIMIT_EXCEEDED",  # hard overage cap — retrying wastes a slot
     "request quota exceeded",
 )
 
@@ -60,7 +63,8 @@ def _decode_body(body: object) -> str:
     """Decode bytes-like input; tolerate any non-bytes (mocks, None, garbage)
     by returning empty string so callers fall through to status-only logic.
     Production callers pass bytes; defensive against test mocks that pass
-    a coroutine or arbitrary type."""
+    a coroutine or arbitrary type.
+    """
     if not body or not isinstance(body, (bytes, bytearray)):
         return ""
     try:

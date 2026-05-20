@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Utility functions for Kiro Gateway.
+"""Utility functions for Kiro Gateway.
 
 Contains functions for fingerprint generation, header formatting,
 and other common utilities.
@@ -37,8 +36,7 @@ if TYPE_CHECKING:
 
 
 def get_machine_fingerprint() -> str:
-    """
-    Generates a unique machine fingerprint based on hostname and username.
+    """Generates a unique machine fingerprint based on hostname and username.
 
     Used for User-Agent formation to identify a specific gateway installation.
 
@@ -51,17 +49,16 @@ def get_machine_fingerprint() -> str:
 
         hostname = socket.gethostname()
         username = getpass.getuser()
-        unique_string = f"{hostname}-{username}-kiro-gateway"
+        unique_string = f"{hostname}-{username}-kiro-gateway"  # TODO(rebrand): defer; changing this string changes the SHA256 hash (breaks cache/correlation)
 
         return hashlib.sha256(unique_string.encode()).hexdigest()
     except Exception as e:
         logger.warning(f"Failed to get machine fingerprint: {e}")
-        return hashlib.sha256(b"default-kiro-gateway").hexdigest()
+        return hashlib.sha256(b"default-kiro-gateway").hexdigest()  # TODO(rebrand): defer; changing fallback string changes the hash
 
 
 def get_kiro_headers(auth_manager: "KiroAuthManager", token: str) -> dict:
-    """
-    Builds headers for Kiro API requests.
+    """Builds headers for Kiro API requests.
 
     Includes all necessary headers for authentication and identification:
     - Authorization with Bearer token
@@ -90,8 +87,7 @@ def get_kiro_headers(auth_manager: "KiroAuthManager", token: str) -> dict:
 
 
 def generate_completion_id() -> str:
-    """
-    Generates a unique ID for chat completion.
+    """Generates a unique ID for chat completion.
 
     Returns:
         ID in format "chatcmpl-{uuid_hex}"
@@ -100,8 +96,7 @@ def generate_completion_id() -> str:
 
 
 def generate_conversation_id(messages: list[dict[str, Any]] | None = None) -> str:
-    """
-    Generates a stable conversation ID based on message history.
+    """Generates a stable conversation ID based on message history.
 
     For truncation recovery, we need a stable ID that persists across requests
     in the same conversation. This is generated from a hash of key messages.
@@ -161,8 +156,7 @@ def generate_conversation_id(messages: list[dict[str, Any]] | None = None) -> st
 
 
 def generate_tool_call_id() -> str:
-    """
-    Generates a unique ID for tool call.
+    """Generates a unique ID for tool call.
 
     Returns:
         ID in format "call_{uuid_hex[:8]}"

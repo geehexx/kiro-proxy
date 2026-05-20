@@ -10,6 +10,11 @@
 # To update dev tool versions, edit requirements-dev.txt and re-run:
 #   .venv/bin/python -m pip install -r requirements-dev.txt
 
+# Suppress version banner and skip-noise; keep failures and summary only.
+output:
+  - summary
+  - failure
+
 pre-commit:
   parallel: true
   commands:
@@ -36,8 +41,23 @@ pre-commit:
           --deselect tests/unit/test_config.py::TestServerPortConfig::test_default_server_port_is_8000
 
     bandit:
-      glob: "{kiro,tests,main.py}/**/*.py"
-      run: uvx bandit -r {staged_files} --severity-level medium -q
+      # Severity medium+ blocks; LOW is informational only.
+      # Config in bandit.yaml: skips B101/B110/B311 (justified patterns),
+      # excludes tests/ and .venv/.
+      glob: "{kiro,main.py}/**/*.py"
+      run: .venv/bin/python -m bandit -c bandit.yaml --severity-level medium -q {staged_files}
+
+    markdownlint:
+      # Warn-only: 62 pre-existing violations in upstream docs. Not blocking
+      # until debt is paid down. Run `markdownlint-cli2 "*.md"` to see full list.
+      glob: "*.md"
+      run: markdownlint-cli2 {staged_files} || true
+
+    check-internal-refs:
+      # Block internal tooling refs that should never appear in a public repo.
+      # Script in claude-config; copied here so kiro-proxy is self-contained.
+      run: python3 scripts/pre-commit/check-internal-refs.py {staged_files}
+
     gitleaks:
       run: gitleaks protect --staged --redact --no-banner
 

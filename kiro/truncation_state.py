@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-In-memory cache for truncation recovery state.
+"""In-memory cache for truncation recovery state.
 
 Tracks truncated tool calls and content by stable identifiers:
 - Tool calls: tracked by tool_call_id (stable across requests)
@@ -37,8 +36,7 @@ from loguru import logger
 
 @dataclass
 class ToolTruncationInfo:
-    """
-    Information about a truncated tool call.
+    """Information about a truncated tool call.
 
     Attributes:
         tool_call_id: Stable ID of the truncated tool call
@@ -46,6 +44,7 @@ class ToolTruncationInfo:
         truncation_info: Diagnostic information from parser
         timestamp: Unix timestamp when truncation was detected
     """
+
     tool_call_id: str
     tool_name: str
     truncation_info: dict
@@ -54,14 +53,14 @@ class ToolTruncationInfo:
 
 @dataclass
 class ContentTruncationInfo:
-    """
-    Information about truncated content (non-tool output).
+    """Information about truncated content (non-tool output).
 
     Attributes:
         message_hash: Hash of the truncated assistant message
         content_preview: First 200 chars of truncated content (for debugging)
         timestamp: Unix timestamp when truncation was detected
     """
+
     message_hash: str
     content_preview: str
     timestamp: float
@@ -78,8 +77,7 @@ _cache_lock = Lock()
 
 
 def save_tool_truncation(tool_call_id: str, tool_name: str, truncation_info: dict) -> None:
-    """
-    Save truncation info for a specific tool call.
+    """Save truncation info for a specific tool call.
 
     Thread-safe operation.
 
@@ -103,8 +101,7 @@ def save_tool_truncation(tool_call_id: str, tool_name: str, truncation_info: dic
 
 
 def get_tool_truncation(tool_call_id: str) -> Optional[ToolTruncationInfo]:
-    """
-    Get and remove truncation info for a specific tool call.
+    """Get and remove truncation info for a specific tool call.
 
     This is a one-time operation - info is removed after retrieval.
     Thread-safe operation.
@@ -128,8 +125,7 @@ def get_tool_truncation(tool_call_id: str) -> Optional[ToolTruncationInfo]:
 
 
 def save_content_truncation(content: str) -> str:
-    """
-    Save truncation info for content (non-tool output).
+    """Save truncation info for content (non-tool output).
 
     Generates a hash of the content to use as stable identifier.
     Thread-safe operation.
@@ -160,8 +156,7 @@ def save_content_truncation(content: str) -> str:
 
 
 def get_content_truncation(content: str) -> Optional[ContentTruncationInfo]:
-    """
-    Get and remove truncation info for specific content.
+    """Get and remove truncation info for specific content.
 
     Generates hash from content and looks it up in cache.
     This is a one-time operation - info is removed after retrieval.
@@ -192,8 +187,7 @@ def get_content_truncation(content: str) -> Optional[ContentTruncationInfo]:
 
 
 def get_cache_stats() -> dict[str, int]:
-    """
-    Get current cache statistics.
+    """Get current cache statistics.
 
     Useful for monitoring and debugging.
 

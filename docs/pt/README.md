@@ -1,6 +1,6 @@
 <div align="center">
 
-# 👻 Kiro Gateway
+# kiro-proxy
 
 **Gateway proxy para Kiro API (Amazon Q Developer / AWS CodeWhisperer)**
 
@@ -11,11 +11,10 @@ Feito com ❤️ por [@Jwadow](https://github.com/jwadow)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
-[![Sponsor](https://img.shields.io/badge/💖_Sponsor-Apoie_o_Desenvolvimento-ff69b4)](#-apoie-o-projeto)
 
 *Use modelos Claude do Kiro com Claude Code, OpenCode, OpenClaw, Claw Code, Codex app, Cursor, Cline, Roo Code, Kilo Code, Obsidian, OpenAI SDK, LangChain, Continue e outras ferramentas compatíveis com OpenAI ou Anthropic*
 
-[Modelos](#-modelos-suportados) • [Recursos](#-recursos) • [Início Rápido](#-início-rápido) • [Configuração](#%EF%B8%8F-configuração) • [💖 Apoiar](#-apoie-o-projeto)
+[Modelos](#-modelos-suportados) • [Recursos](#-recursos) • [Início Rápido](#-início-rápido) • [Configuração](#%EF%B8%8F-configuração)
 
 </div>
 
@@ -86,10 +85,10 @@ Feito com ❤️ por [@Jwadow](https://github.com/jwadow)
 
 ```bash
 # Clone o repositório (requer Git)
-git clone https://github.com/Jwadow/kiro-gateway.git
-cd kiro-gateway
+git clone https://github.com/geehexx/kiro-proxy.git
+cd kiro-proxy
 
-# Ou baixe o ZIP: Code → Download ZIP → extraia → abra a pasta kiro-gateway
+# Ou baixe o ZIP: Code → Download ZIP → extraia → abra a pasta kiro-proxy
 
 # Instale as dependências
 pip install -r requirements.txt
@@ -351,8 +350,8 @@ Para exemplos de configuração completos (incluindo configurações de região 
 
 ```bash
 # 1. Clone e configure
-git clone https://github.com/Jwadow/kiro-gateway.git
-cd kiro-gateway
+git clone https://github.com/geehexx/kiro-proxy.git
+cd kiro-proxy
 cp .env.example .env
 # Edite .env com suas credenciais
 
@@ -374,8 +373,8 @@ docker run -d \
   -p 8000:8000 \
   -e PROXY_API_KEY="my-super-secret-password-123" \
   -e REFRESH_TOKEN="your_refresh_token" \
-  --name kiro-gateway \
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy \
+  kiro-proxy:local
 ```
 
 </details>
@@ -390,8 +389,8 @@ docker run -d \
   -v ~/.aws/sso/cache:/home/kiro/.aws/sso/cache:ro \
   -e KIRO_CREDS_FILE=/home/kiro/.aws/sso/cache/kiro-auth-token.json \
   -e PROXY_API_KEY="my-super-secret-password-123" \
-  --name kiro-gateway \
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy \
+  kiro-proxy:local
 ```
 
 **Windows (PowerShell):**
@@ -401,8 +400,8 @@ docker run -d `
   -v ${HOME}/.aws/sso/cache:/home/kiro/.aws/sso/cache:ro `
   -e KIRO_CREDS_FILE=/home/kiro/.aws/sso/cache/kiro-auth-token.json `
   -e PROXY_API_KEY="my-super-secret-password-123" `
-  --name kiro-gateway `
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy `
+  kiro-proxy:local
 ```
 
 </details>
@@ -411,7 +410,7 @@ docker run -d `
 <summary>🔹 Usando Arquivo .env</summary>
 
 ```bash
-docker run -d -p 8000:8000 --env-file .env --name kiro-gateway ghcr.io/jwadow/kiro-gateway:latest
+docker run -d -p 8000:8000 --env-file .env --name kiro-proxy kiro-proxy:local
 ```
 
 </details>
@@ -447,8 +446,8 @@ docker-compose pull && docker-compose up -d  # Atualizar
 <summary>🔧 Compilar do Código-Fonte</summary>
 
 ```bash
-docker build -t kiro-gateway .
-docker run -d -p 8000:8000 --env-file .env kiro-gateway
+docker build -t kiro-proxy .
+docker run -d -p 8000:8000 --env-file .env kiro-proxy
 ```
 
 </details>
@@ -790,35 +789,9 @@ Ao enviar uma contribuição para este projeto, você concorda com os termos do 
 
 ---
 
-## 💖 Apoie o Projeto
+## Suporte
 
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Smiling%20Face%20with%20Hearts.png" alt="Love" width="80" />
-
-**Se este projeto economizou seu tempo ou dinheiro, considere apoiá-lo!**
-
-Cada contribuição ajuda a manter este projeto vivo e crescendo
-
-<br>
-
-### 🤑 Doar
-
-[**☕ Apoio Único**](https://app.lava.top/products/b4e34d12-3b6b-49b7-be50-50b6a20ed262/f3ea941f-de73-4ad1-bbb6-f82042ef8132)
-
-<br>
-
-### 🪙 Ou envie criptomoedas
-
-| Moeda | Rede | Endereço |
-|:-----:|:----:|:---------|
-| **USDT** | TRC20 | `TSVtgRc9pkC1UgcbVeijBHjFmpkYHDRu26` |
-| **BTC** | Bitcoin | `12GZqxqpcBsqJ4Vf1YreLqwoMGvzBPgJq6` |
-| **ETH** | Ethereum | `0xc86eab3bba3bbaf4eb5b5fff8586f1460f1fd395` |
-| **SOL** | Solana | `9amykF7KibZmdaw66a1oqYJyi75fRqgdsqnG66AK3jvh` |
-| **TON** | TON | `UQBVh8T1H3GI7gd7b-_PPNnxHYYxptrcCVf3qQk5v41h3QTM` |
-
-</div>
+Este é um fork pessoal. Se o gateway subjacente for útil, considere apoiar o projeto original em [Jwadow/kiro-gateway](https://github.com/Jwadow/kiro-gateway).
 
 ---
 
@@ -830,6 +803,6 @@ Este projeto não é afiliado, endossado ou patrocinado pela Amazon Web Services
 
 <div align="center">
 
-**[⬆ Voltar ao Topo](#-kiro-gateway)**
+**[⬆ Voltar ao Topo](#kiro-proxy)**
 
 </div>

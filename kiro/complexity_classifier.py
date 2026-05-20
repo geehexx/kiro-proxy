@@ -1,5 +1,4 @@
-"""
-Request complexity classifier for adaptive RE2 + thinking budget injection.
+"""Request complexity classifier for adaptive RE2 + thinking budget injection.
 
 3-layer architecture:
 - Layer 1: Deterministic short-circuits (haiku, sub-agent, tool_result-only, slash commands)
@@ -17,6 +16,8 @@ from typing import Any, Optional
 
 
 class ComplexityLabel(str, Enum):
+    """Classification of request complexity for RE2 and thinking budget injection."""
+
     SKIP = "skip"       # Don't inject RE2 or thinking
     SIMPLE = "simple"   # No thinking, maybe RE2
     MEDIUM = "medium"   # Low thinking budget, RE2
@@ -25,6 +26,8 @@ class ComplexityLabel(str, Enum):
 
 @dataclass
 class ComplexityResult:
+    """Output of classify_request() — label plus supporting metadata for debugging."""
+
     label: ComplexityLabel
     score: float          # 0.0-1.0 normalized score
     reason: str           # Human-readable reason for debugging
@@ -59,8 +62,7 @@ def classify_request(  # noqa: C901, PLR0912, PLR0913, PLR0915
     is_subagent: bool = False,
     input_tokens_estimate: Optional[int] = None,
 ) -> ComplexityResult:
-    """
-    Classify request complexity for adaptive RE2 + thinking budget injection.
+    """Classify request complexity for adaptive RE2 + thinking budget injection.
 
     Args:
         model: Model ID (e.g. "claude-sonnet-4.6")

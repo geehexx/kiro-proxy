@@ -15,8 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-FastAPI routes for Anthropic Messages API.
+"""FastAPI routes for Anthropic Messages API.
 
 Contains the /v1/messages endpoint compatible with Anthropic's Messages API.
 
@@ -57,6 +56,7 @@ from kiro.streaming_anthropic import (
     stream_with_first_token_retry_anthropic,
 )
 from kiro.tokenizer import estimate_request_tokens
+from kiro.telemetry import emit_cache_event
 from kiro.utils import generate_conversation_id
 
 
@@ -214,8 +214,7 @@ auth_header = APIKeyHeader(name="Authorization", auto_error=False)
 async def verify_anthropic_api_key(
     x_api_key: Optional[str] = Security(anthropic_api_key_header), authorization: Optional[str] = Security(auth_header)
 ) -> bool:
-    """
-    Verify API key for Anthropic API.
+    """Verify API key for Anthropic API.
 
     Supports two authentication methods:
     1. x-api-key header (Anthropic native)
@@ -267,8 +266,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
     anthropic_version: Optional[str] = Header(None, alias="anthropic-version"),
     anthropic_beta: Optional[str] = Header(None, alias="anthropic-beta"),
 ):
-    """
-    Anthropic Messages API endpoint.
+    """Anthropic Messages API endpoint.
 
     Compatible with Anthropic's /v1/messages endpoint.
     Accepts requests in Anthropic format and translates them to Kiro API.
@@ -553,6 +551,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                 )
                 if debug_logger:
                     debug_logger.discard_buffers()
+                emit_cache_event(event="hit", model=_resolved_model, cache_key_prefix=cache_key[:8], layer="response")
                 await _emit_gateway_baseline(
                     request,
                     response_body=hit_body,
@@ -579,6 +578,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                 )
                 if debug_logger:
                     debug_logger.discard_buffers()
+                emit_cache_event(event="hit", model=_resolved_model, cache_key_prefix=cache_key[:8], layer="stream")
                 await _emit_gateway_baseline(
                     request,
                     response_body={},
@@ -595,6 +595,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                 cached_bytes = stream_hit
 
                 async def replay_stream():
+                    """Yield the cached SSE bytes as a single-chunk replay stream."""
                     yield cached_bytes
 
                 return StreamingResponse(
@@ -784,7 +785,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
         _failover_start = time.monotonic()
         _account_retry_counts: dict[str, int] = {}  # account_id → retry count this loop
 
-        for attempt in range(MAX_ATTEMPTS):
+        for _attempt in range(MAX_ATTEMPTS):
             # Get next available account (excluding already tried)
             account = await account_manager.get_next_account(
                 request_data.model,
@@ -890,6 +891,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                     if request_data.stream:
                         # Streaming mode
                         async def stream_wrapper():  # noqa: C901, PLR0912, PLR0915
+                            """Stream Kiro SSE to the client, handling retries and telemetry."""
                             streaming_error = None
                             client_disconnected = False
                             _stream_usage: dict = {}
@@ -901,6 +903,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                             try:
 
                                 async def make_retry_request():
+                                    """Issue a fresh upstream POST for first-token-timeout retry."""
                                     return await http_client.request_with_retry("POST", url, kiro_payload, stream=True, extra_headers=_attribution_headers or None)
 
                                 async for chunk in stream_with_first_token_retry_anthropic(
@@ -1472,6 +1475,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
                 _opus_semaphore = getattr(request.app.state, "global_opus_semaphore", None)
 
             async def stream_wrapper():  # noqa: C901, PLR0912, PLR0915
+                """Stream Kiro SSE to the client, handling Opus concurrency cap, retries, and telemetry."""
                 streaming_error = None
                 client_disconnected = False
                 _sem_acquired = False
@@ -1485,6 +1489,7 @@ async def messages(  # noqa: C901, PLR0912, PLR0915
 
                     # Create retry request function for retries
                     async def make_retry_request():
+                        """Issue a fresh upstream POST for first-token-timeout retry."""
                         return await http_client.request_with_retry("POST", url, kiro_payload, stream=True, extra_headers=_attribution_headers or None)
 
                     # Use retry wrapper with initial response
@@ -1684,8 +1689,7 @@ async def count_tokens_endpoint(
     request: Request,
     request_data: AnthropicCountTokensRequest,
 ):
-    """
-    Anthropic Count Tokens API endpoint.
+    """Anthropic Count Tokens API endpoint.
 
     Returns estimated token count for the given request payload.
     Used by Claude Code to decide when to trigger conversation compaction.

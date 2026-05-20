@@ -1,0 +1,23 @@
+# .markdownlint.yaml — markdownlint-cli2 configuration for kiro-proxy
+#
+# Run: npx markdownlint-cli2 "**/*.md" "#node_modules" "#.venv"
+# Lefthook runs this on pre-commit against staged .md files.
+#
+# Philosophy: enforce structural correctness (headings, lists, code blocks)
+# but not opinionated style (line length, inline HTML for tables).
+
+default: true
+
+# MD013: line length — disabled; proxy docs use long URLs and code examples
+MD013: false
+
+# MD033: inline HTML — disabled; README uses HTML for badges and tables
+MD033: false
+
+# MD041: first line should be top-level heading — disabled; some docs start
+# with a badge or a short description paragraph
+MD041: false
+
+# MD024: no duplicate headings — allow same heading text in different sections
+MD024:
+  siblings_only: true

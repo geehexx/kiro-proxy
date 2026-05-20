@@ -6456,3 +6456,81 @@ class TestBuildKiroPayloadWithThinkingConfig:
         print("Checking for <max_thinking_length>7000</max_thinking_length> in content...")
         assert "<max_thinking_length>7000</max_thinking_length>" in content
         assert "<thinking_mode>enabled</thinking_mode>" in content
+
+
+# ==================================================================================================
+# Integration tests: build_kiro_payload wires apply_opus_effort_guard end-to-end
+# ==================================================================================================
+
+class TestBuildKiroPayloadOpusEffortGuardWiring:
+    """Verify the helper at converters_core.py:1669 is invoked end-to-end.
+
+    Background: apply_opus_effort_guard has 21 unit tests, but the wiring at
+    build_kiro_payload (line ~1669) had zero direct coverage. A refactor that
+    silently drops the call would not break any unit test. These tests assert
+    the payload actually carries the guarded AMF for Opus models, and that
+    non-Opus models do not get spurious AMF injection.
+
+    build_kiro_payload does not accept AMF as a parameter — the guard fires
+    against any AMF already on user_input_message at line ~1668. With the
+    public signature, that AMF is always None, so the guard's None-input path
+    is the one wired here. Direct AMF-with-prefilled-effort coverage stays in
+    test_opus_effort_guard.py (unit-level).
+    """
+
+    def _build_payload(self, model_id: str) -> dict:
+        """Helper: return the payload's user_input_message for the assertions."""
+        result = build_kiro_payload(
+            messages=[UnifiedMessage(role="user", content="hi")],
+            system_prompt="You are helpful.",
+            model_id=model_id,
+            tools=None,
+            conversation_id="wiring-test-conv",
+            profile_arn="arn:aws:codewhisperer:us-east-1:123456789:profile/test",
+            thinking_config=ThinkingConfig(enabled=False),
+        )
+        return result.payload["conversationState"]["currentMessage"]["userInputMessage"]
+
+    def test_opus_4_7_dot_form_gets_effort_high_via_guard(self) -> None:
+        """Opus 4.7 (dot form) → payload AMF.output_config.effort=high (guard wired)."""
+        msg = self._build_payload("claude-opus-4.7")
+        amf = msg.get("additionalModelRequestFields") or {}
+        assert amf.get("output_config", {}).get("effort") == "high", (
+            f"Expected effort=high from guard; got AMF={amf!r}. "
+            "If empty, guard wiring at converters_core.py:1668-1671 was removed."
+        )
+
+    def test_opus_4_7_dash_form_gets_effort_high_via_guard(self) -> None:
+        """Opus 4.7 (hyphen form) → payload AMF.output_config.effort=high.
+
+        Both forms must trigger the guard because _is_opus_4_7 should accept both.
+        """
+        msg = self._build_payload("claude-opus-4-7")
+        amf = msg.get("additionalModelRequestFields") or {}
+        assert amf.get("output_config", {}).get("effort") == "high", (
+            f"Expected effort=high from guard for hyphen-form; got AMF={amf!r}"
+        )
+
+    def test_opus_4_6_does_not_trigger_guard(self) -> None:
+        """Opus 4.6 → guard does NOT fire (only 4.7 has the 429 issue)."""
+        msg = self._build_payload("claude-opus-4.6")
+        amf = msg.get("additionalModelRequestFields") or {}
+        # Should have no effort injected (no guard fired)
+        assert "output_config" not in amf or "effort" not in amf.get("output_config", {}), (
+            f"Opus 4.6 should not trigger Opus 4.7 guard; got AMF={amf!r}"
+        )
+
+    def test_sonnet_4_6_no_amf_injection(self) -> None:
+        """Non-Opus model: no AMF injection (guard returns {} → wiring drops it)."""
+        msg = self._build_payload("claude-sonnet-4.6")
+        # Wiring at line 1670 has `if guarded_amf:` so empty {} → no key set
+        assert "additionalModelRequestFields" not in msg or not msg.get(
+            "additionalModelRequestFields"
+        ), f"Sonnet should not get AMF; got {msg.get('additionalModelRequestFields')!r}"
+
+    def test_haiku_no_amf_injection(self) -> None:
+        """Haiku: no AMF injection."""
+        msg = self._build_payload("claude-haiku-4.5")
+        assert "additionalModelRequestFields" not in msg or not msg.get(
+            "additionalModelRequestFields"
+        )

@@ -158,17 +158,21 @@ class TestRootEndpoint:
         assert response.status_code == 200
         assert response.json()["status"] == "ok"
 
-    def test_root_returns_gateway_message(self, test_client):
-        """
-        What it does: Verifies root endpoint returns gateway message.
-        Purpose: Ensure service identification is present.
+    def test_root_returns_proxy_message(self, test_client):
+        """Verify root endpoint returns the service-identification message.
+
+        Background: the message string was rebranded from "Kiro Gateway" to
+        "Kiro Proxy" 2026-05-20. The assertion uses a case-insensitive
+        substring on "kiro" to remain stable across future rebrands; the
+        important property is service self-identification, not the exact name.
         """
         print("Action: GET /...")
         response = test_client.get("/")
 
         print(f"Result: {response.json()}")
         assert response.status_code == 200
-        assert "Kiro Gateway" in response.json()["message"]
+        assert "kiro" in response.json()["message"].lower()
+        assert "running" in response.json()["message"].lower()
 
     def test_root_returns_version(self, test_client):
         """
@@ -1244,13 +1248,18 @@ class TestTruncationRecoveryEdgeCases:
         stats = get_cache_stats()
         assert stats["tool_truncations"] >= 1
 
-        print("Action: Disabling recovery...")
-        with patch.dict(os.environ, {"TRUNCATION_RECOVERY": "false"}):
-            from importlib import reload
+        print("Action: Disabling recovery via direct attribute patch...")
+        # Patch the module-level constant directly so the test does not pollute
+        # other test modules. The previous implementation called reload(config)
+        # inside a `with patch.dict(os.environ, ...)` block but never re-reloaded
+        # config after exiting — TRUNCATION_RECOVERY=False persisted, breaking
+        # tests/unit/test_routes_anthropic.py::TestTruncationRecoveryMessageModification
+        # whenever it ran later in the same pytest session.
+        from kiro import config as _config
 
-            from kiro import config
-            reload(config)
-
+        _saved_recovery = _config.TRUNCATION_RECOVERY
+        _config.TRUNCATION_RECOVERY = False
+        try:
             print("Action: Processing tool_result with recovery disabled...")
             from kiro.truncation_recovery import should_inject_recovery
             from kiro.truncation_state import get_tool_truncation
@@ -1271,6 +1280,8 @@ class TestTruncationRecoveryEdgeCases:
             print("Checking: No modification occurred...")
             assert modified_messages[0].content == "Result"
             assert "[API Limitation]" not in modified_messages[0].content
+        finally:
+            _config.TRUNCATION_RECOVERY = _saved_recovery
 
         print("Checking: Cache entry still exists (not cleaned up)...")
         # Note: get_tool_truncation() was NOT called, so entry should still be there
@@ -2186,3 +2197,165 @@ class TestRe2InjectionOpenAI:
         # First text block should be unchanged
         assert RE2_INJECTION not in request_data.messages[2].content[0]["text"]
         print("✅ Legacy mode correctly skips failover loop")
+
+
+# =============================================================================
+# Tests for F4 — _emit_gateway_baseline_openai (gateway baselines on OpenAI route)
+# =============================================================================
+
+class TestEmitGatewayBaselineOpenai:
+    """Tests that _emit_gateway_baseline_openai emits records to baselines_writer.
+
+    F4 finding: routes_openai.py emitted ZERO gateway baselines; all OpenAI-format
+    requests (Aider, Cursor, llm-cli) were invisible in baselines-gateway-requests.jsonl.
+    """
+
+    @pytest.mark.asyncio
+    async def test_emit_writes_to_baselines_writer_on_success(self):
+        """
+        What it does: Verifies baseline record is written on a successful non-stream call.
+        Purpose: Ensure OpenAI-format requests appear in baselines-gateway-requests.jsonl.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        from kiro.routes_openai import _emit_gateway_baseline_openai
+
+        mock_writer = AsyncMock()
+        mock_writer.write = AsyncMock()
+
+        mock_app_state = MagicMock()
+        mock_app_state.baselines_writer = mock_writer
+
+        mock_request = MagicMock()
+        mock_request.app.state = mock_app_state
+
+        usage = {"prompt_tokens": 100, "completion_tokens": 50}
+
+        await _emit_gateway_baseline_openai(
+            mock_request,
+            request_model="claude-sonnet-4.6",
+            stream=False,
+            gateway_cache="miss",
+            re2_applied=False,
+            upstream_ms=None,
+            status=200,
+            usage=usage,
+        )
+
+        mock_writer.write.assert_called_once()
+        call_args = mock_writer.write.call_args
+        source, record = call_args[0]
+        assert source == "gateway-requests"
+        assert record["input_tokens"] == 100
+        assert record["output_tokens"] == 50
+        assert record["status"] == 200
+        assert record["stream"] is False
+        assert record["model"] == "claude-sonnet-4.6"
+        # OpenAI shape has no cache tokens — must be None, not 0
+        assert record["cache_read_input_tokens"] is None
+        assert record["cache_creation_input_tokens"] is None
+
+    @pytest.mark.asyncio
+    async def test_emit_writes_to_baselines_writer_on_stream(self):
+        """
+        What it does: Verifies baseline record is written for streaming requests.
+        Purpose: Ensure streaming OpenAI requests are also captured.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        from kiro.routes_openai import _emit_gateway_baseline_openai
+
+        mock_writer = AsyncMock()
+        mock_writer.write = AsyncMock()
+
+        mock_app_state = MagicMock()
+        mock_app_state.baselines_writer = mock_writer
+
+        mock_request = MagicMock()
+        mock_request.app.state = mock_app_state
+
+        usage = {"prompt_tokens": 200, "completion_tokens": 75}
+
+        await _emit_gateway_baseline_openai(
+            mock_request,
+            request_model="claude-opus-4.7",
+            stream=True,
+            gateway_cache="miss",
+            re2_applied=True,
+            upstream_ms=None,
+            status=200,
+            usage=usage,
+        )
+
+        mock_writer.write.assert_called_once()
+        _, record = mock_writer.write.call_args[0]
+        assert record["stream"] is True
+        assert record["re2_applied"] is True
+        assert record["input_tokens"] == 200
+        assert record["output_tokens"] == 75
+
+    @pytest.mark.asyncio
+    async def test_emit_writes_to_baselines_writer_on_4xx_error(self):
+        """
+        What it does: Verifies baseline record is written on a 4xx error response.
+        Purpose: Ensure error paths are also captured in telemetry.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        from kiro.routes_openai import _emit_gateway_baseline_openai
+
+        mock_writer = AsyncMock()
+        mock_writer.write = AsyncMock()
+
+        mock_app_state = MagicMock()
+        mock_app_state.baselines_writer = mock_writer
+
+        mock_request = MagicMock()
+        mock_request.app.state = mock_app_state
+
+        await _emit_gateway_baseline_openai(
+            mock_request,
+            request_model="claude-sonnet-4.6",
+            stream=False,
+            gateway_cache="miss",
+            re2_applied=False,
+            upstream_ms=None,
+            status=429,
+            usage={},
+            error_reason="rate_limit_exceeded",
+        )
+
+        mock_writer.write.assert_called_once()
+        _, record = mock_writer.write.call_args[0]
+        assert record["status"] == 429
+        assert record["error_reason"] == "rate_limit_exceeded"
+        assert record["input_tokens"] is None
+        assert record["output_tokens"] is None
+
+    @pytest.mark.asyncio
+    async def test_emit_is_noop_when_no_baselines_writer(self):
+        """
+        What it does: Verifies no error when baselines_writer is absent.
+        Purpose: Ensure telemetry never breaks the hot path.
+        """
+        from unittest.mock import MagicMock
+
+        from kiro.routes_openai import _emit_gateway_baseline_openai
+
+        mock_app_state = MagicMock()
+        mock_app_state.baselines_writer = None
+
+        mock_request = MagicMock()
+        mock_request.app.state = mock_app_state
+
+        # Should not raise
+        await _emit_gateway_baseline_openai(
+            mock_request,
+            request_model="claude-sonnet-4.6",
+            stream=False,
+            gateway_cache="miss",
+            re2_applied=False,
+            upstream_ms=None,
+            status=200,
+            usage={"prompt_tokens": 10, "completion_tokens": 5},
+        )

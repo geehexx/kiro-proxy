@@ -10,7 +10,7 @@ leaking timing info that lets an attacker brute-force the key one byte
 at a time. hmac.compare_digest is constant-time for equal-length inputs
 and short-circuit-resistant otherwise.
 
-See basic-memory://audits/2026-05-19-kiro-proxy-audit/E-security E1.
+See internal research notes E1.
 """
 
 import pytest

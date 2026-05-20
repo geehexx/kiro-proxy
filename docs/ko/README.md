@@ -1,6 +1,6 @@
 <div align="center">
 
-# 👻 Kiro Gateway
+# kiro-proxy
 
 **Kiro API (Amazon Q Developer / AWS CodeWhisperer) 프록시 게이트웨이**
 
@@ -11,11 +11,10 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
-[![Sponsor](https://img.shields.io/badge/💖_Sponsor-개발_지원-ff69b4)](#-프로젝트-후원)
 
 *Kiro의 Claude 모델을 Claude Code, OpenCode, OpenClaw, Claw Code, Codex app, Cursor, Cline, Roo Code, Kilo Code, Obsidian, OpenAI SDK, LangChain, Continue 및 기타 OpenAI 또는 Anthropic 호환 도구와 함께 사용*
 
-[모델](#-지원-모델) • [기능](#-기능) • [빠른-시작](#-빠른-시작) • [설정](#%EF%B8%8F-설정) • [💖 후원](#-프로젝트-후원)
+[모델](#-지원-모델) • [기능](#-기능) • [빠른-시작](#-빠른-시작) • [설정](#%EF%B8%8F-설정)
 
 </div>
 
@@ -86,10 +85,10 @@
 
 ```bash
 # 저장소 클론 (Git 필요)
-git clone https://github.com/Jwadow/kiro-gateway.git
-cd kiro-gateway
+git clone https://github.com/geehexx/kiro-proxy.git
+cd kiro-proxy
 
-# 또는 ZIP 다운로드: Code → Download ZIP → 압축 해제 → kiro-gateway 폴더 열기
+# 또는 ZIP 다운로드: Code → Download ZIP → 압축 해제 → kiro-proxy 폴더 열기
 
 # 의존성 설치
 pip install -r requirements.txt
@@ -351,8 +350,8 @@ ACCOUNT_SYSTEM=true
 
 ```bash
 # 1. 클론 및 설정
-git clone https://github.com/Jwadow/kiro-gateway.git
-cd kiro-gateway
+git clone https://github.com/geehexx/kiro-proxy.git
+cd kiro-proxy
 cp .env.example .env
 # .env를 자격 증명으로 편집
 
@@ -374,8 +373,8 @@ docker run -d \
   -p 8000:8000 \
   -e PROXY_API_KEY="my-super-secret-password-123" \
   -e REFRESH_TOKEN="your_refresh_token" \
-  --name kiro-gateway \
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy \
+  kiro-proxy:local
 ```
 
 </details>
@@ -390,8 +389,8 @@ docker run -d \
   -v ~/.aws/sso/cache:/home/kiro/.aws/sso/cache:ro \
   -e KIRO_CREDS_FILE=/home/kiro/.aws/sso/cache/kiro-auth-token.json \
   -e PROXY_API_KEY="my-super-secret-password-123" \
-  --name kiro-gateway \
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy \
+  kiro-proxy:local
 ```
 
 **Windows (PowerShell):**
@@ -401,8 +400,8 @@ docker run -d `
   -v ${HOME}/.aws/sso/cache:/home/kiro/.aws/sso/cache:ro `
   -e KIRO_CREDS_FILE=/home/kiro/.aws/sso/cache/kiro-auth-token.json `
   -e PROXY_API_KEY="my-super-secret-password-123" `
-  --name kiro-gateway `
-  ghcr.io/jwadow/kiro-gateway:latest
+  --name kiro-proxy `
+  kiro-proxy:local
 ```
 
 </details>
@@ -411,7 +410,7 @@ docker run -d `
 <summary>🔹 .env 파일 사용</summary>
 
 ```bash
-docker run -d -p 8000:8000 --env-file .env --name kiro-gateway ghcr.io/jwadow/kiro-gateway:latest
+docker run -d -p 8000:8000 --env-file .env --name kiro-proxy kiro-proxy:local
 ```
 
 </details>
@@ -447,8 +446,8 @@ docker-compose pull && docker-compose up -d  # 업데이트
 <summary>🔧 소스에서 빌드</summary>
 
 ```bash
-docker build -t kiro-gateway .
-docker run -d -p 8000:8000 --env-file .env kiro-gateway
+docker build -t kiro-proxy .
+docker run -d -p 8000:8000 --env-file .env kiro-proxy
 ```
 
 </details>
@@ -790,35 +789,9 @@ AGPL-3.0은 이 소프트웨어에 대한 개선이 전체 커뮤니티에 이�
 
 ---
 
-## 💖 프로젝트 후원
+## 지원
 
-<div align="center">
-
-<img src="https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis/Smilies/Smiling%20Face%20with%20Hearts.png" alt="Love" width="80" />
-
-**이 프로젝트가 시간이나 돈을 절약해 주었다면 후원을 고려해 주세요!**
-
-모든 기여가 이 프로젝트를 유지하고 성장시키는 데 도움이 됩니다
-
-<br>
-
-### 🤑 기부
-
-[**☕ 일회성 후원**](https://app.lava.top/products/b4e34d12-3b6b-49b7-be50-50b6a20ed262/f3ea941f-de73-4ad1-bbb6-f82042ef8132)
-
-<br>
-
-### 🪙 또는 암호화폐 전송
-
-| 통화 | 네트워크 | 주소 |
-|:----:|:-------:|:-----|
-| **USDT** | TRC20 | `TSVtgRc9pkC1UgcbVeijBHjFmpkYHDRu26` |
-| **BTC** | Bitcoin | `12GZqxqpcBsqJ4Vf1YreLqwoMGvzBPgJq6` |
-| **ETH** | Ethereum | `0xc86eab3bba3bbaf4eb5b5fff8586f1460f1fd395` |
-| **SOL** | Solana | `9amykF7KibZmdaw66a1oqYJyi75fRqgdsqnG66AK3jvh` |
-| **TON** | TON | `UQBVh8T1H3GI7gd7b-_PPNnxHYYxptrcCVf3qQk5v41h3QTM` |
-
-</div>
+이 저장소는 개인 fork 입니다. 기본 gateway가 유용하다면 원본 프로젝트 [Jwadow/kiro-gateway](https://github.com/Jwadow/kiro-gateway)를 후원해 주세요.
 
 ---
 
@@ -830,6 +803,6 @@ AGPL-3.0은 이 소프트웨어에 대한 개선이 전체 커뮤니티에 이�
 
 <div align="center">
 
-**[⬆ 맨 위로](#-kiro-gateway)**
+**[⬆ 맨 위로](#kiro-proxy)**
 
 </div>
