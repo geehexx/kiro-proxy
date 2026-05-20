@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Dynamic Model Resolution System for Kiro Gateway.
+"""Dynamic Model Resolution System for Kiro Gateway.
 
 Implements a 4-layer resolution pipeline:
 1. Normalize Name - Convert client formats to Kiro format (dashes→dots, strip dates)
@@ -42,8 +41,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class ModelResolution:
-    """
-    Result of model resolution.
+    """Result of model resolution.
 
     Attributes:
         internal_id: ID to send to Kiro API
@@ -52,6 +50,7 @@ class ModelResolution:
         normalized: Model name after normalization
         is_verified: True if found in cache/hidden, False if passthrough
     """
+
     internal_id: str
     source: str
     original_request: str
@@ -60,8 +59,7 @@ class ModelResolution:
 
 
 def normalize_model_name(name: str) -> str:
-    """
-    Normalize client model name to Kiro format.
+    """Normalize client model name to Kiro format.
 
     Transformations applied:
     0. claude-sonnet-4.6[1m] → claude-sonnet-4.6 (strip bracket suffixes like [1m])
@@ -172,8 +170,7 @@ def normalize_model_name(name: str) -> str:
 
 
 def get_model_id_for_kiro(model_name: str, hidden_models: dict[str, str]) -> str:
-    """
-    Get the model ID to send to Kiro API.
+    """Get the model ID to send to Kiro API.
 
     This is a simple helper for converters that don't have access to the full
     ModelResolver. It normalizes the name and checks hidden models.
@@ -201,8 +198,7 @@ def get_model_id_for_kiro(model_name: str, hidden_models: dict[str, str]) -> str
 
 
 def extract_model_family(model_name: str) -> Optional[str]:
-    """
-    Extract model family from model name.
+    """Extract model family from model name.
 
     Args:
         model_name: Model name (normalized or not)
@@ -227,8 +223,7 @@ def extract_model_family(model_name: str) -> Optional[str]:
 
 
 class ModelResolver:
-    """
-    Dynamic model resolver with normalization and optimistic pass-through.
+    """Dynamic model resolver with normalization and optimistic pass-through.
 
     Key principle: We are a gateway, not a gatekeeper.
     Kiro API is the final arbiter of what models exist.
@@ -262,8 +257,7 @@ class ModelResolver:
         aliases: Optional[dict[str, str]] = None,
         hidden_from_list: Optional[list[str]] = None
     ):
-        """
-        Initialize the model resolver.
+        """Initialize the model resolver.
 
         Args:
             cache: ModelInfoCache instance for dynamic model lookup
@@ -280,8 +274,7 @@ class ModelResolver:
         self.hidden_from_list = set(hidden_from_list or [])
 
     def resolve(self, external_model: str) -> ModelResolution:
-        """
-        Resolve external model name to internal Kiro ID.
+        """Resolve external model name to internal Kiro ID.
 
         NEVER raises - always returns a resolution.
         If model is not in cache/hidden, we pass it through to Kiro.
@@ -347,8 +340,7 @@ class ModelResolver:
         )
 
     def get_available_models(self) -> list[str]:
-        """
-        Get list of all available model IDs for /v1/models endpoint.
+        """Get list of all available model IDs for /v1/models endpoint.
 
         Combines:
         - Models from dynamic cache (Kiro API)
@@ -376,8 +368,7 @@ class ModelResolver:
         return sorted(models)
 
     def get_models_by_family(self, family: str) -> list[str]:
-        """
-        Get available models filtered by family.
+        """Get available models filtered by family.
 
         Used for error messages to suggest alternatives from the same family.
 
@@ -391,8 +382,7 @@ class ModelResolver:
         return [m for m in all_models if family.lower() in m.lower()]
 
     def get_suggestions_for_model(self, model_name: str) -> list[str]:
-        """
-        Get available models from the SAME family for error message.
+        """Get available models from the SAME family for error message.
 
         IMPORTANT: Never suggests models from different family!
         Opus request → only Opus suggestions

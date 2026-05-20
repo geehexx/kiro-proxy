@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-MCP Tools Support (WebSearch via Kiro MCP API).
+"""MCP Tools Support (WebSearch via Kiro MCP API).
 
 Handles server-side tools that execute on Kiro infrastructure via MCP API.
 This module provides:
@@ -53,8 +52,7 @@ except ImportError:
 # ==================================================================================================
 
 def generate_random_id(length: int) -> str:
-    """
-    Generate random alphanumeric string.
+    """Generate random alphanumeric string.
 
     Args:
         length: Length of string to generate
@@ -77,8 +75,7 @@ async def call_kiro_mcp_api(  # noqa: C901
     query: str,
     auth_manager
 ) -> tuple[Optional[str], Optional[dict]]:
-    """
-    Call Kiro MCP API for web_search.
+    """Call Kiro MCP API for web_search.
 
     URL: {auth_manager.q_host}/mcp
     Headers: Authorization, x-amzn-codewhisperer-optout, Content-Type
@@ -202,8 +199,7 @@ async def call_kiro_mcp_api(  # noqa: C901
 
 
 def generate_search_summary(query: str, results: dict) -> str:
-    """
-    Generate human-readable summary from search results wrapped in XML tags.
+    """Generate human-readable summary from search results wrapped in XML tags.
 
     Wraps results in <web_search>...</web_search> tags to visually distinguish
     tool output from model's own text. Returns FULL snippets without truncation
@@ -284,8 +280,7 @@ async def generate_anthropic_web_search_sse(
     results: dict,
     input_tokens: int
 ):
-    """
-    Generate Anthropic SSE stream for web_search response.
+    """Generate Anthropic SSE stream for web_search response.
 
     Emulates 11 events (EXACT structure from architecture):
     1. message_start - with usage (input_tokens)
@@ -434,8 +429,7 @@ async def generate_openai_web_search_sse(
     results: dict,
     input_tokens: int
 ):
-    """
-    Generate OpenAI SSE stream for web_search response.
+    """Generate OpenAI SSE stream for web_search response.
 
     CRITICAL: OpenAI format is COMPLETELY different from Anthropic:
     - data: {...} WITHOUT event: prefix
@@ -531,8 +525,7 @@ async def generate_openai_web_search_sse(
 # ==================================================================================================
 
 def extract_query_from_messages(messages, api_format: str) -> Optional[str]:
-    """
-    Extract search query from first user message.
+    """Extract search query from first user message.
 
     IMPORTANT: messages is a list of Pydantic models, NOT dicts.
     Use hasattr() and getattr() to access fields.
@@ -592,8 +585,7 @@ async def handle_native_web_search(
     auth_manager,
     api_format: str = "anthropic"
 ):
-    """
-    Handle native Anthropic web_search (Path A).
+    """Handle native Anthropic web_search (Path A).
 
     This function bypasses /generateAssistantResponse entirely.
     Direct MCP API call → SSE emulation → return to client.

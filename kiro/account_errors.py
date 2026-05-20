@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Account error classification for failover logic.
+"""Account error classification for failover logic.
 
 Classifies Kiro API errors into two categories:
 - FATAL: Error in the request itself → return to client immediately
@@ -32,8 +31,7 @@ from typing import Optional
 
 
 class ErrorType(Enum):
-    """
-    Type of error for failover decision.
+    """Type of error for failover decision.
 
     FATAL: Error in the request itself (bad payload, context overflow, etc.)
            Should be returned to client immediately without trying other accounts.
@@ -41,13 +39,13 @@ class ErrorType(Enum):
     RECOVERABLE: Error with the account (expired token, rate limit, quota exceeded)
                 Should try next available account.
     """
+
     FATAL = "fatal"
     RECOVERABLE = "recoverable"
 
 
 def classify_error(status_code: int, reason: Optional[str]) -> ErrorType:
-    """
-    Classify Kiro API error for failover decision.
+    """Classify Kiro API error for failover decision.
 
     Determines whether an error is account-specific (RECOVERABLE) or
     request-specific (FATAL) based on HTTP status code and error reason.

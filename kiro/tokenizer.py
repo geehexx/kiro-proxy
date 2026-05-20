@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Module for fast token counting.
+"""Module for fast token counting.
 
 Uses tiktoken (OpenAI's Rust library) for approximate
 token counting. The cl100k_base encoding is close to Claude tokenization.
@@ -46,8 +45,7 @@ CLAUDE_CORRECTION_FACTOR = 1.15
 
 
 def _get_encoding():
-    """
-    Lazy initialization of tokenizer.
+    """Lazy initialization of tokenizer.
 
     Uses cl100k_base - encoding for GPT-4/ChatGPT,
     which is close enough to Claude tokenization.
@@ -75,8 +73,7 @@ def _get_encoding():
 
 
 def count_tokens(text: str, apply_claude_correction: bool = True) -> int:
-    """
-    Counts the number of tokens in text.
+    """Counts the number of tokens in text.
 
     Args:
         text: Text to count tokens for
@@ -108,8 +105,7 @@ def count_tokens(text: str, apply_claude_correction: bool = True) -> int:
 
 
 def count_message_tokens(messages: list[dict[str, Any]], apply_claude_correction: bool = True) -> int:  # noqa: C901, PLR0912, PLR0915
-    """
-    Counts tokens in a list of chat messages.
+    """Counts tokens in a list of chat messages.
 
     Accounts for OpenAI/Claude message structure:
     - role: ~1 token
@@ -211,8 +207,7 @@ def count_message_tokens(messages: list[dict[str, Any]], apply_claude_correction
 
 
 def count_tools_tokens(tools: Optional[list[dict[str, Any]]], apply_claude_correction: bool = True) -> int:
-    """
-    Counts tokens in tool definitions.
+    """Counts tokens in tool definitions.
 
     Args:
         tools: List of tools in OpenAI format
@@ -254,8 +249,7 @@ def count_tools_tokens(tools: Optional[list[dict[str, Any]]], apply_claude_corre
 
 
 def count_system_tokens(system_prompt: Optional[Any], apply_claude_correction: bool = True) -> int:
-    """
-    Counts tokens in system prompt.
+    """Counts tokens in system prompt.
 
     Supports both plain string and Anthropic block list.
 
@@ -299,8 +293,7 @@ def estimate_request_tokens(
     system_prompt: Optional[Any] = None,
     apply_claude_correction: bool = True
 ) -> dict[str, int]:
-    """
-    Estimates total number of tokens in request.
+    """Estimates total number of tokens in request.
 
     Args:
         messages: List of messages

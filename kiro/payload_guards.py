@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Payload size guard for Kiro API requests.
+"""Payload size guard for Kiro API requests.
 
 The Kiro API rejects payloads exceeding ~615KB with a misleading
 "Improperly formed request." (reason: null) error. This module provides:
@@ -35,6 +34,7 @@ from typing import Any
 @dataclass
 class PayloadTrimStats:
     """Statistics from a payload trim operation."""
+
     original_bytes: int
     final_bytes: int
     original_entries: int
@@ -63,8 +63,7 @@ def _align_to_user_message(history: list) -> list:
 
 
 def _repair_orphaned_tool_results(history: list) -> None:  # noqa: C901, PLR0912
-    """
-    Remove orphaned toolResults that reference toolUseIds not present
+    """Remove orphaned toolResults that reference toolUseIds not present
     in the preceding assistant message. Preserve orphaned text content
     inline with a marker.
     """
@@ -118,8 +117,7 @@ def _repair_orphaned_tool_results(history: list) -> None:  # noqa: C901, PLR0912
 
 
 def trim_payload_to_limit(payload: dict[str, Any], max_bytes: int) -> PayloadTrimStats:
-    """
-    Trim oldest history entries so the serialized payload fits under max_bytes.
+    """Trim oldest history entries so the serialized payload fits under max_bytes.
 
     Trims in user/assistant pairs (2 entries at a time), aligns start to
     userInputMessage, and repairs orphaned toolResults after trimming.

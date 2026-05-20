@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Converters for transforming OpenAI format to Kiro format.
+"""Converters for transforming OpenAI format to Kiro format.
 
 This module is an adapter layer that converts OpenAI-specific formats
 to the unified format used by converters_core.py.
@@ -53,8 +52,7 @@ from kiro.models_openai import ChatCompletionRequest, ChatMessage, Tool
 # ==================================================================================================
 
 def _extract_tool_results_from_openai(content: Any) -> list[dict[str, Any]]:
-    """
-    Extracts tool results from OpenAI message content.
+    """Extracts tool results from OpenAI message content.
 
     Args:
         content: Message content (can be a list with tool_result blocks)
@@ -77,8 +75,7 @@ def _extract_tool_results_from_openai(content: Any) -> list[dict[str, Any]]:
 
 
 def _extract_images_from_tool_message(content: Any) -> list[dict[str, Any]]:
-    """
-    Extracts images from OpenAI tool message content.
+    """Extracts images from OpenAI tool message content.
 
     Tool messages from MCP servers (e.g., browsermcp) can contain images
     (screenshots) alongside text. This function extracts those images.
@@ -112,8 +109,7 @@ def _extract_images_from_tool_message(content: Any) -> list[dict[str, Any]]:
 
 
 def _extract_tool_calls_from_openai(msg: ChatMessage) -> list[dict[str, Any]]:
-    """
-    Extracts tool calls from OpenAI assistant message.
+    """Extracts tool calls from OpenAI assistant message.
 
     Args:
         msg: OpenAI ChatMessage
@@ -139,8 +135,7 @@ def _extract_tool_calls_from_openai(msg: ChatMessage) -> list[dict[str, Any]]:
 
 
 def convert_openai_messages_to_unified(messages: list[ChatMessage]) -> tuple[str, list[UnifiedMessage]]:  # noqa: C901, PLR0912
-    """
-    Converts OpenAI messages to unified format.
+    """Converts OpenAI messages to unified format.
 
     Handles:
     - System messages (extracted as system prompt)
@@ -250,8 +245,7 @@ def convert_openai_messages_to_unified(messages: list[ChatMessage]) -> tuple[str
 
 
 def convert_openai_tools_to_unified(tools: Optional[list[Tool]]) -> Optional[list[UnifiedTool]]:
-    """
-    Converts OpenAI tools to unified format.
+    """Converts OpenAI tools to unified format.
 
     Supports two formats:
     1. Standard OpenAI format: {"type": "function", "function": {"name": "...", ...}}
@@ -298,8 +292,7 @@ def convert_openai_tools_to_unified(tools: Optional[list[Tool]]) -> Optional[lis
 # ==================================================================================================
 
 def reasoning_effort_to_budget(max_tokens: int, effort: str) -> int:
-    """
-    Convert reasoning_effort to thinking budget (production-grade mapping).
+    """Convert reasoning_effort to thinking budget (production-grade mapping).
 
     Uses percentage-based approach that adapts to different max_tokens limits.
     This ensures that thinking budget scales proportionally with the output limit.
@@ -329,8 +322,7 @@ def reasoning_effort_to_budget(max_tokens: int, effort: str) -> int:
 
 
 def extract_thinking_config_from_openai(request: ChatCompletionRequest) -> ThinkingConfig:
-    """
-    Extract thinking configuration from OpenAI request.
+    """Extract thinking configuration from OpenAI request.
 
     Handles reasoning_effort parameter:
     - "none" → disabled (no thinking tags injected)
@@ -395,8 +387,7 @@ def build_kiro_payload(
     conversation_id: str,
     profile_arn: str
 ) -> dict:
-    """
-    Builds complete payload for Kiro API from OpenAI request.
+    """Builds complete payload for Kiro API from OpenAI request.
 
     This is the main entry point for OpenAI → Kiro conversion.
     Uses the core build_kiro_payload function with OpenAI-specific adapters.

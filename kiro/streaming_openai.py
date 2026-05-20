@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Streaming logic for converting Kiro stream to OpenAI format.
+"""Streaming logic for converting Kiro stream to OpenAI format.
 
 Contains generators for:
 - Converting AWS SSE to OpenAI SSE
@@ -82,8 +81,7 @@ async def stream_kiro_to_openai_internal(  # noqa: C901, PLR0912, PLR0913, PLR09
     request_tools: Optional[list] = None,
     conversation_id: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
-    """
-    Internal generator for converting Kiro stream to OpenAI format.
+    """Internal generator for converting Kiro stream to OpenAI format.
 
     Parses AWS SSE stream and converts events to OpenAI chat.completion.chunk.
     Supports tool calls and usage calculation.
@@ -477,8 +475,7 @@ async def stream_kiro_to_openai(  # noqa: PLR0913
     request_messages: Optional[list] = None,
     request_tools: Optional[list] = None
 ) -> AsyncGenerator[str, None]:
-    """
-    Generator for converting Kiro stream to OpenAI format.
+    """Generator for converting Kiro stream to OpenAI format.
 
     This is a wrapper over stream_kiro_to_openai_internal that does NOT retry.
     Retry logic is implemented in stream_with_first_token_retry.
@@ -515,8 +512,7 @@ async def stream_with_first_token_retry(  # noqa: PLR0913
     request_messages: Optional[list] = None,
     request_tools: Optional[list] = None
 ) -> AsyncGenerator[str, None]:
-    """
-    Streaming with automatic retry on first token timeout.
+    """Streaming with automatic retry on first token timeout.
 
     If model doesn't respond within first_token_timeout seconds,
     request is cancelled and a new one is made. Maximum max_retries attempts.
@@ -603,8 +599,7 @@ async def collect_stream_response(  # noqa: C901, PLR0913
     request_messages: Optional[list] = None,
     request_tools: Optional[list] = None
 ) -> dict:
-    """
-    Collect full response from streaming stream.
+    """Collect full response from streaming stream.
 
     Used for non-streaming mode - collects all chunks
     and forms a single response.

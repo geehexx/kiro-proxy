@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Streaming logic for converting Kiro stream to Anthropic Messages API format.
+"""Streaming logic for converting Kiro stream to Anthropic Messages API format.
 
 This module formats Kiro events into Anthropic SSE format:
 - event: message_start
@@ -67,8 +66,7 @@ def generate_message_id() -> str:
 
 
 def format_sse_event(event_type: str, data: dict[str, Any]) -> str:
-    """
-    Format data as Anthropic SSE event.
+    """Format data as Anthropic SSE event.
 
     Anthropic SSE format:
     event: {event_type}
@@ -85,8 +83,7 @@ def format_sse_event(event_type: str, data: dict[str, Any]) -> str:
 
 
 def generate_thinking_signature() -> str:
-    """
-    Generate a placeholder signature for thinking content blocks.
+    """Generate a placeholder signature for thinking content blocks.
 
     In real Anthropic API, this is a cryptographic signature for verification.
     Since we're using fake reasoning via tag injection, we generate a placeholder.
@@ -98,8 +95,7 @@ def generate_thinking_signature() -> str:
 
 
 def _extract_cache_usage_fields(usage: Optional[dict[str, Any]]) -> dict[str, int]:
-    """
-    Extract cache token fields from upstream usage (if present).
+    """Extract cache token fields from upstream usage (if present).
 
     Args:
         usage: Usage data from Kiro stream event
@@ -137,8 +133,7 @@ async def stream_kiro_to_anthropic(  # noqa: C901, PLR0912, PLR0913, PLR0915  # 
     conversation_id: Optional[str] = None,
     response_model: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
-    """
-    Generator for converting Kiro stream to Anthropic SSE format.
+    """Generator for converting Kiro stream to Anthropic SSE format.
 
     Parses Kiro AWS SSE stream and converts events to Anthropic format.
     Supports thinking content blocks when FAKE_REASONING_HANDLING=as_reasoning_content.
@@ -769,8 +764,7 @@ async def collect_anthropic_response(  # noqa: C901, PLR0912, PLR0913
     request_system: Optional[Any] = None,
     response_model: Optional[str] = None
 ) -> dict:
-    """
-    Collect full response from Kiro stream in Anthropic format.
+    """Collect full response from Kiro stream in Anthropic format.
 
     Used for non-streaming mode.
 
@@ -925,8 +919,7 @@ async def stream_with_first_token_retry_anthropic(  # noqa: PLR0913
     request_system: Optional[Any] = None,
     response_model: Optional[str] = None
 ) -> AsyncGenerator[str, None]:
-    """
-    Streaming with automatic retry on first token timeout for Anthropic API.
+    """Streaming with automatic retry on first token timeout for Anthropic API.
 
     If model doesn't respond within first_token_timeout seconds,
     request is cancelled and a new one is made. Maximum max_retries attempts.

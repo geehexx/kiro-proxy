@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Pydantic models for Anthropic Messages API.
+"""Pydantic models for Anthropic Messages API.
 
 Defines data schemas for requests and responses compatible with
 Anthropic's Messages API specification.
@@ -35,8 +34,7 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class TextContentBlock(BaseModel):
-    """
-    Text content block in Anthropic format.
+    """Text content block in Anthropic format.
 
     Used in both requests and responses for text content.
     """
@@ -46,8 +44,7 @@ class TextContentBlock(BaseModel):
 
 
 class ThinkingContentBlock(BaseModel):
-    """
-    Thinking content block in Anthropic format.
+    """Thinking content block in Anthropic format.
 
     Represents the model's reasoning/thinking process.
     Used when extended thinking is enabled.
@@ -64,8 +61,7 @@ class ThinkingContentBlock(BaseModel):
 
 
 class ToolUseContentBlock(BaseModel):
-    """
-    Tool use content block in Anthropic format.
+    """Tool use content block in Anthropic format.
 
     Represents a tool call made by the assistant.
     """
@@ -77,8 +73,7 @@ class ToolUseContentBlock(BaseModel):
 
 
 class ToolReferenceContentBlock(BaseModel):
-    """
-    Tool reference content block (Claude Code deferred tools).
+    """Tool reference content block (Claude Code deferred tools).
 
     Sent by Claude Code v2.1.69+ inside tool_result blocks to indicate
     which tools were loaded via the ToolSearch deferred tool mechanism.
@@ -91,8 +86,7 @@ class ToolReferenceContentBlock(BaseModel):
 
 
 class ToolResultContentBlock(BaseModel):
-    """
-    Tool result content block in Anthropic format.
+    """Tool result content block in Anthropic format.
 
     Represents the result of a tool call, sent by the user.
     Tool results can contain text, images, tool references, or a mix.
@@ -114,8 +108,7 @@ class ToolResultContentBlock(BaseModel):
 
 
 class Base64ImageSource(BaseModel):
-    """
-    Base64-encoded image source in Anthropic format.
+    """Base64-encoded image source in Anthropic format.
 
     Attributes:
         type: Always "base64"
@@ -129,8 +122,7 @@ class Base64ImageSource(BaseModel):
 
 
 class URLImageSource(BaseModel):
-    """
-    URL-based image source in Anthropic format.
+    """URL-based image source in Anthropic format.
 
     Note: URL images require fetching and converting to base64 for Kiro API.
     Currently logged as warning and skipped.
@@ -145,8 +137,7 @@ class URLImageSource(BaseModel):
 
 
 class ImageContentBlock(BaseModel):
-    """
-    Image content block in Anthropic format.
+    """Image content block in Anthropic format.
 
     Represents an image in a message. Supports both base64-encoded
     images and URL references.
@@ -177,8 +168,7 @@ ContentBlock = Union[
 
 
 class AnthropicMessage(BaseModel):
-    """
-    Message in Anthropic format.
+    """Message in Anthropic format.
 
     Attributes:
         role: Message role (user or assistant)
@@ -197,8 +187,7 @@ class AnthropicMessage(BaseModel):
 
 
 class AnthropicTool(BaseModel):
-    """
-    Tool definition in Anthropic format.
+    """Tool definition in Anthropic format.
 
     Supports both user-defined tools and server-side tools (Anthropic):
     - User-defined tools: require input_schema
@@ -274,8 +263,7 @@ ToolChoice = Union[ToolChoiceAuto, ToolChoiceAny, ToolChoiceTool]
 
 
 class SystemContentBlock(BaseModel):
-    """
-    System content block for prompt caching.
+    """System content block for prompt caching.
 
     Anthropic API supports system as a list of content blocks
     with optional cache_control for prompt caching.
@@ -293,8 +281,7 @@ SystemPrompt = Union[str, list[SystemContentBlock], list[dict[str, Any]]]
 
 
 class AnthropicMessagesRequest(BaseModel):
-    """
-    Request to Anthropic Messages API (/v1/messages).
+    """Request to Anthropic Messages API (/v1/messages).
 
     Attributes:
         model: Model ID (e.g., "claude-sonnet-4-5")
@@ -339,8 +326,7 @@ class AnthropicMessagesRequest(BaseModel):
 
 
 class AnthropicCountTokensRequest(BaseModel):
-    """
-    Request to Anthropic Count Tokens API (/v1/messages/count_tokens).
+    """Request to Anthropic Count Tokens API (/v1/messages/count_tokens).
 
     Similar to AnthropicMessagesRequest but without generation parameters.
     Used to estimate token count before making actual request.
@@ -368,8 +354,7 @@ class AnthropicCountTokensRequest(BaseModel):
 
 
 class AnthropicCacheCreation(BaseModel):
-    """
-    Breakdown of cache-creation tokens by TTL bucket (Anthropic schema).
+    """Breakdown of cache-creation tokens by TTL bucket (Anthropic schema).
 
     Attributes:
         ephemeral_5m_input_tokens: Tokens used to create the 5-minute cache entry
@@ -383,8 +368,7 @@ class AnthropicCacheCreation(BaseModel):
 
 
 class AnthropicServerToolUse(BaseModel):
-    """
-    Server-side tool-use counters surfaced in Anthropic ``usage`` payloads.
+    """Server-side tool-use counters surfaced in Anthropic ``usage`` payloads.
 
     Attributes:
         web_search_requests: Count of web-search tool invocations made by the server
@@ -398,8 +382,7 @@ class AnthropicServerToolUse(BaseModel):
 
 
 class AnthropicUsage(BaseModel):
-    """
-    Token usage information in Anthropic format.
+    """Token usage information in Anthropic format.
 
     Mirrors the ``usage`` object in the public Anthropic Messages API as of
     2026-05. Fields are optional/forwarded only when the upstream Kiro
@@ -428,8 +411,7 @@ class AnthropicUsage(BaseModel):
 
 
 class AnthropicMessagesResponse(BaseModel):
-    """
-    Response from Anthropic Messages API (non-streaming).
+    """Response from Anthropic Messages API (non-streaming).
 
     Attributes:
         id: Unique message ID
@@ -460,8 +442,7 @@ class AnthropicMessagesResponse(BaseModel):
 
 
 class MessageStartEvent(BaseModel):
-    """
-    Event sent at the start of a message stream.
+    """Event sent at the start of a message stream.
 
     Contains the initial message object with empty content.
     """
@@ -471,8 +452,7 @@ class MessageStartEvent(BaseModel):
 
 
 class ContentBlockStartEvent(BaseModel):
-    """
-    Event sent at the start of a content block.
+    """Event sent at the start of a content block.
 
     Attributes:
         index: Index of the content block
@@ -506,8 +486,7 @@ class InputJsonDelta(BaseModel):
 
 
 class ContentBlockDeltaEvent(BaseModel):
-    """
-    Event sent when content block is updated.
+    """Event sent when content block is updated.
 
     Attributes:
         index: Index of the content block being updated
@@ -520,8 +499,7 @@ class ContentBlockDeltaEvent(BaseModel):
 
 
 class ContentBlockStopEvent(BaseModel):
-    """
-    Event sent when a content block is complete.
+    """Event sent when a content block is complete.
     """
 
     type: Literal["content_block_stop"] = "content_block_stop"
@@ -535,8 +513,7 @@ class MessageDeltaUsage(BaseModel):
 
 
 class MessageDeltaEvent(BaseModel):
-    """
-    Event sent near the end of the stream with final message data.
+    """Event sent near the end of the stream with final message data.
 
     Attributes:
         delta: Contains stop_reason and stop_sequence
@@ -549,24 +526,21 @@ class MessageDeltaEvent(BaseModel):
 
 
 class MessageStopEvent(BaseModel):
-    """
-    Event sent at the end of the message stream.
+    """Event sent at the end of the message stream.
     """
 
     type: Literal["message_stop"] = "message_stop"
 
 
 class PingEvent(BaseModel):
-    """
-    Ping event sent periodically to keep connection alive.
+    """Ping event sent periodically to keep connection alive.
     """
 
     type: Literal["ping"] = "ping"
 
 
 class ErrorEvent(BaseModel):
-    """
-    Error event sent when an error occurs during streaming.
+    """Error event sent when an error occurs during streaming.
     """
 
     type: Literal["error"] = "error"
@@ -592,8 +566,7 @@ StreamingEvent = Union[
 
 
 class AnthropicErrorDetail(BaseModel):
-    """
-    Error detail in Anthropic format.
+    """Error detail in Anthropic format.
     """
 
     type: str
@@ -601,8 +574,7 @@ class AnthropicErrorDetail(BaseModel):
 
 
 class AnthropicErrorResponse(BaseModel):
-    """
-    Error response in Anthropic format.
+    """Error response in Anthropic format.
     """
 
     type: Literal["error"] = "error"

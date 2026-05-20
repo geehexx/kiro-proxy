@@ -1,6 +1,5 @@
 
-"""
-Response cache for kiro-gateway.
+"""Response cache for kiro-proxy.
 
 Caches upstream responses keyed by request prefix (system + messages except
 the trailing user turn + model + max_tokens + tool signature). Session-scoped
@@ -20,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import pickle
+import pickle  # nosec B403 — local cache file written by this process, not untrusted input
 import time
 from collections import OrderedDict
 from dataclasses import dataclass, field
@@ -246,6 +245,15 @@ class ResponseCache:
         self.nonstream_misses = 0
 
     def get(self, key: str, *, streaming: bool = False) -> CacheEntry | None:
+        """Return a cached entry by key, or None on miss or TTL expiry.
+
+        Args:
+            key: Cache key string.
+            streaming: Pass True for streaming responses to track per-type counters.
+
+        Returns:
+            A copy of the CacheEntry, or None if not found or expired.
+        """
         with self._lock:
             entry = self._entries.get(key)
             if entry is None:
@@ -281,6 +289,16 @@ class ResponseCache:
     def put(
         self, key: str, body: bytes, headers: dict[str, str] | None = None
     ) -> bool:
+        """Store a response in the cache.
+
+        Args:
+            key: Cache key string.
+            body: Raw response bytes.
+            headers: Optional response headers to cache alongside the body.
+
+        Returns:
+            True if the entry was stored, False if it exceeded max_entry_bytes.
+        """
         size = len(body) + sum(
             len(k) + len(v) for k, v in (headers or {}).items()
         )
@@ -415,6 +433,7 @@ class ResponseCache:
             return count
 
     def stats(self) -> dict[str, int]:
+        """Return a snapshot of cache counters (entries, bytes, hits, misses, evictions)."""
         with self._lock:
             return {
                 "entries": len(self._entries),
@@ -432,6 +451,7 @@ class ResponseCache:
             }
 
     def clear(self) -> None:
+        """Evict all entries and reset all counters. Only call when the app is idle."""
         with self._lock:
             self._entries.clear()
             self._total_bytes = 0

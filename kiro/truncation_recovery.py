@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Truncation recovery system for handling upstream Kiro API limitations.
+"""Truncation recovery system for handling upstream Kiro API limitations.
 
 Generates synthetic messages to inform the model about truncation.
 ONLY activates when truncation is actually detected.
@@ -33,8 +32,7 @@ from loguru import logger
 
 
 def should_inject_recovery() -> bool:
-    """
-    Check if truncation recovery is enabled.
+    """Check if truncation recovery is enabled.
 
     Returns:
         True if recovery should be injected, False otherwise
@@ -48,8 +46,7 @@ def generate_truncation_tool_result(
     tool_use_id: str,
     truncation_info: dict[str, Any]
 ) -> dict[str, Any]:
-    """
-    Generate synthetic tool_result for truncated tool call.
+    """Generate synthetic tool_result for truncated tool call.
 
     Message is carefully worded to:
     - Acknowledge API limitation (not model's fault)
@@ -89,8 +86,7 @@ def generate_truncation_tool_result(
 
 
 def generate_truncation_user_message() -> str:
-    """
-    Generate synthetic user message for content truncation.
+    """Generate synthetic user message for content truncation.
 
     Message is carefully worded to:
     - Acknowledge it's not model's fault

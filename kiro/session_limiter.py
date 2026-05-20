@@ -1,5 +1,4 @@
-"""
-Per-session concurrency limiter.
+"""Per-session concurrency limiter.
 
 Caps the number of in-flight upstream calls per caller (session) so that
 one session making many parallel tool calls cannot starve the shared
@@ -63,6 +62,7 @@ class SessionLimiterSlot:
         self._released = False
 
     def release(self) -> None:
+        """Release the held semaphore slot. Idempotent — safe to call multiple times."""
         if not self._released:
             self._sem.release()
             self._released = True
@@ -128,6 +128,7 @@ class SessionLimiter:
         return SessionLimiterSlot(sem)
 
     def stats(self) -> dict[str, int]:
+        """Return a snapshot of limiter counters (sessions, acquires, waits, default_concurrency)."""
         return {
             "sessions": len(self._sems),
             "acquires": self.acquires,

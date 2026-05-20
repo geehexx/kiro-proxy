@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Debug logging module for requests.
+"""Debug logging module for requests.
 
 Supports three modes (DEBUG_MODE):
 - off: logging disabled
@@ -43,8 +42,7 @@ from kiro.config import DEBUG_DIR, DEBUG_MODE, DEBUG_ROTATE_MAX_DIRS
 
 
 class DebugLogger:
-    """
-    Singleton for managing debug request logs.
+    """Singleton for managing debug request logs.
 
     Operating modes:
     - off: does nothing
@@ -52,6 +50,7 @@ class DebugLogger:
     - all: writes data immediately to files (overwrites on each request)
     - rotate: writes data to timestamped subdirectories (corpus collection)
     """
+
     _instance = None
 
     def __new__(cls):
@@ -127,8 +126,7 @@ class DebugLogger:
         self._app_logs_buffer = io.StringIO()
 
     def _setup_app_logs_capture(self):
-        """
-        Sets up application log capture to buffer.
+        """Sets up application log capture to buffer.
 
         Adds a temporary sink to loguru that writes to StringIO buffer.
         Captures ALL logs without filtering, as sink is active only
@@ -148,8 +146,7 @@ class DebugLogger:
         )
 
     def prepare_new_request(self):
-        """
-        Prepares the logger for a new request.
+        """Prepares the logger for a new request.
 
         In "all" mode: clears the logs folder.
         In "rotate" mode: creates a timestamped subdirectory, prunes old ones.
@@ -191,8 +188,7 @@ class DebugLogger:
                 logger.error(f"[DebugLogger] Error preparing directory: {e}")
 
     def log_request_body(self, body: bytes):
-        """
-        Saves the request body (from client, OpenAI format).
+        """Saves the request body (from client, OpenAI format).
 
         In "all" mode: writes immediately to file.
         In "errors" mode: buffers.
@@ -207,8 +203,7 @@ class DebugLogger:
             self._request_body_buffer = body
 
     def log_kiro_request_body(self, body: bytes):
-        """
-        Saves the modified request body (to Kiro API).
+        """Saves the modified request body (to Kiro API).
 
         In "all" mode: writes immediately to file.
         In "errors" mode: buffers.
@@ -223,8 +218,7 @@ class DebugLogger:
             self._kiro_request_body_buffer = body
 
     def log_raw_chunk(self, chunk: bytes):
-        """
-        Appends raw response chunk (from provider).
+        """Appends raw response chunk (from provider).
 
         In "all" mode: writes immediately to file.
         In "errors" mode: buffers.
@@ -239,8 +233,7 @@ class DebugLogger:
             self._raw_chunks_buffer.extend(chunk)
 
     def log_modified_chunk(self, chunk: bytes):
-        """
-        Appends modified chunk (to client).
+        """Appends modified chunk (to client).
 
         In "all" mode: writes immediately to file.
         In "errors" mode: buffers.
@@ -255,8 +248,7 @@ class DebugLogger:
             self._modified_chunks_buffer.extend(chunk)
 
     def log_error_info(self, status_code: int, error_message: str = ""):
-        """
-        Writes error information to file.
+        """Writes error information to file.
 
         Works in both modes (errors and all).
         In "all" mode writes immediately to file.
@@ -286,8 +278,7 @@ class DebugLogger:
             logger.error(f"[DebugLogger] Error writing error_info: {e}")
 
     def flush_on_error(self, status_code: int, error_message: str = ""):
-        """
-        Flushes buffers to files on error.
+        """Flushes buffers to files on error.
 
         In "errors" mode: flushes buffers and saves error_info.
         In "all" mode: only saves error_info (data already written).
@@ -353,8 +344,7 @@ class DebugLogger:
             self._clear_buffers()
 
     def discard_buffers(self):
-        """
-        Clears buffers without writing to files.
+        """Clears buffers without writing to files.
 
         Called when request completed successfully in "errors" mode.
         Also called in "all"/"rotate" mode to save logs of successful request.

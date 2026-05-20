@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Core converters for transforming API formats to Kiro format.
+"""Core converters for transforming API formats to Kiro format.
 
 This module contains shared logic used by both OpenAI and Anthropic converters:
 - Text content extraction from various formats
@@ -31,7 +30,7 @@ to convert their formats to Kiro API format.
 
 import json
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -51,8 +50,7 @@ from kiro.payload_guards import check_payload_size, trim_payload_to_limit
 
 @dataclass
 class ThinkingConfig:
-    """
-    Unified thinking configuration for fake reasoning.
+    """Unified thinking configuration for fake reasoning.
 
     This configuration is created by API-specific adapters (OpenAI, Anthropic)
     and passed to the core layer for thinking tag injection.
@@ -74,14 +72,14 @@ class ThinkingConfig:
         >>> ThinkingConfig(enabled=True, budget_tokens=8000)
         ThinkingConfig(enabled=True, budget_tokens=8000)
     """
+
     enabled: bool = True
-    budget_tokens: Optional[int] = None
+    budget_tokens: int | None = None
 
 
 @dataclass
 class UnifiedMessage:
-    """
-    Unified message format used internally by converters.
+    """Unified message format used internally by converters.
 
     This format is API-agnostic and can be created from both OpenAI and Anthropic formats.
     Serves as the canonical representation for all message data before conversion to Kiro API.
@@ -94,37 +92,38 @@ class UnifiedMessage:
         images: List of images in unified format (for multimodal user messages)
                 Format: [{"media_type": "image/jpeg", "data": "base64..."}]
     """
+
     role: str
     content: Any = ""
-    tool_calls: Optional[list[dict[str, Any]]] = None
-    tool_results: Optional[list[dict[str, Any]]] = None
-    images: Optional[list[dict[str, Any]]] = None
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_results: list[dict[str, Any]] | None = None
+    images: list[dict[str, Any]] | None = None
 
 
 @dataclass
 class UnifiedTool:
-    """
-    Unified tool format used internally by converters.
+    """Unified tool format used internally by converters.
 
     Attributes:
         name: Tool name
         description: Tool description
         input_schema: JSON Schema for tool parameters
     """
+
     name: str
-    description: Optional[str] = None
-    input_schema: Optional[dict[str, Any]] = None
+    description: str | None = None
+    input_schema: dict[str, Any] | None = None
 
 
 @dataclass
 class KiroPayloadResult:
-    """
-    Result of building Kiro payload.
+    """Result of building Kiro payload.
 
     Attributes:
         payload: The complete Kiro API payload
         tool_documentation: Documentation for tools with long descriptions (to add to system prompt)
     """
+
     payload: dict[str, Any]
     tool_documentation: str = ""
 
@@ -134,8 +133,7 @@ class KiroPayloadResult:
 # ==================================================================================================
 
 def extract_text_content(content: Any) -> str:  # noqa: C901
-    """
-    Extracts text content from various formats.
+    """Extracts text content from various formats.
 
     Supports multiple content formats used by different APIs:
     - String: "Hello, world!"
@@ -181,8 +179,7 @@ def extract_text_content(content: Any) -> str:  # noqa: C901
 
 
 def extract_images_from_content(content: Any) -> list[dict[str, Any]]:  # noqa: C901, PLR0912, PLR0915
-    """
-    Extracts images from message content in unified format.
+    """Extracts images from message content in unified format.
 
     Supports multiple image formats used by different APIs:
 
@@ -300,8 +297,7 @@ def extract_images_from_content(content: Any) -> list[dict[str, Any]]:  # noqa: 
 # ==================================================================================================
 
 def get_thinking_system_prompt_addition() -> str:
-    """
-    Generate system prompt addition that legitimizes thinking tags.
+    """Generate system prompt addition that legitimizes thinking tags.
 
     This text is added to the system prompt to inform the model that
     the <thinking_mode>, <max_thinking_length>, and <thinking_instruction>
@@ -330,8 +326,7 @@ def get_thinking_system_prompt_addition() -> str:
 
 
 def get_truncation_recovery_system_addition() -> str:
-    """
-    Generate system prompt addition for truncation recovery legitimization.
+    """Generate system prompt addition for truncation recovery legitimization.
 
     This text is added to the system prompt to inform the model that
     the [System Notice] and [API Limitation] messages in responses
@@ -356,7 +351,7 @@ def get_truncation_recovery_system_addition() -> str:
     )
 
 
-def get_tool_call_size_guard_system_addition(tools: Optional[List["UnifiedTool"]]) -> str:
+def get_tool_call_size_guard_system_addition(tools: list["UnifiedTool"] | None) -> str:
     """Generate system prompt addition that prevents large tool call arguments.
 
     Kiro API silently truncates tool call output streams exceeding ~9KB,
@@ -384,8 +379,7 @@ def get_tool_call_size_guard_system_addition(tools: Optional[List["UnifiedTool"]
 
 
 def inject_thinking_tags(content: str, thinking_config: ThinkingConfig) -> str:
-    """
-    Inject fake reasoning tags into content based on configuration.
+    """Inject fake reasoning tags into content based on configuration.
 
     When FAKE_REASONING_ENABLED is True and thinking_config.enabled is True,
     this function prepends the special thinking mode tags to the content.
@@ -461,9 +455,8 @@ def inject_thinking_tags(content: str, thinking_config: ThinkingConfig) -> str:
 # JSON Schema Sanitization
 # ==================================================================================================
 
-def sanitize_json_schema(schema: Optional[dict[str, Any]]) -> dict[str, Any]:
-    """
-    Sanitizes JSON Schema from fields that Kiro API doesn't accept.
+def sanitize_json_schema(schema: dict[str, Any] | None) -> dict[str, Any]:
+    """Sanitizes JSON Schema from fields that Kiro API doesn't accept.
 
     Kiro API returns 400 "Improperly formed request" error if:
     - required is an empty array []
@@ -516,10 +509,9 @@ def sanitize_json_schema(schema: Optional[dict[str, Any]]) -> dict[str, Any]:
 # ==================================================================================================
 
 def process_tools_with_long_descriptions(
-    tools: Optional[list[UnifiedTool]]
-) -> tuple[Optional[list[UnifiedTool]], str]:
-    """
-    Processes tools with long descriptions.
+    tools: list[UnifiedTool] | None
+) -> tuple[list[UnifiedTool] | None, str]:
+    """Processes tools with long descriptions.
 
     Kiro API has a limit on description length in toolSpecification.
     If description exceeds the limit, full description is moved to system prompt,
@@ -582,9 +574,8 @@ def process_tools_with_long_descriptions(
     return processed_tools if processed_tools else None, tool_documentation
 
 
-def validate_tool_names(tools: Optional[list[UnifiedTool]]) -> None:
-    """
-    Validates tool names against Kiro API 64-character limit.
+def validate_tool_names(tools: list[UnifiedTool] | None) -> None:
+    """Validates tool names against Kiro API 64-character limit.
 
     Logs WARNING for each problematic tool and raises ValueError
     with complete list of violations.
@@ -624,9 +615,8 @@ def validate_tool_names(tools: Optional[list[UnifiedTool]]) -> None:
         )
 
 
-def convert_tools_to_kiro_format(tools: Optional[list[UnifiedTool]]) -> list[dict[str, Any]]:
-    """
-    Converts unified tools to Kiro API format.
+def convert_tools_to_kiro_format(tools: list[UnifiedTool] | None) -> list[dict[str, Any]]:
+    """Converts unified tools to Kiro API format.
 
     Args:
         tools: List of tools in unified format
@@ -663,9 +653,8 @@ def convert_tools_to_kiro_format(tools: Optional[list[UnifiedTool]]) -> list[dic
 # Image Conversion to Kiro Format
 # ==================================================================================================
 
-def convert_images_to_kiro_format(images: Optional[list[dict[str, Any]]]) -> list[dict[str, Any]]:
-    """
-    Converts unified images to Kiro API format.
+def convert_images_to_kiro_format(images: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Converts unified images to Kiro API format.
 
     Unified format: [{"media_type": "image/jpeg", "data": "base64..."}]
     Kiro format: [{"format": "jpeg", "source": {"bytes": "base64..."}}]
@@ -734,8 +723,7 @@ def convert_images_to_kiro_format(images: Optional[list[dict[str, Any]]]) -> lis
 # ==================================================================================================
 
 def convert_tool_results_to_kiro_format(tool_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Converts unified tool results to Kiro API format.
+    """Converts unified tool results to Kiro API format.
 
     Unified format: {"type": "tool_result", "tool_use_id": "...", "content": "..."}
     Kiro format: {"content": [{"text": "..."}], "status": "success", "toolUseId": "..."}
@@ -768,8 +756,7 @@ def convert_tool_results_to_kiro_format(tool_results: list[dict[str, Any]]) -> l
 
 
 def extract_tool_results_from_content(content: Any) -> list[dict[str, Any]]:
-    """
-    Extracts tool results from message content.
+    """Extracts tool results from message content.
 
     Looks for content blocks with type="tool_result" and converts them
     to Kiro API format.
@@ -796,10 +783,9 @@ def extract_tool_results_from_content(content: Any) -> list[dict[str, Any]]:
 
 def extract_tool_uses_from_message(
     content: Any,
-    tool_calls: Optional[list[dict[str, Any]]] = None
+    tool_calls: list[dict[str, Any]] | None = None
 ) -> list[dict[str, Any]]:
-    """
-    Extracts tool uses from assistant message.
+    """Extracts tool uses from assistant message.
 
     Looks for tool calls in both:
     - tool_calls field (OpenAI format)
@@ -849,8 +835,7 @@ def extract_tool_uses_from_message(
 # ==================================================================================================
 
 def tool_calls_to_text(tool_calls: list[dict[str, Any]]) -> str:
-    """
-    Converts tool_calls to human-readable text representation.
+    """Converts tool_calls to human-readable text representation.
 
     This is used when stripping tool content from messages (when no tools are defined).
     Instead of losing the context, we convert tool calls to text so the model
@@ -886,8 +871,7 @@ def tool_calls_to_text(tool_calls: list[dict[str, Any]]) -> str:
 
 
 def tool_results_to_text(tool_results: list[dict[str, Any]]) -> str:
-    """
-    Converts tool_results to human-readable text representation.
+    """Converts tool_results to human-readable text representation.
 
     This is used when stripping tool content from messages (when no tools are defined).
     Instead of losing the context, we convert tool results to text so the model
@@ -934,8 +918,7 @@ def tool_results_to_text(tool_results: list[dict[str, Any]]) -> str:
 # ==================================================================================================
 
 def strip_all_tool_content(messages: list[UnifiedMessage]) -> tuple[list[UnifiedMessage], bool]:  # noqa: C901
-    """
-    Strips ALL tool-related content from messages, converting it to text representation.
+    """Strips ALL tool-related content from messages, converting it to text representation.
 
     This is used when no tools are defined in the request. Kiro API rejects
     requests that have toolResults but no tools defined.
@@ -1018,8 +1001,7 @@ def strip_all_tool_content(messages: list[UnifiedMessage]) -> tuple[list[Unified
 
 
 def ensure_assistant_before_tool_results(messages: list[UnifiedMessage]) -> tuple[list[UnifiedMessage], bool]:
-    """
-    Ensures that messages with tool_results have a preceding assistant message with tool_calls.
+    """Ensures that messages with tool_results have a preceding assistant message with tool_calls.
 
     Kiro API requires that when toolResults are present, there must be a preceding
     assistantResponseMessage with toolUses. Some clients (like Cline/Roo/Cursor) may send
@@ -1094,8 +1076,7 @@ def ensure_assistant_before_tool_results(messages: list[UnifiedMessage]) -> tupl
 
 
 def merge_adjacent_messages(messages: list[UnifiedMessage]) -> list[UnifiedMessage]:  # noqa: C901, PLR0912
-    """
-    Merges adjacent messages with the same role.
+    """Merges adjacent messages with the same role.
 
     Kiro API does not accept multiple consecutive messages from the same role.
     This function merges such messages into one.
@@ -1178,8 +1159,7 @@ def merge_adjacent_messages(messages: list[UnifiedMessage]) -> list[UnifiedMessa
 
 
 def ensure_first_message_is_user(messages: list[UnifiedMessage]) -> list[UnifiedMessage]:
-    """
-    Ensures that the first message in the conversation is from user role.
+    """Ensures that the first message in the conversation is from user role.
 
     Kiro API requires conversations to start with a user message. If the first
     message is from assistant (or any other non-user role), we prepend a minimal
@@ -1228,8 +1208,7 @@ def ensure_first_message_is_user(messages: list[UnifiedMessage]) -> list[Unified
 
 
 def normalize_message_roles(messages: list[UnifiedMessage]) -> list[UnifiedMessage]:
-    """
-    Normalizes unknown message roles to 'user'.
+    """Normalizes unknown message roles to 'user'.
 
     Kiro API only supports 'user' and 'assistant' roles in history.
     Any other role (e.g., 'developer', 'system') is converted to 'user'
@@ -1283,8 +1262,7 @@ def normalize_message_roles(messages: list[UnifiedMessage]) -> list[UnifiedMessa
 
 
 def ensure_alternating_roles(messages: list[UnifiedMessage]) -> list[UnifiedMessage]:
-    """
-    Ensures alternating user/assistant roles by inserting synthetic assistant messages.
+    """Ensures alternating user/assistant roles by inserting synthetic assistant messages.
 
     Kiro API requires alternating userInputMessage and assistantResponseMessage.
     When consecutive user messages are detected, synthetic assistant messages
@@ -1344,8 +1322,7 @@ def ensure_alternating_roles(messages: list[UnifiedMessage]) -> list[UnifiedMess
 # ==================================================================================================
 
 def build_kiro_history(messages: list[UnifiedMessage], model_id: str) -> list[dict[str, Any]]:  # noqa: C901, PLR0912
-    """
-    Builds history array for Kiro API from unified messages.
+    """Builds history array for Kiro API from unified messages.
 
     Kiro API expects alternating userInputMessage and assistantResponseMessage.
     This function converts unified format to Kiro format.
@@ -1430,7 +1407,7 @@ def build_kiro_history(messages: list[UnifiedMessage], model_id: str) -> list[di
 
 # Effort levels that work for Opus 4.7. Per Phase 0 wire test 2026-05-19:
 # values not in this set return 429 INSUFFICIENT_MODEL_CAPACITY upstream.
-# (basic-memory://research/2026-05-19-amf-phase-0-result)
+# (internal research notes)
 _OPUS_VALID_EFFORTS = frozenset({"high", "xhigh", "max"})
 
 # Cheapest working effort level for Opus 4.7 — used as the upgrade target
@@ -1446,10 +1423,10 @@ def _is_opus_4_7(model_id: str) -> bool:
     return "opus-4.7" in norm or "opus-4-7" in norm
 
 
-def apply_opus_effort_guard(model_id: str, amf: Optional[dict[str, Any]]) -> dict[str, Any]:
+def apply_opus_effort_guard(model_id: str, amf: dict[str, Any] | None) -> dict[str, Any]:
     """Force Opus 4.7 effort >= high to avoid 429 INSUFFICIENT_MODEL_CAPACITY.
 
-    Per the Phase 0 wire test (basic-memory://research/2026-05-19-amf-phase-0-result):
+    Per the Phase 0 wire test (internal research notes):
     Opus 4.7 returns 429 on effort=low/medium/disabled/adaptive or unset.
     Force-upgrade to 'high' (cheapest working level) when proxy detects Opus.
     Sonnet/Haiku/other models pass through unchanged.
@@ -1496,13 +1473,12 @@ def build_kiro_payload(  # noqa: C901, PLR0912, PLR0913, PLR0915
     messages: list[UnifiedMessage],
     system_prompt: str,
     model_id: str,
-    tools: Optional[list[UnifiedTool]],
+    tools: list[UnifiedTool] | None,
     conversation_id: str,
     profile_arn: str,
     thinking_config: ThinkingConfig
 ) -> KiroPayloadResult:
-    """
-    Builds complete payload for Kiro API from unified data.
+    """Builds complete payload for Kiro API from unified data.
 
     This is the main function that assembles the Kiro API payload from
     API-agnostic unified message and tool formats.

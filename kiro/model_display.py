@@ -1,6 +1,5 @@
 
-"""
-Human-readable presentation of Claude model identifiers.
+"""Human-readable presentation of Claude model identifiers.
 
 Claude Code's /model picker and the ``model`` field returned to clients
 benefit from a stable, readable label. Internal Kiro IDs use mixed

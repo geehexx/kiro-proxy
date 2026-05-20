@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Kiro Gateway Configuration.
+"""Kiro Gateway Configuration.
 
 Centralized storage for all settings, constants, and mappings.
 Loads environment variables and provides typed access to them.
@@ -59,8 +58,7 @@ load_dotenv()
 
 
 def _get_raw_env_value(var_name: str, env_file: str = ".env") -> Optional[str]:
-    """
-    Read variable value from .env file without processing escape sequences.
+    """Read variable value from .env file without processing escape sequences.
 
     This is necessary for correct handling of Windows paths where backslashes
     (e.g., D:\\Projects\\file.json) may be incorrectly interpreted
@@ -474,8 +472,7 @@ LOGFIRE_MIN_INPUT_TOKENS: int = int(os.getenv("LOGFIRE_MIN_INPUT_TOKENS", "500")
 
 
 def _warn_timeout_configuration():
-    """
-    Print warning if timeout configuration is suboptimal.
+    """Print warning if timeout configuration is suboptimal.
     Called at application startup.
 
     FIRST_TOKEN_TIMEOUT should be less than STREAMING_READ_TIMEOUT:
@@ -831,7 +828,7 @@ LOGFIRE_TOKEN: str = os.getenv("LOGFIRE_TOKEN", "")
 LOGFIRE_ENABLED: bool = _parse_bool_env("LOGFIRE_ENABLED", default=True) and bool(LOGFIRE_TOKEN)
 
 # Service name for logfire spans
-LOGFIRE_SERVICE_NAME: str = os.getenv("LOGFIRE_SERVICE_NAME", "kiro-gateway")
+LOGFIRE_SERVICE_NAME: str = os.getenv("LOGFIRE_SERVICE_NAME", "kiro-gateway")  # TODO(rebrand): defer; changing default would create a new Logfire project/dashboard
 
 # Kiro Power plan pricing for cost tracking
 # $200/mo flat + $0.04/invocation overage after 10,000 invocations
@@ -848,5 +845,5 @@ DEBUG_CAPTURE_UPSTREAM_ERRORS: bool = _parse_bool_env("DEBUG_CAPTURE_UPSTREAM_ER
 DEBUG_CAPTURE_MAX_FILES: int = int(os.getenv("DEBUG_CAPTURE_MAX_FILES", "200"))
 DEBUG_CAPTURE_DIR: str = os.getenv(
     "DEBUG_CAPTURE_DIR",
-    str(Path.home() / ".claude" / "kiro-gateway-errors"),
+    str(Path.home() / ".claude" / "kiro-proxy-errors"),  # dir renamed from kiro-gateway-errors; old dir still works if it exists
 )

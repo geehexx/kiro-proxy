@@ -1,5 +1,4 @@
-"""
-BaselinesWriter — append-only JSONL emitter for telemetry baselines.
+"""BaselinesWriter — append-only JSONL emitter for telemetry baselines.
 
 Each gateway request, hook event, or similar "should be comparable over
 time" datapoint is written as one JSON object per line to
@@ -55,6 +54,7 @@ class BaselinesWriter:
 
     @property
     def state_dir(self) -> Path:
+        """Return the directory where baseline JSONL files are written."""
         return self._state_dir
 
     def _path_for(self, source: str) -> Path:

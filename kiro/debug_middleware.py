@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Debug logging middleware for Kiro Gateway.
+"""Debug logging middleware for Kiro Gateway.
 
 This middleware initializes debug logging BEFORE Pydantic validation,
 which allows capturing validation errors (422) in debug logs.
@@ -49,8 +48,7 @@ LOGGED_ENDPOINTS = frozenset({
 
 
 class DebugLoggerMiddleware(BaseHTTPMiddleware):
-    """
-    Middleware for initializing debug logging on API requests.
+    """Middleware for initializing debug logging on API requests.
 
     This middleware runs BEFORE Pydantic validation, which means it can
     capture the raw request body even for requests that fail validation.
@@ -66,8 +64,7 @@ class DebugLoggerMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        """
-        Process the request and initialize debug logging if needed.
+        """Process the request and initialize debug logging if needed.
 
         Args:
             request: The incoming HTTP request

@@ -1,6 +1,5 @@
 
-"""
-In-flight request deduplication (request coalescing).
+"""In-flight request deduplication (request coalescing).
 
 When N concurrent requests have the same cache key, only one executes
 upstream; the others await the shared Future and receive identical
@@ -90,6 +89,7 @@ class InFlightDedup:
                     del self._inflight[key]
 
     def stats(self) -> dict[str, int]:
+        """Return hit/miss/inflight counters as a snapshot dict."""
         return {
             "hits": self.hits,
             "misses": self.misses,
@@ -97,6 +97,7 @@ class InFlightDedup:
         }
 
     def clear(self) -> None:
+        """Reset all in-flight futures and counters. Only call when the app is idle."""
         self._inflight.clear()
         self.hits = 0
         self.misses = 0

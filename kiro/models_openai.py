@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Pydantic models for OpenAI-compatible API.
+"""Pydantic models for OpenAI-compatible API.
 
 Defines data schemas for requests and responses,
 providing validation and serialization.
@@ -33,8 +32,7 @@ from pydantic import BaseModel, Field
 # ==================================================================================================
 
 class OpenAIModel(BaseModel):
-    """
-    Data model for describing an AI model in OpenAI format.
+    """Data model for describing an AI model in OpenAI format.
 
     Used in the /v1/models endpoint response.
 
@@ -44,6 +42,7 @@ class OpenAIModel(BaseModel):
     strict OpenAI clients because Pydantic serialises unknown extras
     as regular JSON keys.
     """
+
     id: str
     object: str = "model"
     created: int = Field(default_factory=lambda: int(time.time()))
@@ -54,11 +53,11 @@ class OpenAIModel(BaseModel):
 
 
 class ModelList(BaseModel):
-    """
-    List of models in OpenAI format.
+    """List of models in OpenAI format.
 
     Response of GET /v1/models endpoint.
     """
+
     object: str = "list"
     data: list[OpenAIModel]
 
@@ -68,8 +67,7 @@ class ModelList(BaseModel):
 # ==================================================================================================
 
 class ChatMessage(BaseModel):
-    """
-    Chat message in OpenAI format.
+    """Chat message in OpenAI format.
 
     Supports various roles (user, assistant, system, tool)
     and various content formats (string, list, object).
@@ -81,6 +79,7 @@ class ChatMessage(BaseModel):
         tool_calls: List of tool calls (for assistant)
         tool_call_id: Tool call ID (for tool)
     """
+
     role: str
     content: Optional[str | list[Any] | Any] = None
     name: Optional[str] = None
@@ -91,22 +90,21 @@ class ChatMessage(BaseModel):
 
 
 class ToolFunction(BaseModel):
-    """
-    Tool function description.
+    """Tool function description.
 
     Attributes:
         name: Function name
         description: Function description
         parameters: JSON Schema of function parameters
     """
+
     name: str
     description: Optional[str] = None
     parameters: Optional[dict[str, Any]] = None
 
 
 class Tool(BaseModel):
-    """
-    Tool in OpenAI format.
+    """Tool in OpenAI format.
 
     Supports two formats:
     1. Standard OpenAI format: {"type": "function", "function": {...}}
@@ -119,6 +117,7 @@ class Tool(BaseModel):
         description: Function description (flat format)
         input_schema: Function parameters (flat format)
     """
+
     # Standard OpenAI format fields
     type: str = "function"
     function: Optional[ToolFunction] = None
@@ -132,8 +131,7 @@ class Tool(BaseModel):
 
 
 class ChatCompletionRequest(BaseModel):
-    """
-    Request for response generation in OpenAI Chat Completions API format.
+    """Request for response generation in OpenAI Chat Completions API format.
 
     Supports all standard OpenAI API fields, including:
     - Basic parameters (model, messages, stream)
@@ -156,6 +154,7 @@ class ChatCompletionRequest(BaseModel):
         tools: List of available tools
         tool_choice: Tool selection strategy
     """
+
     model: str
     messages: Annotated[list[ChatMessage], Field(min_length=1)]
     stream: bool = False
@@ -195,22 +194,21 @@ class ChatCompletionRequest(BaseModel):
 # ==================================================================================================
 
 class ChatCompletionChoice(BaseModel):
-    """
-    Single response variant in Chat Completion.
+    """Single response variant in Chat Completion.
 
     Attributes:
         index: Variant index
         message: Response message
         finish_reason: Completion reason (stop, tool_calls, length)
     """
+
     index: int = 0
     message: dict[str, Any]
     finish_reason: Optional[str] = None
 
 
 class ChatCompletionUsage(BaseModel):
-    """
-    Token usage information.
+    """Token usage information.
 
     Attributes:
         prompt_tokens: Number of tokens in request
@@ -218,6 +216,7 @@ class ChatCompletionUsage(BaseModel):
         total_tokens: Total number of tokens
         credits_used: Credits used (Kiro-specific)
     """
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
@@ -225,8 +224,7 @@ class ChatCompletionUsage(BaseModel):
 
 
 class ChatCompletionResponse(BaseModel):
-    """
-    Full Chat Completion response (non-streaming).
+    """Full Chat Completion response (non-streaming).
 
     Attributes:
         id: Unique response ID
@@ -236,6 +234,7 @@ class ChatCompletionResponse(BaseModel):
         choices: List of response variants
         usage: Token usage information
     """
+
     id: str
     object: str = "chat.completion"
     created: int = Field(default_factory=lambda: int(time.time()))
@@ -245,36 +244,35 @@ class ChatCompletionResponse(BaseModel):
 
 
 class ChatCompletionChunkDelta(BaseModel):
-    """
-    Delta of changes in streaming chunk.
+    """Delta of changes in streaming chunk.
 
     Attributes:
         role: Role (only in first chunk)
         content: New content
         tool_calls: New tool calls
     """
+
     role: Optional[str] = None
     content: Optional[str] = None
     tool_calls: Optional[list[dict[str, Any]]] = None
 
 
 class ChatCompletionChunkChoice(BaseModel):
-    """
-    Single variant in streaming chunk.
+    """Single variant in streaming chunk.
 
     Attributes:
         index: Variant index
         delta: Delta of changes
         finish_reason: Completion reason (only in last chunk)
     """
+
     index: int = 0
     delta: ChatCompletionChunkDelta
     finish_reason: Optional[str] = None
 
 
 class ChatCompletionChunk(BaseModel):
-    """
-    Streaming chunk in OpenAI format.
+    """Streaming chunk in OpenAI format.
 
     Attributes:
         id: Unique response ID
@@ -284,6 +282,7 @@ class ChatCompletionChunk(BaseModel):
         choices: List of variants
         usage: Usage information (only in last chunk)
     """
+
     id: str
     object: str = "chat.completion.chunk"
     created: int = Field(default_factory=lambda: int(time.time()))

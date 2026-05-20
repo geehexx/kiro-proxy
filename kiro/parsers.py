@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Parsers for AWS Event Stream format.
+"""Parsers for AWS Event Stream format.
 
 Contains classes and functions for:
 - Parsing binary AWS SSE stream
@@ -36,8 +35,7 @@ from kiro.utils import generate_tool_call_id
 
 
 def find_matching_brace(text: str, start_pos: int) -> int:
-    """
-    Finds the position of the closing brace considering nesting and strings.
+    """Finds the position of the closing brace considering nesting and strings.
 
     Uses bracket counting for correct parsing of nested JSON.
     Accounts for quoted strings and escape sequences.
@@ -89,8 +87,7 @@ def find_matching_brace(text: str, start_pos: int) -> int:
 
 
 def parse_bracket_tool_calls(response_text: str) -> list[dict[str, Any]]:
-    """
-    Parses tool calls in [Called func_name with args: {...}] format.
+    """Parses tool calls in [Called func_name with args: {...}] format.
 
     Some models return tool calls in text format instead of
     structured JSON. This function extracts them.
@@ -148,8 +145,7 @@ def parse_bracket_tool_calls(response_text: str) -> list[dict[str, Any]]:
 
 
 def deduplicate_tool_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """
-    Removes duplicate tool calls.
+    """Removes duplicate tool calls.
 
     Deduplication occurs by two criteria:
     1. By id - if there are multiple tool calls with the same id, keep the one with
@@ -208,8 +204,7 @@ def deduplicate_tool_calls(tool_calls: list[dict[str, Any]]) -> list[dict[str, A
 
 
 class AwsEventStreamParser:
-    """
-    Parser for AWS Event Stream format.
+    """Parser for AWS Event Stream format.
 
     AWS returns events in binary format with :message-type...event delimiters.
     This class extracts JSON events from the stream and converts them to a convenient format.
@@ -255,8 +250,7 @@ class AwsEventStreamParser:
         self.tool_calls: list[dict[str, Any]] = []
 
     def feed(self, chunk: bytes) -> list[dict[str, Any]]:
-        """
-        Adds chunk to buffer and returns parsed events.
+        """Adds chunk to buffer and returns parsed events.
 
         Args:
             chunk: Bytes of data from stream
@@ -306,8 +300,7 @@ class AwsEventStreamParser:
         return events
 
     def _process_event(self, data: dict, event_type: str) -> Optional[dict[str, Any]]:
-        """
-        Processes a parsed event.
+        """Processes a parsed event.
 
         Args:
             data: Parsed JSON
@@ -456,8 +449,7 @@ class AwsEventStreamParser:
         self.current_tool_call = None
 
     def _diagnose_json_truncation(self, json_str: str) -> dict[str, Any]:
-        """
-        Analyzes a malformed JSON string to determine if it was truncated.
+        """Analyzes a malformed JSON string to determine if it was truncated.
 
         This helps distinguish between upstream issues (Kiro API cutting off
         large tool call arguments) and actual malformed JSON from the model.
@@ -540,8 +532,7 @@ class AwsEventStreamParser:
         return {"is_truncated": False, "reason": "malformed JSON", "size_bytes": size_bytes}
 
     def get_tool_calls(self) -> list[dict[str, Any]]:
-        """
-        Returns all collected tool calls.
+        """Returns all collected tool calls.
 
         Finalizes current tool call if not finished.
         Removes duplicates.

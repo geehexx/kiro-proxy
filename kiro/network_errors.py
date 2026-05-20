@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Network error classification and user-friendly message formatting.
+"""Network error classification and user-friendly message formatting.
 
 This module provides a centralized system for classifying network errors
 and converting them into actionable, user-friendly messages with troubleshooting steps.
@@ -38,12 +37,12 @@ import httpx
 
 
 class ErrorCategory(str, Enum):
-    """
-    Categories of network errors.
+    """Categories of network errors.
 
     Each category represents a distinct type of network failure
     with specific troubleshooting steps.
     """
+
     DNS_RESOLUTION = "dns_resolution"
     CONNECTION_REFUSED = "connection_refused"
     CONNECTION_RESET = "connection_reset"
@@ -58,8 +57,7 @@ class ErrorCategory(str, Enum):
 
 @dataclass
 class NetworkErrorInfo:
-    """
-    Structured information about a network error.
+    """Structured information about a network error.
 
     Attributes:
         category: Error category for classification
@@ -69,6 +67,7 @@ class NetworkErrorInfo:
         is_retryable: Whether retrying the request might succeed
         suggested_http_code: Appropriate HTTP status code (502, 504, etc.)
     """
+
     category: ErrorCategory
     user_message: str
     troubleshooting_steps: list[str]
@@ -78,8 +77,7 @@ class NetworkErrorInfo:
 
 
 def classify_network_error(error: Exception) -> NetworkErrorInfo:
-    """
-    Classifies a network error and returns structured information.
+    """Classifies a network error and returns structured information.
 
     Analyzes the exception type, error message, and underlying cause
     to determine the specific type of network failure and provide
@@ -175,8 +173,7 @@ def classify_network_error(error: Exception) -> NetworkErrorInfo:
 
 
 def _classify_connect_error(error: httpx.ConnectError, technical_details: str) -> NetworkErrorInfo:
-    """
-    Classifies httpx.ConnectError into specific subcategories.
+    """Classifies httpx.ConnectError into specific subcategories.
 
     Args:
         error: The ConnectError exception
@@ -295,8 +292,7 @@ def _classify_connect_error(error: httpx.ConnectError, technical_details: str) -
 
 
 def _classify_timeout_error(error: httpx.TimeoutException, technical_details: str) -> NetworkErrorInfo:
-    """
-    Classifies httpx.TimeoutException into specific subcategories.
+    """Classifies httpx.TimeoutException into specific subcategories.
 
     Args:
         error: The TimeoutException
@@ -357,8 +353,7 @@ def format_error_for_user(
     format_type: str = "openai",
     include_troubleshooting: bool = True
 ) -> dict[str, Any]:
-    """
-    Formats NetworkErrorInfo for API response.
+    """Formats NetworkErrorInfo for API response.
 
     Converts structured error information into the appropriate format
     for OpenAI or Anthropic API responses.
@@ -418,8 +413,7 @@ def format_error_for_user(
 
 
 def get_short_error_message(error_info: NetworkErrorInfo) -> str:
-    """
-    Returns a short, single-line error message for logging.
+    """Returns a short, single-line error message for logging.
 
     Args:
         error_info: The classified error information

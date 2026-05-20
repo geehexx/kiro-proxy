@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-"""
-Converters for transforming Anthropic Messages API format to Kiro format.
+"""Converters for transforming Anthropic Messages API format to Kiro format.
 
 This module is an adapter layer that converts Anthropic-specific formats
 to the unified format used by converters_core.py.
@@ -45,8 +44,7 @@ from kiro.models_anthropic import (
 
 
 def convert_anthropic_content_to_text(content: Any) -> str:
-    """
-    Extracts text content from Anthropic message content.
+    """Extracts text content from Anthropic message content.
 
     Anthropic content can be:
     - String: "Hello, world!"
@@ -75,8 +73,7 @@ def convert_anthropic_content_to_text(content: Any) -> str:
 
 
 def extract_system_prompt(system: Any) -> str:
-    """
-    Extracts system prompt text from Anthropic system field.
+    """Extracts system prompt text from Anthropic system field.
 
     Anthropic API supports system in two formats:
     1. String: "You are helpful"
@@ -113,8 +110,7 @@ def extract_system_prompt(system: Any) -> str:
 
 
 def extract_tool_results_from_anthropic_content(content: Any) -> list[dict[str, Any]]:
-    """
-    Extracts tool results from Anthropic message content.
+    """Extracts tool results from Anthropic message content.
 
     Looks for content blocks with type="tool_result".
 
@@ -162,8 +158,7 @@ def extract_tool_results_from_anthropic_content(content: Any) -> list[dict[str, 
 
 
 def extract_images_from_tool_results(content: Any) -> list[dict[str, Any]]:
-    """
-    Extracts images from tool_result content blocks.
+    """Extracts images from tool_result content blocks.
 
     Tool results in Anthropic format can contain images (e.g., screenshots from browser tools).
     This function extracts those images so they can be passed to the model.
@@ -202,8 +197,7 @@ def extract_images_from_tool_results(content: Any) -> list[dict[str, Any]]:
 
 
 def extract_tool_uses_from_anthropic_content(content: Any) -> list[dict[str, Any]]:
-    """
-    Extracts tool uses from Anthropic assistant message content.
+    """Extracts tool uses from Anthropic assistant message content.
 
     Looks for content blocks with type="tool_use".
 
@@ -255,8 +249,7 @@ def extract_tool_uses_from_anthropic_content(content: Any) -> list[dict[str, Any
 def convert_anthropic_messages(
     messages: list[AnthropicMessage],
 ) -> list[UnifiedMessage]:
-    """
-    Converts Anthropic messages to unified format.
+    """Converts Anthropic messages to unified format.
 
     Handles:
     - Text content (string or list of text blocks)
@@ -269,7 +262,6 @@ def convert_anthropic_messages(
     Returns:
         List of messages in unified format
     """
-
     unified_messages = []
     total_tool_calls = 0
     total_tool_results = 0
@@ -336,8 +328,7 @@ def convert_anthropic_messages(
 def convert_anthropic_tools(
     tools: Optional[list[AnthropicTool]],
 ) -> Optional[list[UnifiedTool]]:
-    """
-    Converts Anthropic tools to unified format.
+    """Converts Anthropic tools to unified format.
 
     Args:
         tools: List of Anthropic tools
@@ -368,8 +359,7 @@ def convert_anthropic_tools(
 
 
 def extract_thinking_config_from_anthropic(request: AnthropicMessagesRequest) -> ThinkingConfig:
-    """
-    Extract thinking configuration from Anthropic request.
+    """Extract thinking configuration from Anthropic request.
 
     Handles thinking parameter:
     - {"type": "enabled", "budget_tokens": N} → enabled with budget
@@ -426,8 +416,7 @@ def extract_thinking_config_from_anthropic(request: AnthropicMessagesRequest) ->
 def anthropic_to_kiro(
     request: AnthropicMessagesRequest, conversation_id: str, profile_arn: str
 ) -> dict:
-    """
-    Converts Anthropic Messages API request to Kiro API payload.
+    """Converts Anthropic Messages API request to Kiro API payload.
 
     This is the main entry point for Anthropic → Kiro conversion.
 
