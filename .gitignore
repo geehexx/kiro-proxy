@@ -33,7 +33,3 @@ requests/
 htmlcov/
 HANDOFF.md
 
-# Claude Code internal config — contains private paths, internal tooling refs
-# These are workspace-local files that should not be in a public repo
-CLAUDE.md
-.claude/
